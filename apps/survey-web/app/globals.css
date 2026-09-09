@@ -1,0 +1,22 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+select {
+  color: white;
+}
+
+select option {
+  background-color: #1e3a5f;
+  color: white;
+  padding: 8px 12px;
+}
+
+select option:hover {
+  background-color: #2563eb;
+}
+
+select option:checked {
+  background-color: #eab308;
+  color: #1e3a5f;
+}

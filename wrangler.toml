@@ -1,0 +1,14 @@
+name = "alcohol-survey-platform"
+main = "apps/api/src/index.ts"
+compatibility_date = "2026-09-01"
+
+[[d1_databases]]
+  binding = "survey_db"
+  database_name = "survey-db"
+  database_id = "449a4386-9e0f-4e65-b7cf-e37cc0de491c"
+
+[env.production]
+DB_DEBUG = "false"
+
+[env.development]
+DB_DEBUG = "true"

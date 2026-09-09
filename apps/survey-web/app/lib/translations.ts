@@ -1,0 +1,323 @@
+export const translations = {
+  en: {
+    // Navigation
+    home: 'Home',
+    back: 'Back',
+    next: 'Next',
+    submit: 'Submit',
+    save: 'Save',
+    
+    // Landing
+    brandName: 'Myanmar Beer',
+    scanQR: 'Scan QR Code',
+    scanQRDesc: 'Point your camera at the QR code on the product packaging',
+    startSurvey: 'Start Survey',
+    viewProducts: 'View Products',
+    quickLogin: 'Quick Login with Gmail',
+    
+    // Features
+    quickSurvey: 'Quick Survey',
+    quickSurveyDesc: 'Takes only 2-3 minutes',
+    winRewards: 'Win Rewards',
+    winRewardsDesc: 'Spin the wheel to win prizes',
+    freeDelivery: 'Free Delivery',
+    freeDeliveryDesc: 'We ship to your door',
+    
+    // Login
+    loginTitle: 'Login',
+    registerTitle: 'Register',
+    email: 'Email',
+    password: 'Password',
+    confirmPassword: 'Confirm Password',
+    fullName: 'Full Name',
+    phone: 'Phone Number',
+    loginWithGmail: 'Login with Gmail',
+    orContinueWith: 'Or continue with',
+    noAccount: "Don't have an account?",
+    hasAccount: 'Already have an account?',
+    signUp: 'Sign Up',
+    signIn: 'Sign In',
+    
+    // User Info
+    infoTitle: 'Personal Information',
+    infoDesc: 'Please fill in your details to continue',
+    dob: 'Date of Birth',
+    day: 'Day',
+    month: 'Month',
+    year: 'Year',
+    gender: 'Gender',
+    male: 'Male',
+    female: 'Female',
+    other: 'Other',
+    nrc: 'NRC',
+    stateRegion: 'State/Region',
+    nrcType: 'Type',
+    nrcPlaceholder: '123456',
+    nrcExample: 'e.g. 12/ခင်ဒွေး(နိုင်)၁၂၃၄၅၆',
+    occupation: 'Occupation',
+    occupationPlaceholder: 'Enter your occupation',
+    city: 'City',
+    cityPlaceholder: 'Enter city',
+    
+    // Survey
+    surveyTitle: 'Product Survey',
+    question: 'Question',
+    of: 'of',
+    required: 'Required',
+    selectOne: 'Select one option',
+    selectMultiple: 'Select all that apply',
+    
+    // Survey Questions
+    q1: 'How often do you drink Myanmar Beer?',
+    q1_a: 'Daily',
+    q1_b: 'Weekly',
+    q1_c: 'Monthly',
+    q1_d: 'Occasionally',
+    q1_e: 'Never',
+    
+    q2: 'Which Myanmar Beer product do you prefer?',
+    q2_a: 'Myanmar Beer Premium',
+    q2_b: 'Myanmar Beer Light',
+    q2_c: 'Myanmar Beer Gold',
+    q2_d: 'All products equally',
+    
+    q3: 'What is most important when choosing beer?',
+    q3_a: 'Quality',
+    q3_b: 'Price',
+    q3_c: 'Taste',
+    q3_d: 'Brand reputation',
+    q3_e: 'Availability',
+    
+    q4: 'Where do you usually buy Myanmar Beer?',
+    q4_a: 'Liquor store',
+    q4_b: 'Supermarket',
+    q4_c: 'Restaurant/Bar',
+    q4_d: 'Online',
+    q4_e: 'Convenience store',
+    
+    q5: 'How satisfied are you with Myanmar Beer?',
+    q5_a: 'Very satisfied',
+    q5_b: 'Satisfied',
+    q5_c: 'Neutral',
+    q5_d: 'Dissatisfied',
+    q5_e: 'Very dissatisfied',
+    
+    q6: 'Would you recommend Myanmar Beer to friends?',
+    q6_a: 'Definitely yes',
+    q6_b: 'Probably yes',
+    q6_c: 'Not sure',
+    q6_d: 'Probably no',
+    q6_e: 'Definitely no',
+    
+    q7: 'How do you rate the packaging design?',
+    q7_a: 'Excellent',
+    q7_b: 'Good',
+    q7_c: 'Average',
+    q7_d: 'Below average',
+    q7_e: 'Poor',
+    
+    q8: 'What new products would you like to see?',
+    q8_a: 'Fruit-flavored beer',
+    q8_b: 'Low-calorie option',
+    q8_c: 'Non-alcoholic version',
+    q8_d: 'Larger bottle size',
+    q8_e: 'Limited edition flavors',
+    
+    q9: 'Any additional comments or suggestions?',
+    
+    // Spin Wheel
+    spinTitle: 'Lucky Spin',
+    spinDesc: 'Spin the wheel to win a prize!',
+    spinButton: 'SPIN NOW',
+    spinning: 'Spinning...',
+    
+    // Result
+    congratulations: 'Congratulations!',
+    youWon: 'You won',
+    claimReward: 'Claim Reward',
+    
+    // Delivery
+    deliveryTitle: 'Delivery Information',
+    deliveryDesc: 'Please provide your delivery details',
+    address: 'Address',
+    addressPlaceholder: 'Enter your full address',
+    cityPlaceholder: 'Enter city',
+    statePlaceholder: 'Enter state/region',
+    postalCode: 'Postal Code',
+    deliveryNotes: 'Additional Notes',
+    deliveryNotesPlaceholder: 'Any special delivery instructions?',
+    submitDelivery: 'Submit Delivery Info',
+    
+    // General
+    loading: 'Loading...',
+    error: 'Error occurred',
+    success: 'Success',
+    cancel: 'Cancel',
+    confirm: 'Confirm',
+    requiredField: 'This field is required',
+    invalidEmail: 'Invalid email address',
+    passwordMismatch: 'Passwords do not match',
+  },
+  my: {
+    // Navigation
+    home: 'ပင်မ',
+    back: 'နောက်သို့',
+    next: 'ရှေ့သို့',
+    submit: 'တင်သွင်းရန်',
+    save: 'သိမ်းဆည်းရန်',
+    
+    // Landing
+    brandName: 'မြန်မာဘီယာ',
+    scanQR: 'QR Code ကို Scan ပါ',
+    scanQRDesc: 'ထုတ်ကုန်အထုပ်ပေါ်ရှိ QR Code ကို ကင်မရာဖြင့် ဦးတည်ပါ',
+    startSurvey: 'စစ်တမ်းဖြည့်ပါ',
+    viewProducts: 'ထုတ်ကုန်များကြည့်ပါ',
+    quickLogin: 'Gmail ဖြင့် အမြန်ဝင်ရောက်ပါ',
+    
+    // Features
+    quickSurvey: 'အချိန်တို',
+    quickSurveyDesc: 'မိနစ် ၂-၃ မိနစ်ခန့်သာ ကြာပါမည်',
+    winRewards: 'ဆုရပါ',
+    winRewardsDesc: 'ဘီးလှည့်ပြီး ဆုရယူပါ',
+    freeDelivery: 'အိမ်အရောက်ပို့',
+    freeDeliveryDesc: 'သင့်အိမ်အထိ ပို့ဆောင်ပါမည်',
+    
+    // Login
+    loginTitle: 'ဝင်ရောက်ရန်',
+    registerTitle: 'စာရင်းသွင်းရန်',
+    email: 'အီးမေးလ်',
+    password: 'စကားဝှက်',
+    confirmPassword: 'စကားဝှက် အတည်ပြုရန်',
+    fullName: 'အပြည့်အစုံအမည်',
+    phone: 'ဖုန်းနံပါတ်',
+    loginWithGmail: 'Gmail ဖြင့် ဝင်ရောက်ပါ',
+    orContinueWith: 'သို့မဟုတ် ဆက်လက်ဆောင်ရွက်ပါ',
+    noAccount: 'စာရင်းမရှိသေးဘူးလား?',
+    hasAccount: 'စာရင်းရှိပြီးသားလား?',
+    signUp: 'စာရင်းသွင်းရန်',
+    signIn: 'ဝင်ရောက်ရန်',
+    
+    // User Info
+    infoTitle: 'ကိုယ်ရေးအချက်အလက်',
+    infoDesc: 'ဆက်လက်ဆောင်ရွက်ရန် သင့်အချက်အလက်များ ဖြည့်သွင်းပါ',
+    dob: 'မွေးသက္ကရာဇ်',
+    day: 'နေ့',
+    month: 'လ',
+    year: 'နှစ်',
+    gender: 'ကျား/မ',
+    male: 'ယောက်ျား',
+    female: 'မိန်းမ',
+    other: 'အခြား',
+    nrc: 'မှတ်ပုံတင်နံပါတ်',
+    stateRegion: 'တိုင်းဒေသကြီး/ပြည်နယ်',
+    nrcType: 'အမျိုးအစား',
+    nrcPlaceholder: '၁၂၃၄၅၆',
+    nrcExample: 'ဥပမာ - ၁၂/ခင်ဒွေး(နိုင်)၁၂၃၄၅၆',
+    occupation: 'အလုပ်အကိုင်',
+    occupationPlaceholder: 'သင့်အလုပ်အကိုင် ထည့်ပါ',
+    city: 'မြို့',
+    cityPlaceholder: 'မြို့ထည့်ပါ',
+    
+    // Survey
+    surveyTitle: 'ထုတ်ကုန်စစ်တမ်း',
+    question: 'မေးခွန်း',
+    of: 'မှ',
+    required: 'မဖြည့်မနေရ',
+    selectOne: 'ရွေးချယ်ပါ',
+    selectMultiple: 'လိုသည်များ ရွေးချယ်ပါ',
+    
+    // Survey Questions
+    q1: 'Myanmar Beer ကို ဘယ်လောက် သောက်များပါသလဲ?',
+    q1_a: 'နေ့စဉ်',
+    q1_b: 'အပတ်စဉ်',
+    q1_c: 'လစဉ်',
+    q1_d: 'အခါအားလျောက်',
+    q1_e: 'ဘယ်တုန်းကမှ မသောက်ဖူး',
+    
+    q2: 'ဘယ် Myanmar Beer ထုတ်ကုန်ကို နှစ်သက်ပါသလဲ?',
+    q2_a: 'Myanmar Beer Premium',
+    q2_b: 'Myanmar Beer Light',
+    q2_c: 'Myanmar Beer Gold',
+    q2_d: 'ထုတ်ကုန်အားလုံး တန်းတူပါပဲ',
+    
+    q3: 'ဘီယာရွေးချယ်ရာတွင် ဘာကို အရေးကြီးဆုံး ထည့်သွင်းစဉ်းစားပါသလဲ?',
+    q3_a: 'အရည်အသွေး',
+    q3_b: 'စျေးနှုန်း',
+    q3_c: 'အရသာ',
+    q3_d: 'အမှတ်တံဆိပ်',
+    q3_e: 'ရရှိနိုင်မှု',
+    
+    q4: 'ဘယ်မှာ အများဆုံး ဝယ်ပါသလဲ?',
+    q4_a: 'အရက်ဆိုင်',
+    q4_b: 'စူပါမားကက်',
+    q4_c: 'စားသောက်ဆိုင်/ဘား',
+    q4_d: 'Online',
+    q4_e: 'အဆင်ပြေဆိုင်',
+    
+    q5: 'Myanmar Beer အပေါ် ဘယ်လောက် ကျေနပ်ပါသလဲ?',
+    q5_a: 'အလွန်ကျေနပ်ပါတယ်',
+    q5_b: 'ကျေနပ်ပါတယ်',
+    q5_c: 'သာမန်ပါပဲ',
+    q5_d: 'မကျေနပ်ပါဘူး',
+    q5_e: 'အလွန်မကျေနပ်ပါဘူး',
+    
+    q6: 'သူငယ်ချင်းတွေကို ညွှန်ပေးချင်ပါသလား?',
+    q6_a: 'သေချာပေါက် ညွှန်ပေးမယ်',
+    q6_b: 'ဖြစ်နိုင်ရင် ညွှန်ပေးမယ်',
+    q6_c: 'မဆုံးဖြတ်ရသေးဘူး',
+    q6_d: 'ဖြစ်နိုင်ရင် မညွှန်ပေးဘူး',
+    q6_e: 'သေချာပေါက် မညွှန်ပေးဘူး',
+    
+    q7: 'အထုပ်ဒီဇိုင်းကို ဘယ်လောက် အကဲဖြတ်ပါသလဲ?',
+    q7_a: 'အလွန်ကောင်းပါတယ်',
+    q7_b: 'ကောင်းပါတယ်',
+    q7_c: 'သာမန်ပါပဲ',
+    q7_d: 'သာမန်အောက်',
+    q7_e: 'ဆိုးပါတယ်',
+    
+    q8: 'ဘယ်လို အသစ်ထုတ်ကုန်တွေ ကြည့်ချင်ပါသလဲ?',
+    q8_a: 'အသီးအရသာ ဘီယာ',
+    q8_b: 'ကယ်လိုရီနည်း ဘီယာ',
+    q8_c: 'အရက်မပါဘဲ',
+    q8_d: 'ပိုကြီးသော ပမာဏ',
+    q8_e: 'အထူးအရသာ',
+    
+    q9: 'နောက်ထပ် ဘာများ ပြောချင်ပါသလဲ?',
+    
+    // Spin Wheel
+    spinTitle: 'ကံစမ်းဘီး',
+    spinDesc: 'ဘီးလှည့်ပြီး ဆုရယူပါ!',
+    spinButton: 'အခုလှည့်ပါ',
+    spinning: 'လှည့်နေပါတယ်...',
+    
+    // Result
+    congratulations: 'ဂုဏ်ယူပါတယ်!',
+    youWon: 'သင်ရရှိပါပြီ',
+    claimReward: 'ဆုယူရန်',
+    
+    // Delivery
+    deliveryTitle: 'ပို့ဆောင်ရေးအချက်အလက်',
+    deliveryDesc: 'သင့်ပို့ဆောင်ရေးအသေးစိတ်ကို ဖြည့်သွင်းပါ',
+    address: 'လိပ်စာ',
+    addressPlaceholder: 'သင့်လိပ်စာအပြည့်အစုံ ထည့်ပါ',
+    cityPlaceholder: 'မြို့ထည့်ပါ',
+    statePlaceholder: 'တိုင်းဒေသကြီး ထည့်ပါ',
+    postalCode: 'စာတိုက်ကုဒ်',
+    deliveryNotes: 'အပိုမှတ်ချက်များ',
+    deliveryNotesPlaceholder: 'ပို့ဆောင်ရေးအကြံဉာဏ်များ ရှိပါသလား?',
+    submitDelivery: 'ပို့ဆောင်ရေးအချက်အလက် တင်သွင်းရန်',
+    
+    // General
+    loading: 'ဖွင့်နေပါတယ်...',
+    error: 'အမှားဖြစ်နေပါတယ်',
+    success: 'အောင်မြင်ပါတယ်',
+    cancel: 'ပယ်ဖျက်ရန်',
+    confirm: 'အတည်ပြုရန်',
+    requiredField: 'ဒီအကွက်ကို ဖြည့်သွင်းရမည်',
+    invalidEmail: 'အီးမေးလ် မှားနေပါတယ်',
+    passwordMismatch: 'စကားဝှက်များ မကိုက်ပါဘူး',
+  }
+}
+
+export type Language = 'en' | 'my'
+export type TranslationKey = keyof typeof translations.en
