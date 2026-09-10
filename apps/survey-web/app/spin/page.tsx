@@ -127,11 +127,11 @@ export default function SpinPage() {
         }, 4000)
       } else {
         setSpinning(false)
-        setError(data.error?.message || 'Spin failed')
+        setError(data.error?.message || t('spinFailed'))
       }
     } catch (err) {
       setSpinning(false)
-      setError('Connection failed')
+      setError(t('connectionFailed'))
     }
   }
 
@@ -232,7 +232,7 @@ export default function SpinPage() {
                 : 'bg-yellow-500 text-blue-900 hover:bg-yellow-400 hover:scale-105'
             }`}
           >
-            {spinning ? t('spinning') : hasSpun ? (language === 'my' ? 'လှည့်ပြီးပါပြီ' : 'Already Spun') : t('spinButton')}
+            {spinning ? t('spinning') : hasSpun ? t('alreadySpun') : t('spinButton')}
           </button>
         )}
       </div>

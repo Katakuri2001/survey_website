@@ -9,6 +9,8 @@ export const translations = {
     
     // Landing
     brandName: 'Myanmar Beer',
+    brandSubtitle: 'Myanmar Beer',
+    homeDescription: 'Share your opinion about our beer products and win rewards',
     scanQR: 'Scan QR Code',
     scanQRDesc: 'Point your camera at the QR code on the product packaging',
     startSurvey: 'Start Survey',
@@ -144,9 +146,19 @@ export const translations = {
     cityPlaceholder: 'Enter city',
     statePlaceholder: 'Enter state/region',
     postalCode: 'Postal Code',
+    township: 'Township',
     deliveryNotes: 'Additional Notes',
     deliveryNotesPlaceholder: 'Any special delivery instructions?',
     submitDelivery: 'Submit Delivery Info',
+    deliveryReceived: 'Your delivery information has been received',
+    noReward: 'No reward to deliver',
+    
+    // Survey extras
+    reviewAnswers: 'Review Your Answers',
+    notAnswered: 'Not answered',
+    textPlaceholder: 'Type your answer...',
+    review: 'Review',
+    alreadySpun: 'Already Spun',
     
     // General
     loading: 'Loading...',
@@ -157,6 +169,12 @@ export const translations = {
     requiredField: 'This field is required',
     invalidEmail: 'Invalid email address',
     passwordMismatch: 'Passwords do not match',
+    connectionFailed: 'Connection failed',
+    failedToSubmit: 'Failed to submit',
+    failedToLoad: 'Failed to load survey questions',
+    spinFailed: 'Spin failed',
+    fullNamePlaceholder: 'Enter your full name',
+    thankYou: 'Thank you for participating!',
   },
   my: {
     // Navigation
@@ -168,6 +186,8 @@ export const translations = {
     
     // Landing
     brandName: 'မြန်မာဘီယာ',
+    brandSubtitle: 'မြန်မာဘီယာ',
+    homeDescription: 'ကျေးဇူးပြု၍ ကျွန်တော်တို့၏ ဘီယာထုတ်ကုန်များအကြောင်း သင့်အမြင်ကို မျှဝေပြီး ဆုလက်ဆောင်များရရှိပါ',
     scanQR: 'QR Code ကို Scan ပါ',
     scanQRDesc: 'ထုတ်ကုန်အထုပ်ပေါ်ရှိ QR Code ကို ကင်မရာဖြင့် ဦးတည်ပါ',
     startSurvey: 'စစ်တမ်းဖြည့်ပါ',
@@ -303,9 +323,19 @@ export const translations = {
     cityPlaceholder: 'မြို့ထည့်ပါ',
     statePlaceholder: 'တိုင်းဒေသကြီး ထည့်ပါ',
     postalCode: 'စာတိုက်ကုဒ်',
+    township: 'မြို့နယ်',
     deliveryNotes: 'အပိုမှတ်ချက်များ',
     deliveryNotesPlaceholder: 'ပို့ဆောင်ရေးအကြံဉာဏ်များ ရှိပါသလား?',
     submitDelivery: 'ပို့ဆောင်ရေးအချက်အလက် တင်သွင်းရန်',
+    deliveryReceived: 'သင့်ပို့ဆောင်ရေးအချက်အလက်ကို လက်ခံရရှိပါပြီ',
+    noReward: 'ပေးအပ်ရန် ဆုမရှိပါ',
+    
+    // Survey extras
+    reviewAnswers: 'အဖြေများ ပြန်ကြည့်ပါ',
+    notAnswered: 'ဖြေကြားမထားပါ',
+    textPlaceholder: 'သင့်အဖြေကို ရေးပါ...',
+    review: 'ပြန်ကြည့်ရန်',
+    alreadySpun: 'လှည့်ပြီးပါပြီ',
     
     // General
     loading: 'ဖွင့်နေပါတယ်...',
@@ -316,6 +346,12 @@ export const translations = {
     requiredField: 'ဒီအကွက်ကို ဖြည့်သွင်းရမည်',
     invalidEmail: 'အီးမေးလ် မှားနေပါတယ်',
     passwordMismatch: 'စကားဝှက်များ မကိုက်ပါဘူး',
+    connectionFailed: 'ချိတ်ဆက်မှု မအောင်မြင်ပါ',
+    failedToSubmit: 'တင်သွင်းရန် မအောင်မြင်ပါ',
+    failedToLoad: 'မေးခွန်းများ ဖွင့်ရန် မအောင်မြင်ပါ',
+    spinFailed: 'လှည့်ရန် မအောင်မြင်ပါ',
+    fullNamePlaceholder: 'သင့်အပြည့်အစုံအမည် ထည့်ပါ',
+    thankYou: 'ပါဝင်ဆောင်ရွက်မှုအတွက် ကျေးဇူးတင်ပါတယ်!',
   }
 }
 

@@ -110,7 +110,7 @@ export default function SurveyPage() {
         ])
       }
     } catch (err) {
-      setError('Failed to load survey questions')
+      setError(t('failedToLoad'))
     } finally {
       setLoading(false)
     }
@@ -174,10 +174,10 @@ export default function SurveyPage() {
         }
         window.location.href = '/spin'
       } else {
-        setError(data.error?.message || 'Failed to submit')
+        setError(data.error?.message || t('failedToSubmit'))
       }
     } catch (err) {
-      setError('Connection failed')
+      setError(t('connectionFailed'))
     } finally {
       setSubmitting(false)
     }
@@ -206,7 +206,7 @@ export default function SurveyPage() {
         
         <div className="max-w-lg mx-auto px-4 py-6">
           <div className="text-center mb-6">
-            <h2 className="text-xl font-bold text-yellow-300">{language === 'my' ? 'အဖြေများ ပြန်ကြည့်ပါ' : 'Review Your Answers'}</h2>
+            <h2 className="text-xl font-bold text-yellow-300">{t('reviewAnswers')}</h2>
           </div>
 
           <div className="space-y-3">
@@ -237,7 +237,7 @@ export default function SurveyPage() {
                     </div>
                     <div className="flex-1">
                       <p className="text-sm text-blue-200">{q.question_text}</p>
-                      <p className="text-white font-medium mt-1">{displayAnswer || <span className="text-blue-300">Not answered</span>}</p>
+                      <p className="text-white font-medium mt-1">{displayAnswer || <span className="text-blue-300">{t('notAnswered')}</span>}</p>
                     </div>
                   </div>
                 </div>
@@ -300,7 +300,7 @@ export default function SurveyPage() {
               value={(answers[currentQ.id]?.value as string) || ''}
               onChange={(e) => handleTextChange(currentQ.id, e.target.value)}
               className="w-full h-32 px-4 py-3 bg-white/10 border border-white/20 rounded-xl focus:border-yellow-400 focus:outline-none text-white placeholder-blue-300 resize-none"
-              placeholder={language === 'my' ? 'သင့်အဖြေကို ရေးပါ...' : 'Type your answer...'}
+              placeholder={t('textPlaceholder')}
             />
           ) : currentQ?.question_type === 'rating' ? (
             <div className="flex justify-center gap-2">
@@ -370,7 +370,7 @@ export default function SurveyPage() {
             onClick={handleNext}
             className="flex-1 py-3 bg-yellow-500 text-blue-900 rounded-xl font-bold hover:bg-yellow-400 transition-all"
           >
-            {currentQuestion === questions.length - 1 ? (language === 'my' ? 'ပြန်ကြည့်ရန်' : 'Review') : t('next')}
+            {currentQuestion === questions.length - 1 ? t('review') : t('next')}
           </button>
         </div>
       </div>

@@ -48,10 +48,10 @@ export default function LoginPage() {
         localStorage.setItem('survey_user', JSON.stringify(data.data.user))
         window.location.href = '/info'
       } else {
-        setError(data.error?.message || 'Failed')
+        setError(data.error?.message || t('error'))
       }
     } catch (err) {
-      setError('Connection failed')
+      setError(t('connectionFailed'))
     } finally {
       setLoading(false)
     }
@@ -78,7 +78,7 @@ export default function LoginPage() {
         window.location.href = '/info'
       }
     } catch (err) {
-      setError('Connection failed')
+      setError(t('connectionFailed'))
     } finally {
       setLoading(false)
     }
@@ -126,7 +126,7 @@ export default function LoginPage() {
                 value={formData.fullName}
                 onChange={(e) => setFormData({...formData, fullName: e.target.value})}
                 className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl focus:border-yellow-400 focus:outline-none text-white placeholder-blue-300"
-                placeholder="Enter your full name"
+                placeholder={t('fullNamePlaceholder')}
                 required={!isLogin}
               />
             </div>

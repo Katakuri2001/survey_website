@@ -22,10 +22,10 @@ export default function Home() {
             {t('brandName')}
           </h1>
           <h2 className="text-xl md:text-2xl text-yellow-200 mb-2">
-            မြန်မာဘီယာ
+            {t('brandSubtitle')}
           </h2>
           <p className="text-lg text-blue-200 max-w-md mx-auto">
-            ကျေးဇူးပြု၍ ကျွန်တော်တို့၏ ဘီယာထုတ်ကုန်များအကြောင်း သင့်အမြင်ကို မျှဝေပြီး ဆုလက်ဆောင်များရရှိပါ
+            {t('homeDescription')}
           </p>
         </div>
 

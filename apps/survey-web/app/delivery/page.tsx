@@ -33,7 +33,7 @@ export default function DeliveryPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!userRewardId) {
-      setError('No reward to deliver')
+      setError(t('noReward'))
       return
     }
 
@@ -70,10 +70,10 @@ export default function DeliveryPage() {
           sessionStorage.removeItem('survey_response_id')
         }
       } else {
-        setError(data.error?.message || 'Failed to submit')
+        setError(data.error?.message || t('failedToSubmit'))
       }
     } catch (err) {
-      setError('Connection failed')
+      setError(t('connectionFailed'))
     } finally {
       setSubmitting(false)
     }
@@ -89,8 +89,8 @@ export default function DeliveryPage() {
             </svg>
           </div>
           <h2 className="text-2xl font-bold text-yellow-300 mb-4">{t('success')}</h2>
-          <p className="text-blue-200 mb-2">{language === 'my' ? 'သင့်ပို့ဆောင်ရေးအချက်အလက်ကို လက်ခံရရှိပါပြီ' : 'Your delivery information has been received'}</p>
-          <p className="text-blue-300 text-sm mb-6">{language === 'my' ? 'ကျေးဇူးတင်ပါတယ်!' : 'Thank you for participating!'}</p>
+          <p className="text-blue-200 mb-2">{t('deliveryReceived')}</p>
+          <p className="text-blue-300 text-sm mb-6">{t('thankYou')}</p>
           <a
             href="/"
             className="inline-block px-8 py-3 bg-yellow-500 text-blue-900 rounded-xl font-bold hover:bg-yellow-400 transition-all"
@@ -138,7 +138,7 @@ export default function DeliveryPage() {
                 value={formData.fullName}
                 onChange={(e) => setFormData({...formData, fullName: e.target.value})}
                 className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl focus:border-yellow-400 focus:outline-none text-white placeholder-blue-300"
-                placeholder="Enter your full name"
+                placeholder={t('fullNamePlaceholder')}
                 required
               />
             </div>
