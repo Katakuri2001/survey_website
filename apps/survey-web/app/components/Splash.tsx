@@ -39,7 +39,7 @@ export default function Splash() {
       </button>
       <div className="text-center">
         <div className="w-24 h-24 mx-auto mb-6 bg-accent-gold rounded-full flex items-center justify-center">
-          <span className="text-5xl font-extrabold text-bg-primary">MB</span>
+          <img src="/logo.png" alt="MB" className="w-full h-full object-cover rounded-full" />
         </div>
         <h1 className="text-4xl font-bold text-accent-gold mb-3">{t('brandName')}</h1>
         <p className="text-primary-foreground/80">{t('brandSubtitle')}</p>

@@ -6,6 +6,10 @@ import AdminShell from './components/AdminShell'
 export const metadata: Metadata = {
   title: 'Myanmar Beer Admin',
   description: 'Survey Platform Admin Dashboard',
+  icons: {
+    icon: '/icon.png',
+    apple: '/apple-icon.png',
+  },
 }
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' })

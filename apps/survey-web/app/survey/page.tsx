@@ -192,7 +192,7 @@ export default function SurveyPage() {
       <div className="min-h-screen bg-bg-primary min-h-screen">
         <div className="flex min-h-screen items-center justify-center p-4">
           <div className="w-16 h-16 bg-accent-gold rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="text-3xl font-bold text-bg-primary">MB</span>
+            <img src="/logo.png" alt="MB" className="w-full h-full object-cover rounded-full" />
           </div>
           <p className="text-sm text-text-secondary">{t('loading')}</p>
         </div>

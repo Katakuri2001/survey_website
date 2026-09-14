@@ -17,7 +17,7 @@ export default function Home() {
 
         <div className="mb-8">
           <div className="w-24 h-24 mx-auto mb-6 bg-gradient-to-r from-yellow-400 to-yellow-600 rounded-full flex items-center justify-center shadow-lg shadow-yellow-500/30 border-4 border-white/30">
-            <span className="text-3xl font-bold text-blue-900">MB</span>
+            <img src="/logo.png" alt="MB" className="w-full h-full object-cover rounded-full" />
           </div>
           <h1 className="text-4xl md:text-6xl font-bold mb-4 text-yellow-300">
             {t('brandName')}

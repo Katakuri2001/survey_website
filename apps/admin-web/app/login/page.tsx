@@ -43,7 +43,7 @@ export default function AdminLoginPage() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <span className="text-white font-bold text-xl">MB</span>
+            <img src="/logo.png" alt="MB" className="w-full h-full object-cover rounded-2xl" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Myanmar Beer Admin</h1>
           <p className="text-gray-500 mt-1">Sign in to manage your survey platform</p>

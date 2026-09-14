@@ -165,7 +165,7 @@ export default function SpinPage() {
     return (
       <div className="min-h-screen bg-bg-primary flex items-center justify-center">
         <div className="w-16 h-16 bg-accent-gold rounded-full flex items-center justify-center mx-auto mb-4">
-          <span className="text-3xl font-bold text-bg-primary">MB</span>
+          <img src="/logo.png" alt="MB" className="w-full h-full object-cover rounded-full" />
         </div>
         <p className="text-text-secondary">{t('loading')}</p>
       </div>
@@ -249,7 +249,7 @@ export default function SpinPage() {
             {/* Center circle */}
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="w-20 h-20 bg-bg-primary rounded-full flex items-center justify-center shadow-2xl">
-                <span className="text-3xl font-bold text-accent-gold">MB</span>
+                <img src="/logo.png" alt="MB" className="w-full h-full object-cover rounded-full" />
               </div>
             </div>
           </div>

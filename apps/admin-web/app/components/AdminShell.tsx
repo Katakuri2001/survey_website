@@ -50,7 +50,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
           {/* Logo */}
           <div className="flex items-center gap-3 px-6 py-5 border-b border-gray-200">
             <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center">
-              <span className="text-white font-bold text-sm">MB</span>
+              <img src="/logo.png" alt="MB" className="w-full h-full object-cover rounded-xl" />
             </div>
             <div>
               <h1 className="font-bold text-gray-900">Myanmar Beer</h1>
