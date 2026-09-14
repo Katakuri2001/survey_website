@@ -10,6 +10,7 @@ export const translations = {
     // Landing
     brandName: 'Myanmar Beer',
     brandSubtitle: 'Myanmar Beer',
+    skip: 'Skip',
     homeDescription: 'Share your opinion about our beer products and win rewards',
     scanQR: 'Scan QR Code',
     scanQRDesc: 'Point your camera at the QR code on the product packaging',
@@ -143,7 +144,6 @@ export const translations = {
     deliveryDesc: 'Please provide your delivery details',
     address: 'Address',
     addressPlaceholder: 'Enter your full address',
-    cityPlaceholder: 'Enter city',
     statePlaceholder: 'Enter state/region',
     postalCode: 'Postal Code',
     township: 'Township',
@@ -152,6 +152,7 @@ export const translations = {
     submitDelivery: 'Submit Delivery Info',
     deliveryReceived: 'Your delivery information has been received',
     noReward: 'No reward to deliver',
+    yourReward: 'Your Reward',
     
     // Survey extras
     reviewAnswers: 'Review Your Answers',
@@ -187,6 +188,7 @@ export const translations = {
     // Landing
     brandName: 'မြန်မာဘီယာ',
     brandSubtitle: 'မြန်မာဘီယာ',
+    skip: 'ရှေ့မတိုးပါ',
     homeDescription: 'ကျေးဇူးပြု၍ ကျွန်တော်တို့၏ ဘီယာထုတ်ကုန်များအကြောင်း သင့်အမြင်ကို မျှဝေပြီး ဆုလက်ဆောင်များရရှိပါ',
     scanQR: 'QR Code ကို Scan ပါ',
     scanQRDesc: 'ထုတ်ကုန်အထုပ်ပေါ်ရှိ QR Code ကို ကင်မရာဖြင့် ဦးတည်ပါ',
@@ -320,7 +322,6 @@ export const translations = {
     deliveryDesc: 'သင့်ပို့ဆောင်ရေးအသေးစိတ်ကို ဖြည့်သွင်းပါ',
     address: 'လိပ်စာ',
     addressPlaceholder: 'သင့်လိပ်စာအပြည့်အစုံ ထည့်ပါ',
-    cityPlaceholder: 'မြို့ထည့်ပါ',
     statePlaceholder: 'တိုင်းဒေသကြီး ထည့်ပါ',
     postalCode: 'စာတိုက်ကုဒ်',
     township: 'မြို့နယ်',
@@ -329,6 +330,7 @@ export const translations = {
     submitDelivery: 'ပို့ဆောင်ရေးအချက်အလက် တင်သွင်းရန်',
     deliveryReceived: 'သင့်ပို့ဆောင်ရေးအချက်အလက်ကို လက်ခံရရှိပါပြီ',
     noReward: 'ပေးအပ်ရန် ဆုမရှိပါ',
+    yourReward: 'သင့်ဆု',
     
     // Survey extras
     reviewAnswers: 'အဖြေများ ပြန်ကြည့်ပါ',

@@ -3,6 +3,7 @@ import { cors } from 'hono/cors';
 
 type Bindings = {
   survey_db: D1Database;
+  JWT_SECRET: string;
 };
 
 type Variables = {
@@ -27,6 +28,10 @@ function generateId(): string {
   return crypto.randomUUID();
 }
 
+function orNull<T>(value: T | undefined | null): T | null {
+  return value === undefined ? null : value;
+}
+
 function getAgeGroup(age: number): string {
   if (age < 18) return 'under_18';
   if (age <= 24) return '18-24';
@@ -43,28 +48,84 @@ async function hashPassword(password: string): Promise<string> {
   return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-async function createToken(userId: string, role: string = 'user'): Promise<string> {
-  const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
-  const payload = btoa(JSON.stringify({
+function getJwtSecret(env: Bindings): string {
+  return env.JWT_SECRET || 'dev-jwt-secret-change-in-production';
+}
+
+function toBase64Url(bytes: Uint8Array): string {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function fromBase64Url(value: string): Uint8Array {
+  const padded = value.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (value.length % 4)) % 4);
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+function utf8ToBase64Url(text: string): string {
+  return toBase64Url(new TextEncoder().encode(text));
+}
+
+function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < a.length; i++) mismatch |= a[i] ^ b[i];
+  return mismatch === 0;
+}
+
+async function hmacSha256(secret: string, message: string): Promise<Uint8Array> {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(message));
+  return new Uint8Array(signature);
+}
+
+async function createToken(userId: string, role: string, secret: string): Promise<string> {
+  const header = utf8ToBase64Url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+  const payload = utf8ToBase64Url(JSON.stringify({
     sub: userId,
     role,
     iat: Math.floor(Date.now() / 1000),
     exp: Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60
   }));
-  const signature = btoa('signature-placeholder');
-  return `${header}.${payload}.${signature}`;
+  const signingInput = `${header}.${payload}`;
+  const signature = toBase64Url(await hmacSha256(secret, signingInput));
+  return `${signingInput}.${signature}`;
 }
 
-function decodeToken(token: string): { sub: string; role: string } | null {
+async function decodeToken(token: string, secret: string): Promise<{ sub: string; role: string } | null> {
   try {
     const parts = token.split('.');
     if (parts.length !== 3) return null;
-    const payload = JSON.parse(atob(parts[1]));
-    if (payload.exp < Math.floor(Date.now() / 1000)) return null;
+    const signingInput = `${parts[0]}.${parts[1]}`;
+    const expected = await hmacSha256(secret, signingInput);
+    const actual = fromBase64Url(parts[2]);
+    if (!timingSafeEqual(expected, actual)) return null;
+    const payloadJson = new TextDecoder().decode(fromBase64Url(parts[1]));
+    const payload = JSON.parse(payloadJson);
+    if (!payload.sub || payload.exp < Math.floor(Date.now() / 1000)) return null;
     return { sub: payload.sub, role: payload.role || 'user' };
   } catch {
     return null;
   }
+}
+
+function isAnswerPresent(type: string, value: unknown): boolean {
+  if (value === undefined || value === null) return false;
+  if (type === 'multiple_choice') return Array.isArray(value) && value.length > 0;
+  if (type === 'text' || type === 'long_text') return String(value).trim().length > 0;
+  if (type === 'rating' || type === 'number') return value !== '' && !Number.isNaN(Number(value));
+  if (Array.isArray(value)) return value.length > 0;
+  return String(value).trim().length > 0;
 }
 
 function jsonError(message: string, status: number = 400) {
@@ -91,22 +152,24 @@ async function authMiddleware(c: any, next: any) {
     return jsonError('Unauthorized', 401);
   }
   const token = authHeader.slice(7);
-  const decoded = decodeToken(token);
+  const decoded = await decodeToken(token, getJwtSecret(c.env));
   if (!decoded) {
     return jsonError('Invalid token', 401);
   }
   c.set('userId', decoded.sub);
   c.set('isAdmin', decoded.role === 'admin');
-  await next();
+  return await next();
 }
 
 async function adminMiddleware(c: any, next: any) {
-  await authMiddleware(c, async () => {
-    if (!c.get('isAdmin')) {
-      return jsonError('Forbidden', 403);
-    }
-    await next();
-  });
+  const db = c.env.survey_db;
+  const userId = c.get('userId');
+  const user = await db.prepare('SELECT is_admin, is_active FROM users WHERE id = ?').bind(userId).first() as any;
+  if (!user || !user.is_admin || !user.is_active) {
+    return jsonError('Forbidden', 403);
+  }
+  c.set('isAdmin', true);
+  return await next();
 }
 
 // ============================================================
@@ -134,6 +197,13 @@ app.post('/auth/register', async (c) => {
     return jsonError('Email already registered');
   }
 
+  if (phone) {
+    const phoneExists = await db.prepare('SELECT id FROM users WHERE phone = ?').bind(phone).first();
+    if (phoneExists) {
+      return jsonError('Phone number already registered');
+    }
+  }
+
   const id = generateId();
   const passwordHash = await hashPassword(password);
   const ageGroup = age ? getAgeGroup(age) : null;
@@ -143,7 +213,7 @@ app.post('/auth/register', async (c) => {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(id, fullName, email, phone || null, passwordHash, age || null, ageGroup, gender || null, city || null, township || null, nrcState || null, nrcType || null, nrcNumber || null, occupation || null).run();
 
-  const token = await createToken(id);
+  const token = await createToken(id, 'user', getJwtSecret(c.env));
 
   return jsonSuccess({ userId: id, token, user: { id, fullName, email } });
 });
@@ -168,7 +238,7 @@ app.post('/auth/login', async (c) => {
     return jsonError('Account is disabled', 403);
   }
 
-  const token = await createToken((user as any).id);
+  const token = await createToken((user as any).id, 'user', getJwtSecret(c.env));
 
   return jsonSuccess({ userId: (user as any).id, token, user: { id: (user as any).id, fullName: (user as any).full_name, email: (user as any).email } });
 });
@@ -193,7 +263,7 @@ app.post('/auth/admin/login', async (c) => {
     return jsonError('Not authorized as admin', 403);
   }
 
-  const token = await createToken((user as any).id, 'admin');
+  const token = await createToken((user as any).id, 'admin', getJwtSecret(c.env));
 
   return jsonSuccess({ userId: (user as any).id, token, user: { id: (user as any).id, fullName: (user as any).full_name, email: (user as any).email } });
 });
@@ -358,6 +428,8 @@ app.post('/survey/submit', async (c) => {
     return jsonError('Product ID and answers are required');
   }
 
+  const answersByQuestion = new Map(answers.map((a: any) => [a.questionId, a]));
+
   // Get or create user
   let actualUserId = userId;
   if (!actualUserId && profile) {
@@ -382,6 +454,20 @@ app.post('/survey/submit', async (c) => {
 
   if (!version) {
     return jsonError('No active survey found');
+  }
+
+  const requiredQuestions = await db.prepare(`
+    SELECT id, question_type, is_required, question_text
+    FROM survey_questions
+    WHERE survey_version_id = ? AND is_active = 1
+  `).bind(version.id).all();
+
+  for (const question of (requiredQuestions.results as any[])) {
+    if (!question.is_required) continue;
+    const answer = answersByQuestion.get(question.id);
+    if (!isAnswerPresent(question.question_type, answer?.value)) {
+      return jsonError(`Missing required answer for: ${question.question_text}`);
+    }
   }
 
   // Create response
@@ -445,33 +531,41 @@ app.post('/rewards/spin', authMiddleware, async (c) => {
   const userId = c.get('userId');
   const body = await c.req.json().catch(() => ({}));
   const { campaignId, productId } = body;
+  const campaignKey = campaignId || 'default';
 
-  // Check if user already spun for this campaign
   const existingSpin = await db.prepare(`
     SELECT id FROM reward_spins
     WHERE user_id = ? AND campaign_id = ? AND status != 'CANCELLED'
-  `).bind(userId, campaignId || 'default').first();
+  `).bind(userId, campaignKey).first();
 
   if (existingSpin) {
     return jsonError('You have already spun the wheel for this campaign');
   }
 
-  // Get available rewards with weights
+  const spinId = generateId();
+  try {
+    await db.prepare(`
+      INSERT INTO reward_spins (id, user_id, campaign_id, product_id, reward_id, status)
+      VALUES (?, ?, ?, ?, NULL, 'WON')
+    `).bind(spinId, userId, campaignKey, productId || null).run();
+  } catch {
+    return jsonError('You have already spun the wheel for this campaign');
+  }
+
   const rewards = await db.prepare(`
     SELECT id, name, weight, remaining_quantity FROM rewards
     WHERE is_active = 1 AND remaining_quantity > 0 AND status != 'EXHAUSTED' AND status != 'PAUSED'
-    AND (campaign_id = ? OR campaign_id IS NULL)
+    AND (campaign_id = ? OR campaign_id IS NULL OR ? = 'default')
     ORDER BY weight DESC
-  `).bind(campaignId || null).all();
+  `).bind(campaignKey, campaignKey).all();
 
   if (!rewards.results || (rewards.results as any[]).length === 0) {
+    await db.prepare("UPDATE reward_spins SET status = 'CANCELLED', updated_at = datetime('now') WHERE id = ?").bind(spinId).run();
     return jsonError('No rewards available');
   }
 
-  // Calculate total weight
   const totalWeight = (rewards.results as any[]).reduce((sum, r) => sum + r.weight, 0);
 
-  // Select reward based on weight
   let random = Math.random() * totalWeight;
   let selectedReward = (rewards.results as any[])[0];
 
@@ -483,42 +577,33 @@ app.post('/rewards/spin', authMiddleware, async (c) => {
     }
   }
 
-  // Atomic inventory decrement
   const result = await db.prepare(`
     UPDATE rewards SET remaining_quantity = remaining_quantity - 1, updated_at = datetime('now')
     WHERE id = ? AND remaining_quantity > 0
   `).bind(selectedReward.id).run();
 
   if (result.meta?.changes === 0) {
+    await db.prepare("UPDATE reward_spins SET status = 'CANCELLED', updated_at = datetime('now') WHERE id = ?").bind(spinId).run();
     return jsonError('Reward out of stock. Please try again.', 409);
   }
 
-  // Update reward status
   const reward = await db.prepare('SELECT remaining_quantity, low_stock_threshold FROM rewards WHERE id = ?').bind(selectedReward.id).first() as any;
   let newStatus = 'AVAILABLE';
   if (reward.remaining_quantity <= 0) newStatus = 'EXHAUSTED';
   else if (reward.remaining_quantity <= (reward.low_stock_threshold || 10)) newStatus = 'LOW_STOCK';
 
   await db.prepare('UPDATE rewards SET status = ? WHERE id = ?').bind(newStatus, selectedReward.id).run();
+  await db.prepare('UPDATE reward_spins SET reward_id = ?, updated_at = datetime(\'now\') WHERE id = ?').bind(selectedReward.id, spinId).run();
 
-  // Create spin record
-  const spinId = generateId();
-  await db.prepare(`
-    INSERT INTO reward_spins (id, user_id, campaign_id, product_id, reward_id, status)
-    VALUES (?, ?, ?, ?, ?, 'WON')
-  `).bind(spinId, userId, campaignId || null, productId || null, selectedReward.id).run();
-
-  // Create user reward
   const userRewardId = generateId();
   await db.prepare(`
     INSERT INTO user_rewards (id, user_id, reward_spin_id, reward_id, delivery_status, won_at)
     VALUES (?, ?, ?, ?, 'DELIVERY_PENDING', datetime('now'))
   `).bind(userRewardId, userId, spinId, selectedReward.id).run();
 
-  // Record inventory transaction
   await db.prepare(`
     INSERT INTO reward_inventory_transactions (id, reward_id, type, quantity, reference_type, reference_id, created_by)
-    VALUES (?, ?, 'REWARD_AWARD', -1, 'reward_spin', ?, ?)
+    VALUES (?, ?, 'REWARD_AWARDED', -1, 'reward_spin', ?, ?)
   `).bind(generateId(), selectedReward.id, spinId, userId).run();
 
   return jsonSuccess({
@@ -547,6 +632,14 @@ app.post('/rewards/delivery', authMiddleware, async (c) => {
 
   if (!userReward) {
     return jsonError('Reward not found', 404);
+  }
+
+  // Idempotent: if delivery info already submitted, return existing without duplicating
+  const existing = await db.prepare(`
+    SELECT id FROM delivery_information WHERE user_reward_id = ?
+  `).bind(userRewardId).first();
+  if (existing) {
+    return jsonSuccess({ message: 'Delivery information already submitted', deliveryId: existing.id });
   }
 
   // Create delivery info
@@ -591,7 +684,7 @@ app.get('/rewards/my', authMiddleware, async (c) => {
 // ADMIN ROUTES - DASHBOARD
 // ============================================================
 
-app.get('/admin/dashboard', adminMiddleware, async (c) => {
+app.get('/admin/dashboard', authMiddleware, adminMiddleware, async (c) => {
   const db = c.env.survey_db;
 
   const [totalUsers, completedSurveys, totalRewards, pendingDeliveries, deliveredRewards, activeProducts] = await Promise.all([
@@ -623,7 +716,7 @@ app.get('/admin/dashboard', adminMiddleware, async (c) => {
 // ============================================================
 
 // Product popularity
-app.get('/admin/analytics/popularity', adminMiddleware, async (c) => {
+app.get('/admin/analytics/popularity', authMiddleware, adminMiddleware, async (c) => {
   const db = c.env.survey_db;
 
   const popularity = await db.prepare(`
@@ -641,7 +734,7 @@ app.get('/admin/analytics/popularity', adminMiddleware, async (c) => {
 });
 
 // Average ratings by product
-app.get('/admin/analytics/ratings', adminMiddleware, async (c) => {
+app.get('/admin/analytics/ratings', authMiddleware, adminMiddleware, async (c) => {
   const db = c.env.survey_db;
   const productId = c.req.query('productId');
 
@@ -669,7 +762,7 @@ app.get('/admin/analytics/ratings', adminMiddleware, async (c) => {
 });
 
 // Rating by age group
-app.get('/admin/analytics/age-groups', adminMiddleware, async (c) => {
+app.get('/admin/analytics/age-groups', authMiddleware, adminMiddleware, async (c) => {
   const db = c.env.survey_db;
   const productId = c.req.query('productId');
 
@@ -701,7 +794,7 @@ app.get('/admin/analytics/age-groups', adminMiddleware, async (c) => {
 });
 
 // Product comparison
-app.get('/admin/analytics/comparison', adminMiddleware, async (c) => {
+app.get('/admin/analytics/comparison', authMiddleware, adminMiddleware, async (c) => {
   const db = c.env.survey_db;
 
   const comparison = await db.prepare(`
@@ -725,7 +818,7 @@ app.get('/admin/analytics/comparison', adminMiddleware, async (c) => {
 });
 
 // Participation trend
-app.get('/admin/analytics/trend', adminMiddleware, async (c) => {
+app.get('/admin/analytics/trend', authMiddleware, adminMiddleware, async (c) => {
   const db = c.env.survey_db;
   const period = c.req.query('period') || '30';
 
@@ -746,7 +839,7 @@ app.get('/admin/analytics/trend', adminMiddleware, async (c) => {
 // ============================================================
 
 // Get all questions
-app.get('/admin/survey/questions', adminMiddleware, async (c) => {
+app.get('/admin/survey/questions', authMiddleware, adminMiddleware, async (c) => {
   const db = c.env.survey_db;
 
   const questions = await db.prepare(`
@@ -762,7 +855,7 @@ app.get('/admin/survey/questions', adminMiddleware, async (c) => {
 });
 
 // Create question
-app.post('/admin/survey/questions', adminMiddleware, async (c) => {
+app.post('/admin/survey/questions', authMiddleware, adminMiddleware, async (c) => {
   const db = c.env.survey_db;
   const body = await c.req.json();
   const { surveyVersionId, questionText, questionType, isRequired, displayOrder, validationRules, translations, options } = body;
@@ -816,7 +909,7 @@ app.post('/admin/survey/questions', adminMiddleware, async (c) => {
 });
 
 // Update question
-app.patch('/admin/survey/questions/:id', adminMiddleware, async (c) => {
+app.patch('/admin/survey/questions/:id', authMiddleware, adminMiddleware, async (c) => {
   const db = c.env.survey_db;
   const id = c.req.param('id');
   const body = await c.req.json();
@@ -833,7 +926,7 @@ app.patch('/admin/survey/questions/:id', adminMiddleware, async (c) => {
       validation_rules = COALESCE(?, validation_rules),
       updated_at = datetime('now')
     WHERE id = ?
-  `).bind(questionText || null, questionType || null, isRequired, displayOrder, isActive, validationRules || null, id).run();
+  `).bind(questionText || null, questionType || null, orNull(isRequired), orNull(displayOrder), orNull(isActive), validationRules || null, id).run();
 
   // Update translations
   if (translations) {
@@ -851,7 +944,7 @@ app.patch('/admin/survey/questions/:id', adminMiddleware, async (c) => {
 });
 
 // Delete question
-app.delete('/admin/survey/questions/:id', adminMiddleware, async (c) => {
+app.delete('/admin/survey/questions/:id', authMiddleware, adminMiddleware, async (c) => {
   const db = c.env.survey_db;
   const id = c.req.param('id');
 
@@ -861,7 +954,7 @@ app.delete('/admin/survey/questions/:id', adminMiddleware, async (c) => {
 });
 
 // Get all survey versions
-app.get('/admin/survey/versions', adminMiddleware, async (c) => {
+app.get('/admin/survey/versions', authMiddleware, adminMiddleware, async (c) => {
   const db = c.env.survey_db;
 
   const versions = await db.prepare(`
@@ -877,7 +970,7 @@ app.get('/admin/survey/versions', adminMiddleware, async (c) => {
 });
 
 // Create survey version
-app.post('/admin/survey/versions', adminMiddleware, async (c) => {
+app.post('/admin/survey/versions', authMiddleware, adminMiddleware, async (c) => {
   const db = c.env.survey_db;
   const body = await c.req.json();
   const { productId, title, description, translations } = body;
@@ -918,7 +1011,7 @@ app.post('/admin/survey/versions', adminMiddleware, async (c) => {
 // ADMIN ROUTES - PRODUCTS
 // ============================================================
 
-app.get('/admin/products', adminMiddleware, async (c) => {
+app.get('/admin/products', authMiddleware, adminMiddleware, async (c) => {
   const db = c.env.survey_db;
 
   const products = await db.prepare(`
@@ -931,7 +1024,7 @@ app.get('/admin/products', adminMiddleware, async (c) => {
   return jsonSuccess(products.results);
 });
 
-app.post('/admin/products', adminMiddleware, async (c) => {
+app.post('/admin/products', authMiddleware, adminMiddleware, async (c) => {
   const db = c.env.survey_db;
   const body = await c.req.json();
   const { name, description, brand, imageUrl, displayOrder, translations } = body;
@@ -958,7 +1051,7 @@ app.post('/admin/products', adminMiddleware, async (c) => {
   return jsonSuccess({ id, message: 'Product created' });
 });
 
-app.patch('/admin/products/:id', adminMiddleware, async (c) => {
+app.patch('/admin/products/:id', authMiddleware, adminMiddleware, async (c) => {
   const db = c.env.survey_db;
   const id = c.req.param('id');
   const body = await c.req.json();
@@ -975,7 +1068,7 @@ app.patch('/admin/products/:id', adminMiddleware, async (c) => {
       is_active = COALESCE(?, is_active),
       updated_at = datetime('now')
     WHERE id = ?
-  `).bind(name || null, description || null, brand || null, imageUrl || null, displayOrder, isActive, id).run();
+  `).bind(name || null, description || null, brand || null, imageUrl || null, orNull(displayOrder), orNull(isActive), id).run();
 
   if (translations) {
     for (const [lang, data] of Object.entries(translations) as any) {
@@ -995,7 +1088,7 @@ app.patch('/admin/products/:id', adminMiddleware, async (c) => {
 // ADMIN ROUTES - REWARDS
 // ============================================================
 
-app.get('/admin/rewards', adminMiddleware, async (c) => {
+app.get('/admin/rewards', authMiddleware, adminMiddleware, async (c) => {
   const db = c.env.survey_db;
 
   const rewards = await db.prepare(`
@@ -1009,7 +1102,7 @@ app.get('/admin/rewards', adminMiddleware, async (c) => {
   return jsonSuccess(rewards.results);
 });
 
-app.post('/admin/rewards', adminMiddleware, async (c) => {
+app.post('/admin/rewards', authMiddleware, adminMiddleware, async (c) => {
   const db = c.env.survey_db;
   const body = await c.req.json();
   const { name, description, imageUrl, totalQuantity, weight, lowStockThreshold, campaignId, translations } = body;
@@ -1042,7 +1135,7 @@ app.post('/admin/rewards', adminMiddleware, async (c) => {
   return jsonSuccess({ id, message: 'Reward created' });
 });
 
-app.patch('/admin/rewards/:id', adminMiddleware, async (c) => {
+app.patch('/admin/rewards/:id', authMiddleware, adminMiddleware, async (c) => {
   const db = c.env.survey_db;
   const id = c.req.param('id');
   const body = await c.req.json();
@@ -1061,7 +1154,7 @@ app.patch('/admin/rewards/:id', adminMiddleware, async (c) => {
       campaign_id = COALESCE(?, campaign_id),
       updated_at = datetime('now')
     WHERE id = ?
-  `).bind(name || null, description || null, imageUrl || null, weight, lowStockThreshold, isActive, status, campaignId, id).run();
+  `).bind(name || null, description || null, imageUrl || null, orNull(weight), orNull(lowStockThreshold), orNull(isActive), orNull(status), orNull(campaignId), id).run();
 
   if (translations) {
     for (const [lang, data] of Object.entries(translations) as any) {
@@ -1078,7 +1171,7 @@ app.patch('/admin/rewards/:id', adminMiddleware, async (c) => {
 });
 
 // Reward inventory
-app.get('/admin/rewards/inventory', adminMiddleware, async (c) => {
+app.get('/admin/rewards/inventory', authMiddleware, adminMiddleware, async (c) => {
   const db = c.env.survey_db;
 
   const inventory = await db.prepare(`
@@ -1106,7 +1199,7 @@ app.get('/admin/rewards/inventory', adminMiddleware, async (c) => {
 });
 
 // Adjust reward stock
-app.patch('/admin/rewards/:id/stock', adminMiddleware, async (c) => {
+app.patch('/admin/rewards/:id/stock', authMiddleware, adminMiddleware, async (c) => {
   const db = c.env.survey_db;
   const id = c.req.param('id');
   const body = await c.req.json();
@@ -1132,7 +1225,7 @@ app.patch('/admin/rewards/:id/stock', adminMiddleware, async (c) => {
 });
 
 // Reward history
-app.get('/admin/rewards/history', adminMiddleware, async (c) => {
+app.get('/admin/rewards/history', authMiddleware, adminMiddleware, async (c) => {
   const db = c.env.survey_db;
   const limit = parseInt(c.req.query('limit') || '50');
   const offset = parseInt(c.req.query('offset') || '0');
@@ -1160,7 +1253,7 @@ app.get('/admin/rewards/history', adminMiddleware, async (c) => {
 // ADMIN ROUTES - DELIVERIES
 // ============================================================
 
-app.get('/admin/deliveries', adminMiddleware, async (c) => {
+app.get('/admin/deliveries', authMiddleware, adminMiddleware, async (c) => {
   const db = c.env.survey_db;
   const status = c.req.query('status');
   const limit = parseInt(c.req.query('limit') || '50');
@@ -1200,7 +1293,7 @@ app.get('/admin/deliveries', adminMiddleware, async (c) => {
 });
 
 // Update delivery status
-app.patch('/admin/deliveries/:id/status', adminMiddleware, async (c) => {
+app.patch('/admin/deliveries/:id/status', authMiddleware, adminMiddleware, async (c) => {
   const db = c.env.survey_db;
   const id = c.req.param('id');
   const body = await c.req.json();
@@ -1255,7 +1348,7 @@ app.patch('/admin/deliveries/:id/status', adminMiddleware, async (c) => {
 // ADMIN ROUTES - USERS
 // ============================================================
 
-app.get('/admin/users', adminMiddleware, async (c) => {
+app.get('/admin/users', authMiddleware, adminMiddleware, async (c) => {
   const db = c.env.survey_db;
   const limit = parseInt(c.req.query('limit') || '50');
   const offset = parseInt(c.req.query('offset') || '0');
@@ -1285,7 +1378,7 @@ app.get('/admin/users', adminMiddleware, async (c) => {
   return jsonSuccess({ users: users.results, total: (total as any)?.count || 0 });
 });
 
-app.get('/admin/users/:id', adminMiddleware, async (c) => {
+app.get('/admin/users/:id', authMiddleware, adminMiddleware, async (c) => {
   const db = c.env.survey_db;
   const id = c.req.param('id');
 
@@ -1323,7 +1416,7 @@ app.get('/admin/users/:id', adminMiddleware, async (c) => {
 // ADMIN ROUTES - RESPONSES
 // ============================================================
 
-app.get('/admin/responses', adminMiddleware, async (c) => {
+app.get('/admin/responses', authMiddleware, adminMiddleware, async (c) => {
   const db = c.env.survey_db;
   const limit = parseInt(c.req.query('limit') || '50');
   const offset = parseInt(c.req.query('offset') || '0');
@@ -1360,7 +1453,7 @@ app.get('/admin/responses', adminMiddleware, async (c) => {
   return jsonSuccess({ responses: responses.results, total: (total as any)?.count || 0 });
 });
 
-app.get('/admin/responses/:id', adminMiddleware, async (c) => {
+app.get('/admin/responses/:id', authMiddleware, adminMiddleware, async (c) => {
   const db = c.env.survey_db;
   const id = c.req.param('id');
 
@@ -1392,7 +1485,7 @@ app.get('/admin/responses/:id', adminMiddleware, async (c) => {
 // ADMIN ROUTES - AUDIT LOGS
 // ============================================================
 
-app.get('/admin/audit-logs', adminMiddleware, async (c) => {
+app.get('/admin/audit-logs', authMiddleware, adminMiddleware, async (c) => {
   const db = c.env.survey_db;
   const limit = parseInt(c.req.query('limit') || '50');
   const offset = parseInt(c.req.query('offset') || '0');

@@ -2,7 +2,38 @@
 
 import { useState, useEffect } from 'react'
 
-const API_BASE = 'http://localhost:8787'
+import { API_BASE } from '../lib/api'
+
+interface AdminDashboard {
+  totalParticipants: number
+  completedSurveys: number
+  completionRate: number
+  totalRewardsAwarded: number
+  pendingDeliveries: number
+  deliveredRewards: number
+  activeProducts: number
+}
+
+interface PopularityItem { name: string; percentage: number; response_count: number }
+
+interface InventoryReward {
+  id: string
+  name: string
+  status: string
+  total_quantity: number
+  remaining_quantity: number
+  delivered_count: number
+}
+
+interface InventoryData {
+  rewards: InventoryReward[]
+  summary: {
+    total_stock: number
+    total_rewarded: number
+    total_remaining: number
+    total_delivered: number
+  }
+}
 
 function StatCard({ label, value, icon, color, trend }: { label: string; value: string | number; icon: string; color: string; trend?: string }) {
   return (
@@ -71,12 +102,12 @@ function SimpleBarChart({ data, title }: { data: { name: string; value: number }
   )
 }
 
-function RewardInventory({ rewards }: { rewards: any[] }) {
+function RewardInventory({ rewards }: { rewards: InventoryReward[] }) {
   return (
     <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
       <h3 className="text-sm font-semibold text-gray-900 mb-4">Reward Inventory</h3>
       <div className="space-y-4">
-        {rewards.map((r: any) => {
+        {rewards.map((r: InventoryReward) => {
           const utilized = r.total_quantity - r.remaining_quantity
           const percent = r.total_quantity > 0 ? (utilized / r.total_quantity) * 100 : 0
           const statusColor = r.status === 'EXHAUSTED' ? 'text-red-600 bg-red-50' :
@@ -121,21 +152,12 @@ function RewardInventory({ rewards }: { rewards: any[] }) {
 }
 
 export default function DashboardPage() {
-  const [dashboard, setDashboard] = useState<any>(null)
-  const [popularity, setPopularity] = useState<any[]>([])
-  const [inventory, setInventory] = useState<any>(null)
+  const [dashboard, setDashboard] = useState<AdminDashboard | null>(null)
+  const [popularity, setPopularity] = useState<PopularityItem[]>([])
+  const [inventory, setInventory] = useState<InventoryData | null>(null)
   const [loading, setLoading] = useState(true)
   const [authError, setAuthError] = useState(false)
 
-  useEffect(() => {
-    const token = localStorage.getItem('admin_token')
-    if (!token) {
-      setAuthError(true)
-      setLoading(false)
-      return
-    }
-    fetchDashboard(token)
-  }, [])
 
   async function fetchDashboard(token: string) {
     try {
@@ -166,6 +188,21 @@ export default function DashboardPage() {
       setLoading(false)
     }
   }
+
+
+  useEffect(() => {
+    const run = async () => {
+      await Promise.resolve()
+      const token = typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null
+      if (!token) {
+        setAuthError(true)
+        setLoading(false)
+        return
+      }
+      fetchDashboard(token)
+    }
+    run()
+  }, [])
 
   if (loading) {
     return (
@@ -243,7 +280,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <BarChart
           title="Product Popularity"
-          data={popularity.map((p: any) => ({
+          data={popularity.map((p) => ({
             name: p.name,
             value: p.percentage || 0,
           }))}
@@ -251,7 +288,7 @@ export default function DashboardPage() {
 
         <SimpleBarChart
           title="Survey Responses by Product"
-          data={popularity.map((p: any) => ({
+          data={popularity.map((p) => ({
             name: p.name,
             value: p.response_count || 0,
           }))}

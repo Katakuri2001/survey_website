@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
-const API_BASE = 'http://localhost:8787'
+import { API_BASE } from '../lib/api'
 
 export default function AdminLoginPage() {
   const router = useRouter()
@@ -31,7 +31,7 @@ export default function AdminLoginPage() {
       } else {
         setError(data.error?.message || 'Login failed')
       }
-    } catch (err) {
+    } catch {
       setError('Connection failed')
     } finally {
       setLoading(false)

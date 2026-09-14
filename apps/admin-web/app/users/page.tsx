@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 
-const API_BASE = 'http://localhost:8787'
+import { API_BASE } from '../lib/api'
 
 interface UserList {
   id: string
@@ -149,6 +149,7 @@ function UserDetailPanel({
   }, [userId])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchUser()
   }, [fetchUser])
 
@@ -426,6 +427,7 @@ export default function UsersPage() {
   }, [page, debouncedSearch])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchUsers()
   }, [fetchUsers])
 

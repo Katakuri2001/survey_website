@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useLanguage } from '../context/LanguageContext'
 import Header from '../components/Header'
 
@@ -14,6 +15,7 @@ const myanmarStates = [
 const nrcTypes = ['နိုင်ငံသား', 'နိုင်ငံသား', 'ဧရိယာ']
 
 export default function InfoPage() {
+  const router = useRouter()
   const { t } = useLanguage()
   const [formData, setFormData] = useState({
     dobDay: '',
@@ -29,7 +31,7 @@ export default function InfoPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    window.location.href = '/survey'
+    router.push('/survey')
   }
 
   const days = Array.from({ length: 31 }, (_, i) => String(i + 1))
@@ -37,26 +39,29 @@ export default function InfoPage() {
   const currentYear = new Date().getFullYear()
   const years = Array.from({ length: 60 }, (_, i) => String(currentYear - 18 - i))
 
-  const selectClass = "w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl focus:border-yellow-400 focus:outline-none text-white appearance-none cursor-pointer"
-  const optionClass = "bg-gray-800 text-white"
+  const selectClass = "w-full px-4 py-3 bg-bg-surface border border-border rounded-xl focus:border-accent-gold focus:outline-none text-text-primary appearance-none cursor-pointer"
+  const optionClass = "bg-bg-surface text-text-primary"
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-900 to-blue-800 text-white">
-      <Header title={t('infoTitle')} backHref="/login" />
+    <div className="min-h-screen bg-bg-primary">
+      <Header
+        title={t('infoTitle')}
+        backHref="/login"
+      />
       
-      <div className="max-w-lg mx-auto px-4 py-6">
-        <div className="text-center mb-6">
-          <p className="text-blue-200">{t('infoDesc')}</p>
+      <div className="min-h-screen p-4 md:p-6">
+        <div className="text-center mb-8">
+          <p className="text-text-secondary">{t('infoDesc')}</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20">
+        <form onSubmit={handleSubmit} className="bg-bg-surface rounded-2xl p-6 md:p-8 border border-border max-w-lg mx-auto">
           
           {/* DOB */}
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-blue-200 mb-2">{t('dob')}</label>
-            <div className="grid grid-cols-3 gap-3">
+          <div className="mb-5">
+            <label className="block text-sm text-text-secondary mb-2">{t('dob')}</label>
+            <div className="grid grid-cols-3 gap-3 mb-3">
               <div>
-                <label className="block text-xs text-blue-300 mb-1">{t('day')}</label>
+                <label className="block text-xs text-text-secondary mb-1">{t('day')}</label>
                 <select
                   value={formData.dobDay}
                   onChange={(e) => setFormData({...formData, dobDay: e.target.value})}
@@ -69,7 +74,7 @@ export default function InfoPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs text-blue-300 mb-1">{t('month')}</label>
+                <label className="block text-xs text-text-secondary mb-1">{t('month')}</label>
                 <select
                   value={formData.dobMonth}
                   onChange={(e) => setFormData({...formData, dobMonth: e.target.value})}
@@ -82,7 +87,7 @@ export default function InfoPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs text-blue-300 mb-1">{t('year')}</label>
+                <label className="block text-xs text-text-secondary mb-1">{t('year')}</label>
                 <select
                   value={formData.dobYear}
                   onChange={(e) => setFormData({...formData, dobYear: e.target.value})}
@@ -99,7 +104,7 @@ export default function InfoPage() {
 
           {/* Gender */}
           <div className="mb-4">
-            <label className="block text-sm font-medium text-blue-200 mb-2">{t('gender')}</label>
+            <label className="block text-sm text-text-secondary mb-2">{t('gender')}</label>
             <div className="grid grid-cols-3 gap-3">
               {[
                 { value: 'male', label: t('male') },
@@ -112,8 +117,8 @@ export default function InfoPage() {
                   onClick={() => setFormData({...formData, gender: option.value})}
                   className={`py-3 rounded-xl font-medium transition-all ${
                     formData.gender === option.value
-                      ? 'bg-yellow-500 text-blue-900'
-                      : 'bg-white/10 border border-white/20 hover:bg-white/20'
+                      ? 'bg-accent-gold text-bg-primary'
+                      : 'bg-bg-surface border-border hover:bg-bg-surface/50 hover:text-accent-gold'
                   }`}
                 >
                   {option.label}
@@ -124,7 +129,7 @@ export default function InfoPage() {
 
           {/* NRC */}
           <div className="mb-4">
-            <label className="block text-sm font-medium text-blue-200 mb-2">{t('nrc')}</label>
+            <label className="block text-sm text-text-secondary mb-2">{t('nrc')}</label>
             <div className="grid grid-cols-3 gap-2 mb-2">
               <select
                 value={formData.nrcState}
@@ -150,41 +155,41 @@ export default function InfoPage() {
                 type="text"
                 value={formData.nrcNumber}
                 onChange={(e) => setFormData({...formData, nrcNumber: e.target.value})}
-                className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl focus:border-yellow-400 focus:outline-none text-white placeholder-blue-300"
+                className="w-full px-4 py-3 bg-bg-surface border border-border rounded-xl focus:border-accent-gold focus:outline-none text-text-primary placeholder-text-muted"
                 placeholder={t('nrcPlaceholder')}
                 maxLength={6}
               />
             </div>
-            <p className="text-xs text-blue-300">{t('nrcExample')}</p>
+            <p className="text-xs text-text-secondary">{t('nrcExample')}</p>
           </div>
 
           {/* Occupation */}
           <div className="mb-4">
-            <label className="block text-sm font-medium text-blue-200 mb-2">{t('occupation')}</label>
+            <label className="block text-sm text-text-secondary mb-2">{t('occupation')}</label>
             <input
               type="text"
               value={formData.occupation}
               onChange={(e) => setFormData({...formData, occupation: e.target.value})}
-              className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl focus:border-yellow-400 focus:outline-none text-white placeholder-blue-300"
+              className="w-full px-4 py-3 bg-bg-surface border border-border rounded-xl focus:border-accent-gold focus:outline-none text-text-primary placeholder-text-muted"
               placeholder={t('occupationPlaceholder')}
             />
           </div>
 
           {/* City */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-blue-200 mb-2">{t('city')}</label>
+          <div className="mb-5">
+            <label className="block text-sm text-text-secondary mb-2">{t('city')}</label>
             <input
               type="text"
               value={formData.city}
               onChange={(e) => setFormData({...formData, city: e.target.value})}
-              className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl focus:border-yellow-400 focus:outline-none text-white placeholder-blue-300"
+              className="w-full px-4 py-3 bg-bg-surface border border-border rounded-xl focus:border-accent-gold focus:outline-none text-text-primary placeholder-text-muted"
               placeholder={t('cityPlaceholder')}
             />
           </div>
 
           <button
             type="submit"
-            className="w-full py-4 bg-yellow-500 text-blue-900 rounded-xl font-bold hover:bg-yellow-400 transition-all"
+            className="w-full py-4 bg-accent-gold text-bg-primary rounded-xl font-bold hover:bg-accent-warm transition-all"
           >
             {t('next')}
           </button>

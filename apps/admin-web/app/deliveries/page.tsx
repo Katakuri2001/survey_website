@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { API_BASE, adminHeaders } from "../lib/api";
 
 type DeliveryStatus = "PROCESSING" | "SHIPPED" | "DELIVERED" | "CANCELLED";
 
@@ -68,7 +69,7 @@ export default function DeliveriesPage() {
       const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
       if (statusFilter) params.set("status", statusFilter);
 
-      const res = await fetch(`/admin/deliveries?${params}`);
+      const res = await fetch(`${API_BASE}/admin/deliveries?${params}`, { headers: adminHeaders() });
       if (!res.ok) throw new Error("Failed to fetch deliveries");
 
       const data: DeliveriesResponse = await res.json();
@@ -82,6 +83,7 @@ export default function DeliveriesPage() {
   }, [statusFilter, offset]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchDeliveries();
   }, [fetchDeliveries]);
 
@@ -89,9 +91,9 @@ export default function DeliveriesPage() {
     setUpdatingId(id);
 
     try {
-      const res = await fetch(`/admin/deliveries/${id}/status`, {
+      const res = await fetch(`${API_BASE}/admin/deliveries/${id}/status`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: adminHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ status }),
       });
 

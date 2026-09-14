@@ -1,18 +1,30 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { useLanguage } from '../context/LanguageContext'
 import Header from '../components/Header'
-
-const API_BASE = 'http://localhost:8787'
+import { API_BASE } from '../lib/api'
 
 interface Question {
   id: string
+  survey_version_id: string
   question_text: string
   question_type: string
   is_required: boolean
   display_order: number
-  options: { id: string; option_text: string; option_value: string }[]
+  is_active: boolean
+  validation_rules: string | null
+  version_title: string
+  product_name: string
+  option_count: number
+  options?: Option[]
+}
+
+interface Option {
+  id: string
+  option_text: string
+  option_value: string
 }
 
 interface Answer {
@@ -23,6 +35,7 @@ interface Answer {
 
 export default function SurveyPage() {
   const { t, language } = useLanguage()
+  const router = useRouter()
   const [currentQuestion, setCurrentQuestion] = useState(0)
   const [questions, setQuestions] = useState<Question[]>([])
   const [answers, setAnswers] = useState<Record<string, Answer>>({})
@@ -31,90 +44,55 @@ export default function SurveyPage() {
   const [submitting, setSubmitting] = useState(false)
   const [reviewMode, setReviewMode] = useState(false)
 
-  // Get product ID from URL or default
-  const productId = typeof window !== 'undefined'
-    ? new URLSearchParams(window.location.search).get('product') || 'prod-1'
-    : 'prod-1'
+  // Get product ID from URL or resolve the first active product
+  const [productId, setProductId] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return new URLSearchParams(window.location.search).get('product')
+    }
+    return null
+  })
 
   useEffect(() => {
-    fetchQuestions()
-  }, [language])
-
-  async function fetchQuestions() {
-    try {
-      setLoading(true)
-      const res = await fetch(`${API_BASE}/survey/questions/${productId}?lang=${language}`)
-      const data = await res.json()
-
-      if (data.success && data.data.questions) {
-        setQuestions(data.data.questions)
-      } else {
-        // Fallback to hardcoded questions if API fails
-        setQuestions([
-          { id: 'q1', question_text: t('q1'), question_type: 'single_choice', is_required: true, display_order: 1, options: [
-            { id: 'q1_a', option_text: t('q1_a'), option_value: 'daily' },
-            { id: 'q1_b', option_text: t('q1_b'), option_value: 'weekly' },
-            { id: 'q1_c', option_text: t('q1_c'), option_value: 'monthly' },
-            { id: 'q1_d', option_text: t('q1_d'), option_value: 'occasionally' },
-            { id: 'q1_e', option_text: t('q1_e'), option_value: 'never' },
-          ]},
-          { id: 'q2', question_text: t('q2'), question_type: 'single_choice', is_required: true, display_order: 2, options: [
-            { id: 'q2_a', option_text: t('q2_a'), option_value: 'premium' },
-            { id: 'q2_b', option_text: t('q2_b'), option_value: 'light' },
-            { id: 'q2_c', option_text: t('q2_c'), option_value: 'gold' },
-            { id: 'q2_d', option_text: t('q2_d'), option_value: 'all' },
-          ]},
-          { id: 'q3', question_text: t('q3'), question_type: 'single_choice', is_required: true, display_order: 3, options: [
-            { id: 'q3_a', option_text: t('q3_a'), option_value: 'quality' },
-            { id: 'q3_b', option_text: t('q3_b'), option_value: 'price' },
-            { id: 'q3_c', option_text: t('q3_c'), option_value: 'taste' },
-            { id: 'q3_d', option_text: t('q3_d'), option_value: 'brand' },
-            { id: 'q3_e', option_text: t('q3_e'), option_value: 'availability' },
-          ]},
-          { id: 'q4', question_text: t('q4'), question_type: 'single_choice', is_required: true, display_order: 4, options: [
-            { id: 'q4_a', option_text: t('q4_a'), option_value: 'liquor_store' },
-            { id: 'q4_b', option_text: t('q4_b'), option_value: 'supermarket' },
-            { id: 'q4_c', option_text: t('q4_c'), option_value: 'restaurant' },
-            { id: 'q4_d', option_text: t('q4_d'), option_value: 'online' },
-            { id: 'q4_e', option_text: t('q4_e'), option_value: 'convenience' },
-          ]},
-          { id: 'q5', question_text: t('q5'), question_type: 'single_choice', is_required: true, display_order: 5, options: [
-            { id: 'q5_a', option_text: t('q5_a'), option_value: 'very_satisfied' },
-            { id: 'q5_b', option_text: t('q5_b'), option_value: 'satisfied' },
-            { id: 'q5_c', option_text: t('q5_c'), option_value: 'neutral' },
-            { id: 'q5_d', option_text: t('q5_d'), option_value: 'dissatisfied' },
-            { id: 'q5_e', option_text: t('q5_e'), option_value: 'very_dissatisfied' },
-          ]},
-          { id: 'q6', question_text: t('q6'), question_type: 'single_choice', is_required: true, display_order: 6, options: [
-            { id: 'q6_a', option_text: t('q6_a'), option_value: 'definitely_yes' },
-            { id: 'q6_b', option_text: t('q6_b'), option_value: 'probably_yes' },
-            { id: 'q6_c', option_text: t('q6_c'), option_value: 'not_sure' },
-            { id: 'q6_d', option_text: t('q6_d'), option_value: 'probably_no' },
-            { id: 'q6_e', option_text: t('q6_e'), option_value: 'definitely_no' },
-          ]},
-          { id: 'q7', question_text: t('q7'), question_type: 'rating', is_required: true, display_order: 7, options: [
-            { id: 'q7_a', option_text: '1', option_value: '1' },
-            { id: 'q7_b', option_text: '2', option_value: '2' },
-            { id: 'q7_c', option_text: '3', option_value: '3' },
-            { id: 'q7_d', option_text: '4', option_value: '4' },
-            { id: 'q7_e', option_text: '5', option_value: '5' },
-          ]},
-          { id: 'q8', question_text: t('q8'), question_type: 'multiple_choice', is_required: false, display_order: 8, options: [
-            { id: 'q8_a', option_text: t('q8_a'), option_value: 'fruit_flavored' },
-            { id: 'q8_b', option_text: t('q8_b'), option_value: 'low_calorie' },
-            { id: 'q8_c', option_text: t('q8_c'), option_value: 'non_alcoholic' },
-            { id: 'q8_d', option_text: t('q8_d'), option_value: 'larger_bottle' },
-            { id: 'q8_e', option_text: t('q8_e'), option_value: 'limited_edition' },
-          ]},
-          { id: 'q9', question_text: t('q9'), question_type: 'text', is_required: false, display_order: 9, options: [] },
-        ])
-      }
-    } catch (err) {
-      setError(t('failedToLoad'))
-    } finally {
-      setLoading(false)
+    if (!productId) {
+      fetch(`${API_BASE}/products?lang=${language}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.success && data.data && data.data.length > 0) {
+            setProductId(data.data[0].id)
+          } else {
+            setProductId('prod-1')
+          }
+        })
+        .catch(() => setProductId('prod-1'))
     }
-  }
+  }, [language, productId])
+
+  useEffect(() => {
+    if (!productId) return
+    let cancelled = false
+
+    fetch(`${API_BASE}/survey/questions/${productId}?lang=${language}`)
+      .then(r => r.json())
+      .then(data => {
+        if (cancelled) return
+        if (data.success && data.data.questions) {
+          setQuestions(data.data.questions)
+        } else {
+          setQuestions([])
+        }
+      })
+      .catch(() => {
+        if (cancelled) return
+        setError(t('failedToLoad'))
+        setQuestions([])
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [language, productId])
 
   const handleSelect = (questionId: string, optionValue: string, questionType: string) => {
     if (questionType === 'multiple_choice') {
@@ -155,12 +133,30 @@ export default function SurveyPage() {
   const handleSubmit = async () => {
     setSubmitting(true)
     try {
+      let campaignId: string | null = null
+      try {
+        const campRes = await fetch(`${API_BASE}/campaigns?lang=${language}`)
+        const campData = await campRes.json()
+        if (campData.success && campData.data && campData.data.length > 0) {
+          campaignId = campData.data[0].id
+        }
+      } catch { /* campaign optional */ }
       const answerArray = Object.values(answers)
+      let userId: string | null = null
+      try {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('survey_token') : null
+        if (token) {
+          const payload = JSON.parse(atob(token.split('.')[1]))
+          if (payload.sub) userId = payload.sub
+        }
+      } catch { /* not logged in */ }
       const res = await fetch(`${API_BASE}/survey/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           productId,
+          campaignId,
+          userId,
           language,
           answers: answerArray,
         })
@@ -171,28 +167,34 @@ export default function SurveyPage() {
         // Store response ID for spin
         if (typeof window !== 'undefined') {
           sessionStorage.setItem('survey_response_id', data.data.responseId)
+          sessionStorage.setItem('survey_product_id', productId)
+          if (campaignId) sessionStorage.setItem('survey_campaign_id', campaignId)
         }
-        window.location.href = '/spin'
+        router.push('/spin')
       } else {
         setError(data.error?.message || t('failedToSubmit'))
       }
-    } catch (err) {
+    } catch {
       setError(t('connectionFailed'))
     } finally {
       setSubmitting(false)
     }
   }
 
-  const progress = reviewMode ? 100 : ((currentQuestion + 1) / questions.length) * 100
+  // Calculate progress
+  const progress = reviewMode ? 100 : ((currentQuestion + 1) / Math.max(questions.length, 1)) * 100
   const currentQ = questions[currentQuestion]
-  const selectedOptions = currentQ ? (answers[currentQ.id]?.value as string[]) || [] : []
+  // Determine if can go back
+  const canGoBack = currentQuestion > 0 || reviewMode
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-900 to-blue-800 text-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-yellow-400 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-blue-200">{t('loading')}</p>
+      <div className="min-h-screen bg-bg-primary min-h-screen">
+        <div className="flex min-h-screen items-center justify-center p-4">
+          <div className="w-16 h-16 bg-accent-gold rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-3xl font-bold text-bg-primary">MB</span>
+          </div>
+          <p className="text-sm text-text-secondary">{t('loading')}</p>
         </div>
       </div>
     )
@@ -201,61 +203,82 @@ export default function SurveyPage() {
   // Review mode
   if (reviewMode) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-900 to-blue-800 text-white">
-        <Header title={t('surveyTitle')} backHref="/survey" />
-        
-        <div className="max-w-lg mx-auto px-4 py-6">
-          <div className="text-center mb-6">
-            <h2 className="text-xl font-bold text-yellow-300">{t('reviewAnswers')}</h2>
-          </div>
+      <div className="min-h-screen bg-bg-primary">
+        <Header
+          title={t('surveyTitle')}
+          backHref="/survey"
+          showBack={currentQuestion > 0}
+        />
+        {error && <div className="mx-auto max-w-lg px-4 py-3 mb-4 bg-error/10 text-error rounded-xl text-sm">{error}</div>}
+        <div className="min-h-screen p-4 md:p-6">
+          <div className="max-w-lg mx-auto">
+            <div className="text-center mb-8">
+              <h2 className="text-3xl font-bold text-accent-warm mb-3">{t('reviewAnswers')}</h2>
+              <p className="text-text-secondary mb-6">Please review your answers before submitting</p>
+            </div>
 
-          <div className="space-y-3">
-            {questions.map((q, i) => {
-              const answer = answers[q.id]
-              let displayAnswer = ''
+            <div className="space-y-3">
+              {questions.map((q, i) => {
+                const answer = answers[q.id]
+                let displayAnswer = ''
 
-              if (answer) {
-                if (q.question_type === 'rating') {
-                  displayAnswer = '★'.repeat(Number(answer.value)) + '☆'.repeat(5 - Number(answer.value))
-                } else if (q.question_type === 'multiple_choice' && Array.isArray(answer.value)) {
-                  displayAnswer = answer.value.join(', ')
-                } else if (q.question_type === 'text') {
-                  displayAnswer = String(answer.value) || '-'
-                } else {
-                  const option = q.options.find(o => o.option_value === answer.value)
-                  displayAnswer = option?.option_text || String(answer.value)
+                if (answer) {
+                  if (q.question_type === 'rating') {
+                    const rating = Number(answer.value)
+                    const fullStars = Math.floor(rating)
+                    const halfStar = rating - fullStars >= 0.5
+                    let stars = ''
+                    for (let j = 1; j <= 5; j++) {
+                      if (j <= fullStars) stars += '★'
+                      else if (j === fullStars + 1 && halfStar) stars += '½'
+                      else stars += '☆'
+                    }
+                    displayAnswer = stars
+                  } else if (q.question_type === 'multiple_choice' && Array.isArray(answer.value)) {
+                    displayAnswer = answer.value.map(v => {
+                      const opt = q.options?.find(o => o.option_value === v)
+                      return opt ? opt.option_text : v
+                    }).join(', ')
+                  } else if (q.question_type === 'text') {
+                    displayAnswer = String(answer.value) || '-'
+                  } else {
+                    const option = q.options?.find(o => o.option_value === answer.value)
+                    displayAnswer = option?.option_text || String(answer.value)
+                  }
                 }
-              }
 
-              return (
-                <div key={q.id} className="bg-white/10 backdrop-blur-lg rounded-xl p-4 border border-white/20">
-                  <div className="flex items-start gap-3">
-                    <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm text-blue-200">{q.question_text}</p>
-                      <p className="text-white font-medium mt-1">{displayAnswer || <span className="text-blue-300">{t('notAnswered')}</span>}</p>
+                return (
+                  <div key={q.id} className="bg-bg-surface rounded-xl p-5 border border-border mb-4">
+                    <div className="flex items-start gap-4">
+                      <div className="w-10 h-10 rounded-lg bg-bg-surface flex items-center justify-center flex-shrink-0">
+                        <span className="text-sm font-medium text-text-primary">{i + 1}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-text-primary font-medium mb-1 truncate">{q.question_text}</p>
+                        {displayAnswer && <p className="text-text-secondary text-sm mb-1">{displayAnswer}</p>}
+                      </div>
                     </div>
                   </div>
-                </div>
-              )
-            })}
-          </div>
+                )
+              })}
+            </div>
 
-          <div className="mt-6 flex gap-3">
-            <button onClick={handlePrev} className="flex-1 py-3 bg-white/10 border border-white/20 rounded-xl font-medium hover:bg-white/20 transition-all">
-              {t('back')}
-            </button>
-            <button
-              onClick={handleSubmit}
-              disabled={submitting}
-              className="flex-1 py-3 bg-green-500 text-white rounded-xl font-bold hover:bg-green-400 transition-all disabled:opacity-50"
-            >
-              {submitting ? t('loading') : t('submit')}
-            </button>
+            <div className="mt-8 flex gap-3 justify-end">
+              <button
+                onClick={handlePrev}
+                disabled={currentQuestion === 0 && !reviewMode}
+                className="px-4 py-2 bg-white/10 text-text-secondary rounded-lg hover:bg-bg-surface transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {t('back')}
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={submitting}
+                className="px-6 py-3 bg-accent-gold text-bg-primary rounded-xl font-bold hover:bg-accent-warm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {submitting ? t('loading') : t('submit')}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -263,112 +286,166 @@ export default function SurveyPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-900 to-blue-800 text-white">
-      <Header title={t('surveyTitle')} backHref="/info" />
-      
-      {/* Progress */}
-      <div className="max-w-lg mx-auto px-4 py-4">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm text-blue-200">{t('question')} {currentQuestion + 1} / {questions.length}</span>
-          <span className="text-sm text-yellow-400 font-medium">{Math.round(progress)}%</span>
+    <div className="min-h-screen bg-bg-primary">
+      <Header
+        title={t('surveyTitle')}
+        backHref="/info"
+        showBack={currentQuestion > 0}
+      />
+
+      {error && <div className="mx-auto max-w-2xl px-4 py-3 mb-4 bg-error/10 text-error rounded-xl text-sm">{error}</div>}
+
+      <div className="bg-bg-surface rounded-2xl p-4 mb-6 border border-border">
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-sm text-text-secondary">{t('question')} {currentQuestion + 1} / {Math.max(questions.length, 1)}</span>
+          <span className="text-xs font-medium text-text-secondary">{Math.round(progress)}%</span>
         </div>
-        <div className="h-2 bg-blue-700 rounded-full overflow-hidden">
+        <div className="h-2 bg-border rounded-full overflow-hidden">
           <div 
-            className="h-full bg-yellow-400 rounded-full transition-all duration-300" 
+            className="h-full bg-accent-gold rounded-full transition-all duration-300" 
             style={{ width: `${progress}%` }}
           />
         </div>
       </div>
 
-      {error && (
-        <div className="max-w-lg mx-auto px-4">
-          <div className="bg-red-500/20 border border-red-400/30 rounded-xl p-3 text-sm text-red-200">
-            {error}
-          </div>
-        </div>
-      )}
-
-      {/* Survey Content */}
-      <div className="max-w-lg mx-auto px-4 py-6">
-        <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20">
-          <h2 className="text-xl font-bold mb-6 text-yellow-300">
-            {currentQ?.question_text}
-          </h2>
+      <div className="max-w-2xl mx-auto px-4 py-6">
+        <div className="bg-bg-surface rounded-2xl p-6 border border-border">
+          <h2 className="text-xl font-bold text-accent-warm mb-6">{currentQ?.question_text}</h2>
 
           {currentQ?.question_type === 'text' ? (
-            <textarea
-              value={(answers[currentQ.id]?.value as string) || ''}
-              onChange={(e) => handleTextChange(currentQ.id, e.target.value)}
-              className="w-full h-32 px-4 py-3 bg-white/10 border border-white/20 rounded-xl focus:border-yellow-400 focus:outline-none text-white placeholder-blue-300 resize-none"
-              placeholder={t('textPlaceholder')}
-            />
-          ) : currentQ?.question_type === 'rating' ? (
-            <div className="flex justify-center gap-2">
-              {[1, 2, 3, 4, 5].map((rating) => (
-                <button
-                  key={rating}
-                  onClick={() => handleRating(currentQ.id, rating)}
-                  className={`w-14 h-14 rounded-xl text-2xl font-bold transition-all ${
-                    Number(answers[currentQ.id]?.value) >= rating
-                      ? 'bg-yellow-400 text-blue-900'
-                      : 'bg-white/10 border border-white/20 hover:bg-yellow-400/20'
-                  }`}
-                >
-                  {rating}
-                </button>
-              ))}
+            <div>
+              <textarea
+                value={(answers[currentQ.id]?.value as string) || ''}
+                onChange={(e) => handleTextChange(currentQ.id, e.target.value)}
+                className="w-full px-4 py-3 bg-bg-surface border border-border rounded-xl focus:border-accent-gold focus:outline-none text-text-primary resize-none min-h-[80px] placeholder-text-muted"
+                placeholder={t('textPlaceholder')}
+                rows={4}
+              />
+              <div className="mt-3 text-xs text-text-secondary">
+                {answers[currentQ.id]?.value ? `${(answers[currentQ.id].value as string).length} / 500` : '0 / 500'}
+              </div>
             </div>
-          ) : (
-            <div className="space-y-3">
+          ) : currentQ?.question_type === 'rating' ? (
+            <div className="flex items-center gap-4 mb-6">
+              <p className="text-text-secondary">How do you rate this product?</p>
+              <div className="flex gap-1">
+                {[1, 2, 3, 4, 5].map(rating => (
+                  <button
+                    key={rating}
+                    onClick={() => handleRating(currentQ.id, rating)}
+                    aria-label={`${rating} out of 5`}
+                    aria-pressed={answers[currentQ.id]?.value && Number(answers[currentQ.id].value) >= rating}
+                    className={`w-14 h-14 rounded-2xl flex items-center justify-center text-3xl font-bold transition-all ${
+                      answers[currentQ.id]?.value && Number(answers[currentQ.id].value) >= rating
+                        ? 'bg-accent-gold text-bg-primary'
+                        : 'bg-bg-surface border-border hover:bg-accent-gold/20 hover:text-accent-gold'
+                    }`}
+                  >
+                    {rating}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-2 text-xs text-text-secondary">
+                Very dissatisfied · Very satisfied
+              </p>
+            </div>
+          ) : currentQ?.question_type === 'yes_no' ? (
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              <button
+                onClick={() => handleSelect(currentQ.id, 'yes', 'yes_no')}
+                className={`w-full rounded-2xl p-5 flex items-center justify-center gap-3 ${
+                  answers[currentQ.id]?.value === 'yes'
+                    ? 'bg-accent-gold/20 border-accent-gold text-accent-gold'
+                    : 'bg-bg-surface border-border text-text-secondary hover:bg-accent-gold/20 hover:text-accent-gold'
+                }`}>
+                  <svg className="w-5 h-5 text-accent-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span>Yes</span>
+                </button>
+                <button
+                  onClick={() => handleSelect(currentQ.id, 'no', 'yes_no')}
+                  className={`w-full rounded-2xl p-5 flex items-center justify-center gap-3 ${
+                    answers[currentQ.id]?.value === 'no'
+                      ? 'bg-accent-gold/20 border-accent-gold text-accent-gold'
+                      : 'bg-bg-surface border-border text-text-secondary hover:bg-accent-gold/20 hover:text-accent-gold'
+                  }`}>
+                    <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002-2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"
+                    /></svg>
+                    <span>No</span>
+                </button>
+            </div>
+          ) : currentQ?.question_type === 'multiple_choice' ? (
+            <div className="space-y-2">
               {currentQ?.options.map((option) => (
                 <button
                   key={option.id}
                   onClick={() => handleSelect(currentQ.id, option.option_value, currentQ.question_type)}
-                  className={`w-full p-4 border rounded-xl text-left transition-all ${
-                    currentQ.question_type === 'multiple_choice'
-                      ? selectedOptions.includes(option.option_value)
-                        ? 'bg-yellow-500/30 border-yellow-400 text-white'
-                        : 'bg-white/10 border-white/20 hover:bg-yellow-500/20 hover:border-yellow-400/50'
-                      : answers[currentQ.id]?.value === option.option_value
-                        ? 'bg-yellow-500/30 border-yellow-400 text-white'
-                        : 'bg-white/10 border-white/20 hover:bg-yellow-500/20 hover:border-yellow-400/50'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
+                  className={`w-full px-4 py-3 bg-bg-surface border-border rounded-xl text-left transition-all hover:bg-accent-gold/20 hover:border-accent-gold/50 flex items-center gap-3 ${
+                    answers[currentQ.id]?.value && (answers[currentQ.id].value as string[]).includes(option.option_value)
+                      ? 'bg-accent-gold/30 border-accent-gold text-accent-gold'
+                      : 'bg-bg-surface border-border hover:bg-accent-gold/20 hover:border-accent-gold/50'
+                  }`}>
                     <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                      currentQ.question_type === 'multiple_choice'
-                        ? selectedOptions.includes(option.option_value) ? 'border-yellow-400 bg-yellow-400' : 'border-white/40'
-                        : answers[currentQ.id]?.value === option.option_value ? 'border-yellow-400 bg-yellow-400' : 'border-white/40'
+                      answers[currentQ.id]?.value && (answers[currentQ.id].value as string[]).includes(option.option_value)
+                        ? 'border-accent-gold bg-accent-gold'
+                        : 'border-white/40'
                     }`}>
-                      {(currentQ.question_type === 'multiple_choice'
-                        ? selectedOptions.includes(option.option_value)
-                        : answers[currentQ.id]?.value === option.option_value
-                      ) && (
-                        <svg className="w-3 h-3 text-blue-900" fill="currentColor" viewBox="0 0 20 20">
+                      {(answers[currentQ.id]?.value && (answers[currentQ.id].value as string[]).includes(option.option_value)) && (
+                        <svg className="w-3 h-3 text-accent-gold" fill="currentColor" viewBox="0 0 20 20">
                           <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                         </svg>
                       )}
                     </div>
-                    <span>{option.option_text}</span>
-                  </div>
-                </button>
-              ))}
+                    <span className="flex-1 truncate">{option.option_text}</span>
+                  </button>
+                ))}
             </div>
+          ) : currentQ?.question_type === 'single_choice' ? (
+            <div className="space-y-2">
+              {currentQ?.options.map((option) => (
+                <button
+                  key={option.id}
+                  onClick={() => handleSelect(currentQ.id, option.option_value, currentQ.question_type)}
+                  className={`w-full px-4 py-3 bg-bg-surface border-border rounded-xl text-left transition-all hover:bg-accent-gold/20 hover:border-accent-gold/50 flex items-center gap-3 ${
+                    answers[currentQ.id]?.value === option.option_value
+                      ? 'bg-accent-gold/30 border-accent-gold text-accent-gold'
+                      : 'bg-bg-surface border-border hover:bg-accent-gold/20 hover:border-accent-gold/50'
+                  }`}>
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                      answers[currentQ.id]?.value === option.option_value
+                        ? 'border-accent-gold bg-accent-gold'
+                        : 'border-white/40'
+                    }`}>
+                      {(answers[currentQ.id]?.value === option.option_value) && (
+                        <svg className="w-3 h-3 text-accent-gold" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                    </div>
+                    <span className="flex-1 truncate">{option.option_text}</span>
+                  </button>
+                ))}
+            </div>
+          ) : (
+            <p className="text-text-secondary">{t('notAnswered')}</p>
           )}
         </div>
+      </div>
 
-        {/* Navigation */}
-        <div className="mt-6 flex gap-3">
-          <button 
+      <div className="mt-6 border-t border-border pt-6">
+        <div className="flex gap-3">
+          <button
             onClick={handlePrev}
-            disabled={currentQuestion === 0 && !reviewMode}
-            className="flex-1 py-3 bg-white/10 border border-white/20 rounded-xl font-medium hover:bg-white/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={!canGoBack}
+            className="flex-1 py-3 bg-bg-surface/50 text-text-secondary rounded-lg hover:bg-bg-surface transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {t('back')}
           </button>
-          <button 
+          <button
             onClick={handleNext}
-            className="flex-1 py-3 bg-yellow-500 text-blue-900 rounded-xl font-bold hover:bg-yellow-400 transition-all"
+            className="flex-1 py-3 bg-accent-gold text-bg-primary rounded-xl font-bold hover:bg-accent-warm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {currentQuestion === questions.length - 1 ? t('review') : t('next')}
           </button>

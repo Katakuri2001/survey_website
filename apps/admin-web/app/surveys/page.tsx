@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 
-const API_BASE = 'http://localhost:8787'
+import { API_BASE } from '../lib/api'
 
 type Tab = 'questions' | 'versions'
 
@@ -247,8 +247,8 @@ function QuestionModal({
     try {
       await onSave(form)
       onClose()
-    } catch (err: any) {
-      setError(err.message || 'Failed to save question')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to save question')
     } finally {
       setSaving(false)
     }
@@ -484,8 +484,8 @@ function VersionModal({
     try {
       await onSave(form)
       onClose()
-    } catch (err: any) {
-      setError(err.message || 'Failed to create version')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to create version')
     } finally {
       setSaving(false)
     }
@@ -655,6 +655,7 @@ export default function SurveysPage() {
   }, [])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchQuestions()
     fetchVersions()
   }, [fetchQuestions, fetchVersions])

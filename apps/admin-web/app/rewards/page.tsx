@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { API_BASE, adminHeaders } from "../lib/api";
 
 type Reward = {
   id: string;
@@ -107,19 +108,19 @@ export default function RewardsPage() {
   const historyLimit = 50;
 
   const fetchRewards = useCallback(async () => {
-    const res = await fetch("/admin/rewards");
+    const res = await fetch(`${API_BASE}/admin/rewards`, { headers: adminHeaders() });
     if (!res.ok) throw new Error("Failed to fetch rewards");
     return res.json();
   }, []);
 
   const fetchInventory = useCallback(async () => {
-    const res = await fetch("/admin/rewards/inventory");
+    const res = await fetch(`${API_BASE}/admin/rewards/inventory`, { headers: adminHeaders() });
     if (!res.ok) throw new Error("Failed to fetch inventory");
     return res.json();
   }, []);
 
   const fetchHistory = useCallback(async (offset: number) => {
-    const res = await fetch(`/admin/rewards/history?limit=${historyLimit}&offset=${offset}`);
+    const res = await fetch(`${API_BASE}/admin/rewards/history?limit=${historyLimit}&offset=${offset}`, { headers: adminHeaders() });
     if (!res.ok) throw new Error("Failed to fetch history");
     return res.json();
   }, []);
@@ -148,6 +149,7 @@ export default function RewardsPage() {
   }, [tab, historyOffset, fetchRewards, fetchInventory, fetchHistory]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadData();
   }, [loadData]);
 
@@ -194,7 +196,7 @@ export default function RewardsPage() {
       if (form.campaignId) body.campaignId = form.campaignId;
 
       const method = editingReward ? "PATCH" : "POST";
-      const url = editingReward ? `/admin/rewards/${editingReward.id}` : "/admin/rewards";
+      const url = editingReward ? `${API_BASE}/admin/rewards/${editingReward.id}` : `${API_BASE}/admin/rewards`;
 
       if (editingReward) {
         body.isActive = form.isActive;
@@ -203,7 +205,7 @@ export default function RewardsPage() {
 
       const res = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json" },
+        headers: adminHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(body),
       });
 
@@ -228,9 +230,9 @@ export default function RewardsPage() {
     setAdjusting(true);
     setError("");
     try {
-      const res = await fetch(`/admin/rewards/${adjustModal.reward.id}/stock`, {
+      const res = await fetch(`${API_BASE}/admin/rewards/${adjustModal.reward.id}/stock`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: adminHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ adjustment, reason }),
       });
       if (!res.ok) throw new Error("Failed to adjust stock");
@@ -350,8 +352,12 @@ export default function RewardsPage() {
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
                             {r.image_url && (
-                              <img src={r.image_url} alt={r.name} className="h-10 w-10 rounded object-cover" />
+                              <>
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={r.image_url} alt={r.name} className="h-10 w-10 rounded object-cover" />
+                              </>
                             )}
+
                             <div>
                               <div className="text-sm font-medium text-gray-900">{r.name}</div>
                               <div className="text-xs text-gray-500 line-clamp-1">{r.description}</div>

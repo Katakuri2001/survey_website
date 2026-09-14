@@ -2,6 +2,9 @@ name = "alcohol-survey-platform"
 main = "apps/api/src/index.ts"
 compatibility_date = "2026-09-01"
 
+[vars]
+JWT_SECRET = "dev-jwt-secret-change-in-production"
+
 [[d1_databases]]
   binding = "survey_db"
   database_name = "survey-db"

@@ -2,12 +2,28 @@
 
 import { useState, useEffect } from 'react'
 
-const API_BASE = 'http://localhost:8787'
+import { API_BASE } from '../lib/api'
 
 const CHART_COLORS = [
   'bg-indigo-500', 'bg-emerald-500', 'bg-amber-500',
   'bg-rose-500', 'bg-cyan-500', 'bg-violet-500',
 ]
+
+type HorizontalBarItem = Record<string, string | number | undefined>
+interface PopularityItem { name: string; response_count: number; percentage?: number }
+interface RatingItem { name: string; avg_rating: number }
+interface AgeGroupItem { age_group: string; avg_rating: number; response_count: number }
+interface ComparisonItem {
+  name: string
+  total_responses: number
+  avg_rating: number
+  taste_rating: number
+  packaging_rating: number
+  value_rating: number
+  recommendation_rate: number
+}
+interface TrendItem { date: string; count: number }
+interface ProductItem { id: string; name: string }
 
 function LoadingSkeleton() {
   return (
@@ -57,51 +73,30 @@ function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }
   )
 }
 
-function HorizontalBarChart({ data, labelKey, valueKey, colorKey }: {
-  data: any[]
-  labelKey: string
-  valueKey: string
-  colorKey?: string
+function HorizontalBarChart<T extends HorizontalBarItem>({ data, labelKey, valueKey, colorKey }: {
+  data: T[]
+  labelKey: keyof T
+  valueKey: keyof T
+  colorKey?: keyof T
 }) {
-  const maxValue = Math.max(...data.map(d => d[valueKey] || 0), 1)
+  const maxValue = Math.max(...data.map(d => Number(d[valueKey] || 0)), 1)
   return (
     <div className="space-y-3">
       {data.map((item, i) => (
         <div key={i}>
           <div className="flex items-center justify-between mb-1">
             <span className="text-sm text-gray-600 truncate max-w-[60%]">{item[labelKey]}</span>
-            <span className="text-sm font-medium text-gray-900">{typeof item[valueKey] === 'number' && item[valueKey] % 1 !== 0 ? item[valueKey].toFixed(2) : item[valueKey]}</span>
+            <span className="text-sm font-medium text-gray-900">{typeof item[valueKey] === 'number' && item[valueKey] % 1 !== 0 ? (item[valueKey] as number).toFixed(2) : item[valueKey]}</span>
           </div>
           <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
             <div
               className={`h-full rounded-full transition-all duration-500 ${colorKey ? item[colorKey] : CHART_COLORS[i % CHART_COLORS.length]}`}
-              style={{ width: `${((item[valueKey] || 0) / maxValue) * 100}%` }}
+              style={{ width: `${(Number(item[valueKey] || 0) / maxValue) * 100}%` }}
             />
           </div>
         </div>
       ))}
       {data.length === 0 && <p className="text-sm text-gray-400 text-center py-4">No data available</p>}
-    </div>
-  )
-}
-
-function VerticalBarChart({ data, title }: { data: { name: string; value: number }[]; title: string }) {
-  const maxValue = Math.max(...data.map(d => d.value), 1)
-  return (
-    <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-      <SectionHeader title={title} />
-      <div className="flex items-end gap-2 h-48 mt-4">
-        {data.map((item, i) => (
-          <div key={i} className="flex-1 flex flex-col items-center gap-1 min-w-0">
-            <span className="text-xs font-medium text-gray-700">{item.value}</span>
-            <div className="w-full rounded-t transition-all duration-500" style={{ height: `${(item.value / maxValue) * 100}%`, minHeight: '4px' }}>
-              <div className={`w-full h-full rounded-t ${CHART_COLORS[i % CHART_COLORS.length]}`} />
-            </div>
-            <span className="text-[11px] text-gray-500 text-center leading-tight truncate w-full" title={item.name}>{item.name}</span>
-          </div>
-        ))}
-        {data.length === 0 && <p className="text-sm text-gray-400 text-center py-4 w-full">No data available</p>}
-      </div>
     </div>
   )
 }
@@ -131,7 +126,7 @@ function RatingStars({ rating }: { rating: number }) {
   )
 }
 
-function ComparisonTable({ data }: { data: any[] }) {
+function ComparisonTable({ data }: { data: ComparisonItem[] }) {
   if (data.length === 0) return <p className="text-sm text-gray-400 text-center py-8">No comparison data available</p>
 
   return (
@@ -178,7 +173,7 @@ function ComparisonTable({ data }: { data: any[] }) {
   )
 }
 
-function AgeGroupChart({ data, productName }: { data: any[]; productName: string }) {
+function AgeGroupChart({ data, productName }: { data: AgeGroupItem[]; productName: string }) {
   if (data.length === 0) return <p className="text-sm text-gray-400 text-center py-8">No age group data available</p>
 
   const maxValue = Math.max(...data.map(d => d.avg_rating || 0), 5)
@@ -245,12 +240,12 @@ function ParticipationTrend({ data }: { data: { date: string; count: number }[] 
 }
 
 export default function AnalyticsPage() {
-  const [popularity, setPopularity] = useState<any[]>([])
-  const [ratings, setRatings] = useState<any[]>([])
-  const [ageGroups, setAgeGroups] = useState<any[]>([])
-  const [comparison, setComparison] = useState<any[]>([])
-  const [trend, setTrend] = useState<any[]>([])
-  const [products, setProducts] = useState<any[]>([])
+  const [popularity, setPopularity] = useState<PopularityItem[]>([])
+  const [ratings, setRatings] = useState<RatingItem[]>([])
+  const [ageGroups, setAgeGroups] = useState<AgeGroupItem[]>([])
+  const [comparison, setComparison] = useState<ComparisonItem[]>([])
+  const [trend, setTrend] = useState<TrendItem[]>([])
+  const [products, setProducts] = useState<ProductItem[]>([])
   const [selectedProductId, setSelectedProductId] = useState<string>('')
   const [trendPeriod, setTrendPeriod] = useState<number>(30)
 
@@ -259,16 +254,19 @@ export default function AnalyticsPage() {
 
   useEffect(() => {
     fetchAllData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
     if (selectedProductId) {
       fetchAgeGroups(selectedProductId)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedProductId])
 
   useEffect(() => {
     fetchTrend(trendPeriod)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trendPeriod])
 
   async function fetchWithAuth(url: string) {
@@ -322,7 +320,7 @@ export default function AnalyticsPage() {
       }
 
       setErrors(newErrors)
-    } catch (err) {
+    } catch {
       setErrors({ general: 'Failed to connect to server' })
     } finally {
       setLoading(false)
@@ -351,7 +349,7 @@ export default function AnalyticsPage() {
     }
   }
 
-  const selectedProductName = products.find((p: any) => p.id === selectedProductId)?.name || ''
+  const selectedProductName = products.find(p => p.id === selectedProductId)?.name || ''
 
   const totalResponses = popularity.reduce((sum, p) => sum + (p.response_count || 0), 0)
   const avgOverallRating = ratings.length > 0
@@ -450,7 +448,7 @@ export default function AnalyticsPage() {
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white"
             >
               <option value="">Choose a product...</option>
-              {products.map((p: any) => (
+              {products.map((p: ProductItem) => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </select>

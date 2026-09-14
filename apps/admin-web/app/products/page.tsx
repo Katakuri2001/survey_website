@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 
-const API_BASE = 'http://localhost:8787'
+import { API_BASE } from '../lib/api'
 
 interface ProductTranslation {
   name: string
@@ -180,8 +180,8 @@ function ProductModal({
     try {
       await onSave(form)
       onClose()
-    } catch (err: any) {
-      setError(err.message || 'Failed to save product')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to save product')
     } finally {
       setSaving(false)
     }
@@ -332,7 +332,6 @@ export default function ProductsPage() {
   const [showModal, setShowModal] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [togglingId, setTogglingId] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
 
   const fetchProducts = useCallback(async () => {
     setLoading(true)
@@ -355,6 +354,7 @@ export default function ProductsPage() {
   }, [])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchProducts()
   }, [fetchProducts])
 
@@ -478,11 +478,14 @@ export default function ProductsPage() {
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-3">
                         {product.image_url ? (
-                          <img
-                            src={product.image_url}
-                            alt={product.name}
-                            className="w-10 h-10 rounded-lg object-cover bg-gray-100"
-                          />
+                          <>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={product.image_url}
+                              alt={product.name}
+                              className="w-10 h-10 rounded-lg object-cover bg-gray-100"
+                            />
+                          </>
                         ) : (
                           <div className="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center">
                             <svg className="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

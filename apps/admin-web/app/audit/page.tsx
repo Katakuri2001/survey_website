@@ -1,8 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-
-const API_BASE = 'http://localhost:8787'
+import { API_BASE, adminHeaders } from '../lib/api'
 
 interface AuditLog {
   id: string
@@ -127,7 +126,7 @@ export default function AuditLogsPage() {
       if (actionFilter) {
         params.set('action', actionFilter)
       }
-      const res = await fetch(`${API_BASE}/admin/audit-logs?${params}`)
+      const res = await fetch(`${API_BASE}/admin/audit-logs?${params}`, { headers: adminHeaders() })
       if (!res.ok) throw new Error('Failed to fetch audit logs')
       const data = await res.json()
       setLogs(data.logs || [])
@@ -140,6 +139,7 @@ export default function AuditLogsPage() {
   }, [page, actionFilter])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchLogs()
   }, [fetchLogs])
 
