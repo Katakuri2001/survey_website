@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 
 import { API_BASE } from '../lib/api'
 
@@ -230,9 +231,9 @@ export default function DashboardPage() {
           </div>
           <h2 className="text-xl font-bold text-gray-900 mb-2">Admin Login Required</h2>
           <p className="text-gray-500 mb-6">Sign in with your admin account to access the dashboard.</p>
-          <a href="/login" className="inline-block px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition-colors">
+          <Link href="/login" className="inline-block px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition-colors">
             Go to Login
-          </a>
+          </Link>
         </div>
       </div>
     )
@@ -325,10 +326,10 @@ export default function DashboardPage() {
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
           <h3 className="text-sm font-semibold text-gray-900 mb-3">Quick Actions</h3>
           <div className="space-y-2">
-            <a href="/products" className="block w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg">Manage Products</a>
-            <a href="/surveys" className="block w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg">Manage Surveys</a>
-            <a href="/rewards" className="block w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg">Manage Rewards</a>
-            <a href="/deliveries" className="block w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg">View Deliveries</a>
+            <Link href="/products" className="block w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg">Manage Products</Link>
+            <Link href="/surveys" className="block w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg">Manage Surveys</Link>
+            <Link href="/rewards" className="block w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg">Manage Rewards</Link>
+            <Link href="/deliveries" className="block w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg">View Deliveries</Link>
           </div>
         </div>
 
