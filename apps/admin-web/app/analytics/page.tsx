@@ -118,8 +118,8 @@ function HorizontalBarChart<T extends HorizontalBarItem>({ data, labelKey, value
                 <stop offset="100%" stopColor="#BD9B2D" />
               </linearGradient>
               <linearGradient id="emeraldBar" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stopColor="#4E9A6F" />
-                <stop offset="100%" stopColor="#0E4A2A" />
+                <stop offset="0%" stopColor="#00994B" />
+                <stop offset="100%" stopColor="#007A3C" />
               </linearGradient>
             </defs>
             <XAxis type="number" hide />
@@ -298,7 +298,7 @@ function ParticipationTrend({ data }: { data: { date: string; count: number }[] 
             />
             <Bar dataKey="count" radius={[4, 4, 0, 0]} maxBarSize={26}>
               {data.map((item, i) => (
-                <Cell key={i} fill={i % 2 === 0 ? '#D4AF37' : '#1F6B41'} />
+                <Cell key={i} fill={i % 2 === 0 ? '#D4AF37' : '#00994B'} />
               ))}
             </Bar>
           </ReBarChart>

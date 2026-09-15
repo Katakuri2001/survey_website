@@ -5,13 +5,13 @@ import Link from 'next/link'
 import LanguageSwitcher from './components/LanguageSwitcher'
 
 function Bottle({ variant }: { variant: 'dagon' | 'premium' | 'andaman' }) {
-  const glow = variant === 'dagon' ? '#38BDF8' : variant === 'premium' ? '#D4AF37' : '#22C55E'
+  const glow = variant === 'dagon' ? '#00994B' : variant === 'premium' ? '#D4AF37' : '#F0E826'
   return (
     <svg viewBox="0 0 64 140" className="w-16 h-32 md:w-20 md:h-40" aria-hidden="true">
       <defs>
         <linearGradient id={`bottle-${variant}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#0A3D25" />
-          <stop offset="100%" stopColor="#061F14" />
+          <stop offset="0%" stopColor="#1F4F35" />
+          <stop offset="100%" stopColor="#0B2014" />
         </linearGradient>
       </defs>
       {/* body */}
@@ -23,22 +23,23 @@ function Bottle({ variant }: { variant: 'dagon' | 'premium' | 'andaman' }) {
         strokeWidth="1.2"
       />
       {/* neck + cap */}
-      <rect x="27" y="8" width="10" height="24" rx="3" fill="#0B1220" stroke={glow} strokeOpacity="0.4" />
+      <rect x="27" y="8" width="10" height="24" rx="3" fill="#08140D" stroke={glow} strokeOpacity="0.4" />
       <rect x="24" y="4" width="16" height="6" rx="2" fill={glow} />
       {/* label */}
-      <rect x="21" y="52" width="22" height="40" rx="3" fill="#0B1220" stroke={glow} strokeOpacity="0.7" />
+      <rect x="21" y="52" width="22" height="40" rx="3" fill="#08140D" stroke={glow} strokeOpacity="0.7" />
       <circle cx="32" cy="64" r="4" fill={glow} />
       <rect x="25" y="73" width="14" height="2.5" rx="1" fill={glow} opacity="0.8" />
       <rect x="27" y="79" width="10" height="2.5" rx="1" fill={glow} opacity="0.5" />
       {/* bubbles */}
-      <circle cx={glow === '#38BDF8' ? 40 : 24} cy="120" r="1.6" fill={glow} opacity="0.7" />
-      <circle cx={glow === '#38BDF8' ? 28 : 40} cy="106" r="1.2" fill={glow} opacity="0.5" />
+      <circle cx={glow === '#00994B' ? 40 : 24} cy="120" r="1.6" fill={glow} opacity="0.7" />
+      <circle cx={glow === '#00994B' ? 28 : 40} cy="106" r="1.2" fill={glow} opacity="0.5" />
     </svg>
   )
 }
 
 export default function Home() {
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
+  const myFont = language === 'my' ? 'font-myanmar leading-[1.45]' : 'leading-[1.05]'
 
   const products = [
     { variant: 'dagon' as const, name: t('productDagon'), desc: t('productDagonDesc') },
@@ -75,7 +76,7 @@ export default function Home() {
               <img src="/logo.png" alt="MB" className="w-full h-full object-cover rounded-full" />
             </span>
             <span className="hidden sm:block">
-              <span className="block font-display font-bold text-sm gold-text leading-tight">{t('brandName')}</span>
+              <span className={`block font-display font-bold gold-text ${language === 'my' ? 'font-myanmar leading-snug' : 'text-sm leading-tight'}`}>{t('brandName')}</span>
               <span className="block text-[10px] tracking-[0.25em] uppercase text-fg-muted">Survey &amp; Rewards</span>
             </span>
           </Link>
@@ -84,13 +85,13 @@ export default function Home() {
 
         {/* Hero content */}
         <div className="relative z-10 mx-auto max-w-3xl px-5 pt-16 pb-24 md:pt-24 md:pb-32 text-center">
-          <span className="inline-block px-4 py-1.5 rounded-full border border-gold/30 bg-gold/10 text-[11px] tracking-[0.35em] uppercase text-gold mb-7 animate-fade-up">
+          <span className={`inline-block px-4 py-1.5 rounded-full border border-gold/30 bg-gold/10 text-[11px] tracking-[0.35em] uppercase text-gold mb-7 animate-fade-up ${language === 'my' ? 'font-myanmar tracking-normal leading-relaxed' : ''}`}>
             {t('heroEyebrow')}
           </span>
 
-          <h1 className="font-display font-extrabold leading-[1.04] animate-fade-up" style={{ animationDelay: '0.1s' }}>
+          <h1 className={`font-display font-extrabold animate-fade-up ${myFont}`} style={{ animationDelay: '0.1s' }}>
             <span className="block text-5xl md:text-7xl text-white drop-shadow-2xl">{t('heroTitleLine1')}</span>
-            <span className="block text-5xl md:text-7xl gold-text mt-2">{t('heroTitleLine2')}</span>
+            <span className={`block text-5xl md:text-7xl gold-text mt-1 ${language === 'my' ? 'font-myanmar leading-tight' : ''}`}>{t('heroTitleLine2')}</span>
           </h1>
 
           {/* gold divider */}
@@ -102,8 +103,8 @@ export default function Home() {
 
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4 animate-fade-up" style={{ animationDelay: '0.5s' }}>
             <Link
-              href="/login"
-              className="group w-full sm:w-auto px-9 py-4 bg-gold-gradient text-brand-emerald rounded-full font-bold text-lg shadow-gold-lg hover:scale-[1.03] hover:shadow-gold transition-all inline-flex items-center justify-center gap-2"
+              href="/info"
+              className="group w-full sm:w-auto px-9 py-4 bg-lager-gradient text-white rounded-full font-bold text-lg shadow-lager-lg hover:scale-[1.03] hover:shadow-lager transition-all inline-flex items-center justify-center gap-2"
             >
               {t('heroCtaSurvey')}
               <svg className="w-5 h-5 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -161,7 +162,7 @@ export default function Home() {
               <h3 className="font-display text-xl font-bold text-white group-hover:gold-text transition-all">{p.name}</h3>
               <p className="text-sm text-fg-muted mt-2 mb-6">{p.desc}</p>
               <Link
-                href="/login"
+                href="/info"
                 className="inline-flex items-center gap-2 text-sm font-bold text-gold border border-gold/30 rounded-full px-6 py-2.5 hover:bg-gold hover:text-brand-emerald hover:shadow-gold transition-all"
               >
                 {t('takeSurvey')}
@@ -209,8 +210,8 @@ export default function Home() {
           <div className="mx-auto my-5 h-px w-24 bg-gradient-to-r from-transparent via-gold to-transparent" />
           <p className="text-fg-secondary mb-9 max-w-lg mx-auto">{t('voiceDesc')}</p>
           <Link
-            href="/login"
-            className="inline-flex items-center gap-2 px-10 py-4 bg-gold-gradient text-brand-emerald rounded-full font-bold text-lg shadow-gold-lg hover:scale-[1.03] hover:shadow-gold transition-all"
+            href="/info"
+            className="inline-flex items-center gap-2 px-10 py-4 bg-lager-gradient text-white rounded-full font-bold text-lg shadow-lager-lg hover:scale-[1.03] hover:shadow-lager transition-all"
           >
             {t('joinNow')}
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -227,7 +228,7 @@ export default function Home() {
             <span className="w-9 h-9 rounded-full gold-border bg-brand-emerald overflow-hidden p-0.5">
               <img src="/logo.png" alt="MB" className="w-full h-full object-cover rounded-full" />
             </span>
-            <span className="font-display font-bold gold-text">{t('brandName')}</span>
+            <span className={`font-display font-bold gold-text ${language === 'my' ? 'font-myanmar leading-snug' : ''}`}>{t('brandName')}</span>
           </div>
           <p className="text-xs text-fg-muted">{t('footerRights')}</p>
         </div>

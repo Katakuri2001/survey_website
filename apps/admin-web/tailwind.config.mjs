@@ -9,7 +9,7 @@ const config = {
     extend: {
       colors: {
         primary: {
-          DEFAULT: '#082D1B',
+          DEFAULT: '#163B2C',
           foreground: '#F7F3E9',
         },
         secondary: {
@@ -31,7 +31,7 @@ const config = {
         },
         accent: {
           DEFAULT: '#D4AF37',
-          foreground: '#082D1B',
+          foreground: '#163B2C',
         },
         destructive: {
           DEFAULT: '#DC2626',
@@ -52,17 +52,30 @@ const config = {
 
         // --- Myanmar Beer brand palette ---
         forest: {
-          DEFAULT: '#082D1B',
-          50: '#F0F6F2',
-          100: '#DCEBE2',
-          200: '#B7DBC6',
-          300: '#8CC2A5',
-          400: '#4E9A6F',
-          500: '#1F6B41',
-          600: '#0E4A2A',
-          700: '#082D1B',
-          800: '#062418',
-          900: '#041B12',
+          DEFAULT: '#163B2C',
+          50: '#E6F7EE',
+          100: '#CCEFDD',
+          200: '#99DFBB',
+          300: '#4FC38A',
+          400: '#17A866',
+          500: '#00994B',
+          600: '#007F3E',
+          700: '#0D6B38',
+          800: '#0C4B2C',
+          900: '#0A3D22',
+        },
+        emerald: {
+          DEFAULT: '#00994B',
+          50: '#E6F7EE',
+          100: '#CCEFDD',
+          200: '#99DFBB',
+          300: '#4FC38A',
+          400: '#17A866',
+          500: '#00994B',
+          600: '#007F3E',
+          700: '#0D6B38',
+          800: '#0C4B2C',
+          900: '#0A3D22',
         },
         gold: {
           DEFAULT: '#D4AF37',
@@ -129,7 +142,7 @@ const config = {
       boxShadow: {
         card: '0 1px 2px 0 rgb(15 23 42 / 0.04), 0 1px 3px 0 rgb(15 23 42 / 0.06)',
         gold: '0 8px 24px -8px rgba(212, 175, 55, 0.45)',
-        forest: '0 8px 24px -8px rgba(8, 45, 27, 0.45)',
+        forest: '0 8px 24px -8px rgba(0, 153, 75, 0.4)',
       },
       borderRadius: {
         lg: '1rem',

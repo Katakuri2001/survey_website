@@ -272,6 +272,51 @@ app.post('/auth/admin/login', async (c) => {
 // USER PROFILE ROUTES
 // ============================================================
 
+// Create a guest user from the personal information form (no email/password needed)
+app.post('/users/guest', async (c) => {
+  const db = c.env.survey_db;
+  const body = await c.req.json();
+  const { fullName, phone, dob, nrcState, nrcType, nrcNumber } = body || {};
+
+  if (!fullName || !phone || !dob) {
+    return jsonError('Full name, phone number, and date of birth are required');
+  }
+
+  const dobDate = new Date(`${dob}T00:00:00Z`);
+  if (isNaN(dobDate.getTime())) {
+    return jsonError('Invalid date of birth');
+  }
+
+  const age = Math.floor((Date.now() - dobDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+  if (age < 18) {
+    return jsonError('Must be at least 18 years old');
+  }
+  const ageGroup = getAgeGroup(age);
+
+  // Reuse an existing user by phone so repeat surveys stay linked
+  const existing = await db.prepare('SELECT id, email, password_hash FROM users WHERE phone = ?').bind(phone).first() as any;
+
+  let userId: string;
+  if (existing) {
+    userId = existing.id;
+    await db.prepare(`
+      UPDATE users SET full_name = ?, age = ?, age_group = ?, dob = ?, nrc_state = ?, nrc_type = ?, nrc_number = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).bind(fullName, age, ageGroup, dob || null, nrcState || null, nrcType || null, nrcNumber || null, userId).run();
+  } else {
+    userId = generateId();
+    const passwordHash = await hashPassword(crypto.randomUUID());
+    await db.prepare(`
+      INSERT INTO users (id, full_name, phone, password_hash, age, age_group, dob, nrc_state, nrc_type, nrc_number, is_active)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+    `).bind(userId, fullName, phone, passwordHash, age, ageGroup, dob || null, nrcState || null, nrcType || null, nrcNumber || null).run();
+  }
+
+  const token = await createToken(userId, 'user', getJwtSecret(c.env));
+
+  return jsonSuccess({ userId, token, user: { id: userId, fullName, phone } });
+});
+
 // Get current user profile
 app.get('/user/profile', authMiddleware, async (c) => {
   const db = c.env.survey_db;

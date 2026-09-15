@@ -23,10 +23,10 @@ interface RewardApiItem {
   weight: number
 }
 
-const COLORS = ['#D4AF37', '#0A3D25', '#38BDF8', '#F5C542', '#22C55E', '#8B5CF6', '#EC4899']
-const LIGHT_TEXT = new Set(['#D4AF37', '#F5C542', '#38BDF8', '#22C55E'])
+const COLORS = ['#00994B', '#163B2C', '#F0E826', '#1F4F35']
+const LIGHT_TEXT = new Set(['#F0E826', '#D4AF37'])
 
-const CONFETTI_COLORS = ['#F5C542', '#D4AF37', '#22C55E', '#38BDF8', '#EF4444', '#8B5CF6']
+const CONFETTI_COLORS = ['#F0E826', '#00994B', '#D4AF37', '#1F4F35', '#00A351', '#163B2C']
 
 export default function SpinPage() {
   const router = useRouter()
@@ -112,7 +112,7 @@ export default function SpinPage() {
           id: serverReward.rewardId,
           name: serverReward.rewardName,
           weight: 10,
-          color: '#FFD700',
+          color: '#00994B',
         }
 
         let targetIndex = 0

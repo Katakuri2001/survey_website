@@ -99,6 +99,9 @@ export const translations = {
     required: 'Required',
     selectOne: 'Select one option',
     selectMultiple: 'Select all that apply',
+    taste: 'Taste',
+    tasteTest: 'Taste Test',
+    answered: 'Answered',
     
     // Survey Questions
     q1: 'How often do you drink Myanmar Beer?',
@@ -310,6 +313,9 @@ export const translations = {
     required: 'မဖြည့်မနေရ',
     selectOne: 'ရွေးချယ်ပါ',
     selectMultiple: 'လိုသည်များ ရွေးချယ်ပါ',
+    taste: 'အရသာ',
+    tasteTest: 'အရသာစမ်းသပ်မှု',
+    answered: 'ဖြေပြီးပါပြီ',
     
     // Survey Questions
     q1: 'Myanmar Beer ကို ဘယ်လောက် သောက်များပါသလဲ?',

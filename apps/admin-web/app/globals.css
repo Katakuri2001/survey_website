@@ -11,24 +11,24 @@
     @apply bg-gold-400/30;
   }
 
-  /* Custom thin scrollbar with emerald track */
+  /* Custom thin scrollbar with branded green track */
   * {
     scrollbar-width: thin;
-    scrollbar-color: #1f6b41 rgba(8, 45, 27, 0.08);
+    scrollbar-color: #00994b rgba(22, 59, 44, 0.08);
   }
   ::-webkit-scrollbar {
     width: 8px;
     height: 8px;
   }
   ::-webkit-scrollbar-track {
-    background: rgba(8, 45, 27, 0.08);
+    background: rgba(22, 59, 44, 0.08);
   }
   ::-webkit-scrollbar-thumb {
-    background: #1f6b41;
+    background: #00994b;
     border-radius: 9999px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #0e4a2a;
+    background: #163b2c;
   }
 }
 

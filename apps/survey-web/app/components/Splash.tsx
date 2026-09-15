@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useLanguage } from '../context/LanguageContext'
 
 export default function Splash() {
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
   const [visible, setVisible] = useState(() => {
     if (typeof window !== 'undefined' && sessionStorage.getItem('splashDisplayed')) {
       return false
@@ -80,7 +80,7 @@ export default function Splash() {
           </div>
         </div>
 
-        <h1 className="font-display text-4xl md:text-5xl font-bold gold-text mb-3 animate-fade-up" style={{ animationDelay: '0.15s' }}>
+        <h1 className={`font-display font-bold gold-text mb-3 animate-fade-up ${language === 'my' ? 'font-myanmar leading-snug tracking-normal text-3xl md:text-5xl' : 'text-4xl md:text-5xl'}`} style={{ animationDelay: '0.15s' }}>
           {t('brandName')}
         </h1>
 

@@ -8,29 +8,23 @@ import { API_BASE } from '../lib/api'
 
 interface Question {
   id: string
-  survey_version_id: string
-  question_text: string
   question_type: string
+  question_text: string
   is_required: boolean
   display_order: number
-  is_active: boolean
-  validation_rules: string | null
-  version_title: string
-  product_name: string
-  option_count: number
-  options?: Option[]
-}
-
-interface Option {
-  id: string
-  option_text: string
-  option_value: string
 }
 
 interface Answer {
   questionId: string
   type: string
-  value: string | number | string[]
+  value: string | number
+}
+
+interface Taste {
+  n: number
+  key: string
+  rating: Question | null
+  desc: Question | null
 }
 
 function Star({ filled, onChoose, label }: { filled: boolean; onChoose: () => void; label: string }) {
@@ -39,7 +33,7 @@ function Star({ filled, onChoose, label }: { filled: boolean; onChoose: () => vo
       type="button"
       onClick={onChoose}
       aria-label={`${label} ${filled ? 'selected' : ''}`}
-      className={`group flex flex-col items-center gap-2 p-1 focus:outline-none`}
+      className="group flex flex-col items-center gap-2 p-1 focus:outline-none"
     >
       <svg
         viewBox="0 0 24 24"
@@ -55,19 +49,14 @@ function Star({ filled, onChoose, label }: { filled: boolean; onChoose: () => vo
   )
 }
 
-function hasAnswer(q: Question, a: Answer | undefined): boolean {
-  if (!a) return false
-  if (Array.isArray(a.value)) return a.value.length > 0
-  return a.value !== '' && a.value !== undefined && a.value !== null
-}
-
 export default function SurveyPage() {
   const { t, language } = useLanguage()
   const router = useRouter()
-  const [currentQuestion, setCurrentQuestion] = useState(0)
-  const [questions, setQuestions] = useState<Question[]>([])
+  const [tastes, setTastes] = useState<Taste[]>([])
+  const [currentTaste, setCurrentTaste] = useState(0)
   const [answers, setAnswers] = useState<Record<string, Answer>>({})
   const [loading, setLoading] = useState(true)
+  const [guarded, setGuarded] = useState(false)
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [reviewMode, setReviewMode] = useState(false)
@@ -81,6 +70,17 @@ export default function SurveyPage() {
   })
 
   useEffect(() => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('survey_token') : null
+    if (!token) {
+      router.replace('/info')
+      return
+    }
+    setGuarded(true)
+  }, [router])
+
+  useEffect(() => {
+    if (!guarded || !productId) return
+
     if (!productId) {
       fetch(`${API_BASE}/products?lang=${language}`)
         .then(r => r.json())
@@ -93,26 +93,38 @@ export default function SurveyPage() {
         })
         .catch(() => setProductId('prod-1'))
     }
-  }, [language, productId])
+  }, [language, productId, guarded])
 
   useEffect(() => {
-    if (!productId) return
+    if (!guarded || !productId) return
     let cancelled = false
 
     fetch(`${API_BASE}/survey/questions/${productId}?lang=${language}`)
       .then(r => r.json())
       .then(data => {
         if (cancelled) return
-        if (data.success && data.data.questions) {
-          setQuestions(data.data.questions)
-        } else {
-          setQuestions([])
+        const questions: Question[] = data.success && data.data.questions ? data.data.questions : []
+        const ordered = [...questions].sort((a, b) => a.display_order - b.display_order)
+
+        const built: Taste[] = []
+        for (let i = 0; i < ordered.length; i += 2) {
+          const first = ordered[i]
+          const second = ordered[i + 1]
+          if (!first) continue
+          const rating = first.question_type === 'rating' || first.question_type === 'number' ? first :
+            (second && (second.question_type === 'rating' || second.question_type === 'number')) ? second : null
+          const desc = second && second.question_type === 'text' ? second :
+            (first.question_type === 'text' ? first : null)
+          if (!rating || !desc) continue
+          built.push({ n: built.length, key: `taste-${built.length + 1}`, rating, desc })
         }
+
+        setTastes(built)
       })
       .catch(() => {
         if (cancelled) return
         setError(t('failedToLoad'))
-        setQuestions([])
+        setTastes([])
       })
       .finally(() => {
         if (!cancelled) {
@@ -123,31 +135,25 @@ export default function SurveyPage() {
 
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [language, productId])
+  }, [language, productId, guarded])
 
-  const handleSelect = (questionId: string, optionValue: string, questionType: string) => {
-    if (questionType === 'multiple_choice') {
-      const current = (answers[questionId]?.value as string[]) || []
-      const updated = current.includes(optionValue)
-        ? current.filter(o => o !== optionValue)
-        : [...current, optionValue]
-      setAnswers(prev => ({ ...prev, [questionId]: { questionId, type: questionType, value: updated } }))
-    } else {
-      setAnswers(prev => ({ ...prev, [questionId]: { questionId, type: questionType, value: optionValue } }))
-    }
+  const handleRating = (questionId: string, rating: number) => {
+    setAnswers(prev => ({ ...prev, [questionId]: { questionId, type: 'rating', value: rating } }))
   }
 
   const handleTextChange = (questionId: string, value: string) => {
     setAnswers(prev => ({ ...prev, [questionId]: { questionId, type: 'text', value } }))
   }
 
-  const handleRating = (questionId: string, rating: number) => {
-    setAnswers(prev => ({ ...prev, [questionId]: { questionId, type: 'rating', value: rating } }))
+  const isTasteComplete = (taste: Taste): boolean => {
+    const rating = taste.rating ? answers[taste.rating.id]?.value : undefined
+    const desc = taste.desc ? String(answers[taste.desc.id]?.value ?? '').trim() : ''
+    return rating !== undefined && rating !== '' && desc.length > 0
   }
 
   const handleNext = () => {
-    if (currentQuestion < questions.length - 1) {
-      setCurrentQuestion(prev => prev + 1)
+    if (currentTaste < tastes.length - 1) {
+      setCurrentTaste(prev => prev + 1)
     } else {
       setReviewMode(true)
     }
@@ -156,8 +162,8 @@ export default function SurveyPage() {
   const handlePrev = () => {
     if (reviewMode) {
       setReviewMode(false)
-    } else if (currentQuestion > 0) {
-      setCurrentQuestion(prev => prev - 1)
+    } else if (currentTaste > 0) {
+      setCurrentTaste(prev => prev - 1)
     }
   }
 
@@ -172,7 +178,8 @@ export default function SurveyPage() {
           campaignId = campData.data[0].id
         }
       } catch { /* campaign optional */ }
-      const answerArray = Object.values(answers)
+
+      const answerArray: Answer[] = Object.values(answers)
       let userId: string | null = null
       try {
         const token = typeof window !== 'undefined' ? localStorage.getItem('survey_token') : null
@@ -181,6 +188,7 @@ export default function SurveyPage() {
           if (payload.sub) userId = payload.sub
         }
       } catch { /* not logged in */ }
+
       const res = await fetch(`${API_BASE}/survey/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -197,7 +205,7 @@ export default function SurveyPage() {
       if (data.success) {
         if (typeof window !== 'undefined') {
           sessionStorage.setItem('survey_response_id', data.data.responseId)
-          sessionStorage.setItem('survey_product_id', productId)
+          sessionStorage.setItem('survey_product_id', productId || '')
           if (campaignId) sessionStorage.setItem('survey_campaign_id', campaignId)
         }
         router.push('/spin')
@@ -211,13 +219,13 @@ export default function SurveyPage() {
     }
   }
 
-  const total = Math.max(questions.length, 1)
-  const progress = reviewMode ? 100 : ((currentQuestion + 1) / total) * 100
-  const currentQ = questions[currentQuestion]
-  const canGoBack = currentQuestion > 0 || reviewMode
-  const answered = currentQ ? hasAnswer(currentQ, answers[currentQ.id]) : false
+  const total = Math.max(tastes.length, 1)
+  const progress = reviewMode ? 100 : ((currentTaste + 1) / total) * 100
+  const current = tastes[currentTaste]
+  const canGoBack = currentTaste > 0 || reviewMode
+  const complete = current ? isTasteComplete(current) : false
 
-  if (loading) {
+  if (loading || !guarded) {
     return (
       <div className="min-h-screen bg-navy flex flex-col items-center justify-center p-4">
         <div className="relative mb-6 animate-pop">
@@ -232,11 +240,26 @@ export default function SurveyPage() {
     )
   }
 
+  if (tastes.length === 0 && !loading) {
+    return (
+      <div className="min-h-screen bg-navy text-fg-bright flex flex-col items-center justify-center p-6 text-center">
+        <h2 className="font-display text-xl font-bold text-white mb-2">{t('surveyTitle')}</h2>
+        <p className="text-fg-muted mb-6">{error || t('failedToLoad')}</p>
+        <button
+          onClick={() => router.push('/info')}
+          className="px-6 py-3 rounded-2xl bg-gold-gradient text-brand-emerald font-bold shadow-gold"
+        >
+          {t('back')}
+        </button>
+      </div>
+    )
+  }
+
   // ================================ REVIEW ================================
   if (reviewMode) {
     return (
       <div className="min-h-screen bg-navy text-fg-bright">
-        <Header title={t('surveyTitle')} backHref="/survey" showBack={currentQuestion > 0} />
+        <Header title={t('surveyTitle')} backHref="/survey" showBack={currentTaste > 0} />
 
         <div className="relative mx-auto max-w-xl px-4 py-8">
           <div className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 w-[420px] h-[260px] rounded-full bg-gold/[0.07] blur-[110px]" />
@@ -257,39 +280,13 @@ export default function SurveyPage() {
           )}
 
           <div className="space-y-3 mb-8">
-            {questions.map((q, i) => {
-              const answer = answers[q.id]
-              const isAnswered = hasAnswer(q, answer)
-              let displayAnswer = ''
-
-              if (answer && isAnswered) {
-                if (q.question_type === 'rating') {
-                  const rating = Number(answer.value)
-                  const fullStars = Math.floor(rating)
-                  const halfStar = rating - fullStars >= 0.5
-                  let stars = ''
-                  for (let j = 1; j <= 5; j++) {
-                    if (j <= fullStars) stars += '★'
-                    else if (j === fullStars + 1 && halfStar) stars += '½'
-                    else stars += '☆'
-                  }
-                  displayAnswer = stars
-                } else if (q.question_type === 'multiple_choice' && Array.isArray(answer.value)) {
-                  displayAnswer = answer.value.map(v => {
-                    const opt = q.options?.find(o => o.option_value === v)
-                    return opt ? opt.option_text : v
-                  }).join(', ')
-                } else if (q.question_type === 'text') {
-                  displayAnswer = String(answer.value) || '-'
-                } else {
-                  const option = q.options?.find(o => o.option_value === answer.value)
-                  displayAnswer = option?.option_text || String(answer.value)
-                }
-              }
-
+            {tastes.map((taste, i) => {
+              const ratingValue = taste.rating ? Number(answers[taste.rating.id]?.value ?? 0) : 0
+              const descValue = taste.desc ? String(answers[taste.desc.id]?.value ?? '') : ''
+              const isAnswered = ratingValue > 0 && descValue.trim().length > 0
               return (
                 <div
-                  key={q.id}
+                  key={taste.key}
                   className={`flex items-start gap-4 rounded-2xl border p-4 md:p-5 animate-fade-up ${
                     isAnswered ? 'border-gold/20 bg-surface' : 'border-white/[0.06] bg-surface/40 opacity-70'
                   }`}
@@ -299,11 +296,14 @@ export default function SurveyPage() {
                     <span className={`text-sm font-display font-bold ${isAnswered ? 'text-gold' : 'text-fg-muted'}`}>{i + 1}</span>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className={`font-medium mb-1 ${isAnswered ? 'text-fg-bright' : 'text-fg-secondary'}`}>{q.question_text}</p>
-                    <p className="text-sm">
-                      {isAnswered
-                        ? <span className="text-gold">{displayAnswer}</span>
-                        : <span className="text-fg-muted italic">{t('notAnswered')}</span>}
+                    <p className="font-medium mb-1 text-fg-bright">
+                      {t('taste')} {taste.n + 1}
+                    </p>
+                    <p className="text-sm mb-1">
+                      <span className="text-gold">{"★".repeat(ratingValue)}{"☆".repeat(5 - ratingValue)}</span>
+                    </p>
+                    <p className={`text-sm ${descValue ? 'text-fg-secondary' : 'text-fg-muted italic'}`}>
+                      {descValue || t('notAnswered')}
                     </p>
                   </div>
                   {isAnswered && (
@@ -319,7 +319,6 @@ export default function SurveyPage() {
           <div className="flex gap-3">
             <button
               onClick={handlePrev}
-              disabled={currentQuestion === 0 && !reviewMode}
               className="px-6 py-4 rounded-2xl border border-white/10 bg-white/[0.04] text-fg-secondary font-semibold hover:bg-white/10 hover:text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {t('back')}
@@ -337,10 +336,10 @@ export default function SurveyPage() {
     )
   }
 
-  // ================================ QUESTION ================================
+  // ================================ TASTE ================================
   return (
     <div className={`min-h-screen bg-navy text-fg-bright transition-opacity duration-300 ${ready ? 'opacity-100' : 'opacity-0'}`}>
-      <Header title={t('surveyTitle')} backHref="/info" showBack={currentQuestion > 0} />
+      <Header title={t('surveyTitle')} backHref="/info" showBack={currentTaste > 0} />
 
       <div className="relative mx-auto max-w-xl px-4 pb-10">
         <div className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 w-[420px] h-[260px] rounded-full bg-gold/[0.06] blur-[110px]" />
@@ -351,7 +350,7 @@ export default function SurveyPage() {
             <div className="flex items-center justify-between mb-3">
               <span className="flex items-center gap-3 text-sm text-fg-secondary">
                 <span className="w-7 h-7 rounded-lg bg-gold/15 border border-gold/30 flex items-center justify-center text-[10px] font-bold text-gold">02</span>
-                {t('question')} {currentQuestion + 1} <span className="text-fg-muted">{t('of')} {total}</span>
+                {t('taste')} {currentTaste + 1} <span className="text-fg-muted">{t('of')} {total}</span>
               </span>
               <span className="text-xs font-bold text-gold px-2.5 py-1 rounded-full bg-gold/10 border border-gold/20">
                 {Math.round(progress)}%
@@ -360,172 +359,72 @@ export default function SurveyPage() {
             <div className="h-2 bg-white/[0.06] rounded-full overflow-hidden">
               <div
                 className="h-full bg-gold-gradient rounded-full transition-all duration-500 ease-out"
-                style={{ width: `${Math.max(progress, (currentQuestion + 1) / total * 100)}%` }}
+                style={{ width: `${Math.max(progress, ((currentTaste + 1) / total) * 100)}%` }}
               />
             </div>
           </div>
 
-          {/* ---------- question card ---------- */}
+          {/* ---------- taste card ---------- */}
           <div className="rounded-[1.75rem] border border-white/[0.08] bg-surface/90 backdrop-blur p-6 md:p-8 shadow-card relative overflow-hidden animate-fade-up">
             <div className="absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-gold to-transparent" />
 
             <div className="flex items-center justify-between mb-4">
-              <span className="text-[10px] tracking-[0.3em] uppercase text-gold/80">Survey · Q{String(currentQuestion + 1).padStart(2, '0')}</span>
-              {currentQ?.is_required ? (
-                <span className="text-[10px] font-semibold uppercase tracking-widest text-warning px-2.5 py-1 rounded-full bg-warning/10 border border-warning/30">
-                  {t('required')}
-                </span>
-              ) : (
-                <span className="text-[10px] text-fg-muted tracking-widest uppercase">Optional</span>
-              )}
+              <span className="text-[10px] tracking-[0.3em] uppercase text-gold/80">
+                {t('tasteTest')} · {t('taste')} {String(currentTaste + 1).padStart(2, '0')}
+              </span>
+              <span className="text-[10px] font-semibold uppercase tracking-widest text-warning px-2.5 py-1 rounded-full bg-warning/10 border border-warning/30">
+                {t('required')}
+              </span>
             </div>
 
-            <h2 className="font-display text-xl md:text-2xl font-bold text-white mb-7 leading-snug">
-              {currentQ?.question_text}
+            <h2 className={`font-display text-xl md:text-2xl font-bold text-white mb-2 leading-snug ${language === 'my' ? 'font-myanmar' : ''}`}>
+              {t('taste')} {currentTaste + 1}
             </h2>
 
-            <>
-              {currentQ?.question_type === 'text' ? (
-                <div>
-                  <textarea
-                    value={(answers[currentQ.id]?.value as string) || ''}
-                    onChange={(e) => handleTextChange(currentQ.id, e.target.value)}
-                    className="survey-input resize-none min-h-[120px] leading-relaxed"
-                    placeholder={t('textPlaceholder')}
-                    rows={4}
-                  />
-                  <div className="mt-3 flex items-center justify-between text-xs">
-                    <span className={`flex items-center gap-1.5 ${answered ? 'text-success' : 'text-fg-muted'}`}>
-                      {answered && (
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                        </svg>
-                      )}
-                      {answered ? 'Answered' : t('notAnswered')}
-                    </span>
-                    <span className="text-fg-muted">
-                      {answers[currentQ.id]?.value ? `${(answers[currentQ.id].value as string).length} / 500` : '0 / 500'}
-                    </span>
-                  </div>
+            {/* rating */}
+            {current?.rating && (
+              <div className="mt-4">
+                <p className={`text-sm text-fg-muted mb-3 ${language === 'my' ? 'font-myanmar' : ''}`}>{current.rating.question_text}</p>
+                <div className="flex items-center justify-center gap-2 md:gap-3" key={String(answers[current.rating.id]?.value ?? '')}>
+                  {[1, 2, 3, 4, 5].map(rating => (
+                    <Star
+                      key={rating}
+                      filled={!!answers[current.rating.id]?.value && Number(answers[current.rating.id].value) >= rating}
+                      onChoose={() => handleRating(current.rating!.id, rating)}
+                      label={`${rating}`}
+                    />
+                  ))}
                 </div>
-              ) : currentQ?.question_type === 'rating' ? (
-                <div>
-                  <div className="flex items-center justify-center gap-2 md:gap-3" key={String(answers[currentQ.id]?.value ?? '')}>
-                    {[1, 2, 3, 4, 5].map(rating => (
-                      <Star
-                        key={rating}
-                        filled={!!answers[currentQ.id]?.value && Number(answers[currentQ.id].value) >= rating}
-                        onChoose={() => handleRating(currentQ.id, rating)}
-                        label={`${rating}`}
-                      />
-                    ))}
-                  </div>
-                  <div className="mt-3 flex items-center justify-between text-xs text-fg-muted px-2">
-                    <span>{t('ratingLow')}</span>
-                    <span>{t('ratingHigh')}</span>
-                  </div>
+              </div>
+            )}
+
+            {/* description */}
+            {current?.desc && (
+              <div className="mt-6">
+                <p className={`text-sm text-fg-muted mb-3 ${language === 'my' ? 'font-myanmar' : ''}`}>{current.desc.question_text}</p>
+                <textarea
+                  value={(answers[current.desc.id]?.value as string) || ''}
+                  onChange={(e) => handleTextChange(current.desc!.id, e.target.value)}
+                  className="survey-input resize-none min-h-[120px] leading-relaxed"
+                  placeholder={t('textPlaceholder')}
+                  rows={4}
+                  required
+                />
+                <div className="mt-3 flex items-center justify-between text-xs">
+                  <span className={`flex items-center gap-1.5 ${complete ? 'text-success' : 'text-fg-muted'}`}>
+                    {complete && (
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                    {complete ? t('answered') : t('notAnswered')}
+                  </span>
+                  <span className="text-fg-muted">
+                    {answers[current.desc.id]?.value ? `${(answers[current.desc.id].value as string).length} / 500` : '0 / 500'}
+                  </span>
                 </div>
-              ) : currentQ?.question_type === 'yes_no' ? (
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={() => handleSelect(currentQ.id, 'yes', 'yes_no')}
-                    className={`rounded-2xl p-6 flex flex-col items-center gap-2 border-2 transition-all ${
-                      answers[currentQ.id]?.value === 'yes'
-                        ? 'border-gold bg-gold/15 text-gold shadow-glow'
-                        : 'border-white/10 bg-surface-deep text-fg-secondary hover:border-gold/50 hover:text-gold'
-                    }`}
-                  >
-                    <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    <span className="font-display font-bold">Yes</span>
-                  </button>
-                  <button
-                    onClick={() => handleSelect(currentQ.id, 'no', 'yes_no')}
-                    className={`rounded-2xl p-6 flex flex-col items-center gap-2 border-2 transition-all ${
-                      answers[currentQ.id]?.value === 'no'
-                        ? 'border-gold bg-gold/15 text-gold shadow-glow'
-                        : 'border-white/10 bg-surface-deep text-fg-secondary hover:border-gold/50 hover:text-gold'
-                    }`}
-                  >
-                    <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                    <span className="font-display font-bold">No</span>
-                  </button>
-                </div>
-              ) : currentQ?.question_type === 'multiple_choice' ? (
-                <div className="space-y-2.5">
-                  <p className="text-sm text-fg-muted flex items-center gap-2 mb-3">
-                    <svg className="w-4 h-4 text-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    {t('selectMultiple')}
-                  </p>
-                  {currentQ?.options.map(option => {
-                    const selected = (answers[currentQ.id]?.value as string[])?.includes(option.option_value)
-                    return (
-                      <button
-                        key={option.id}
-                        onClick={() => handleSelect(currentQ.id, option.option_value, currentQ.question_type)}
-                        className={`w-full px-5 py-4 rounded-2xl border-2 text-left transition-all flex items-center gap-3.5 ${
-                          selected
-                            ? 'bg-gold/10 border-gold'
-                            : 'bg-surface-deep border-white/[0.08] hover:border-gold/40'
-                        }`}
-                      >
-                        <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all shrink-0 ${
-                          selected ? 'border-gold bg-gold-gradient' : 'border-slate-500'
-                        }`}>
-                          {selected && (
-                            <svg className="w-4 h-4 text-brand-emerald" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                            </svg>
-                          )}
-                        </div>
-                        <span className={`flex-1 truncate font-medium ${selected ? 'text-gold' : 'text-fg-secondary'}`}>
-                          {option.option_text}
-                        </span>
-                      </button>
-                    )
-                  })}
-                </div>
-              ) : currentQ?.question_type === 'single_choice' ? (
-                <div className="space-y-2.5">
-                  <p className="text-sm text-fg-muted flex items-center gap-2 mb-3">
-                    <svg className="w-4 h-4 text-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4-.87L3 20l1.36-3.72A7.9 7.9 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                    </svg>
-                    {t('selectOne')}
-                  </p>
-                  {currentQ?.options.map(option => {
-                    const selected = answers[currentQ.id]?.value === option.option_value
-                    return (
-                      <button
-                        key={option.id}
-                        onClick={() => handleSelect(currentQ.id, option.option_value, currentQ.question_type)}
-                        className={`w-full px-5 py-4 rounded-2xl border-2 text-left transition-all flex items-center gap-3.5 ${
-                          selected
-                            ? 'bg-gold/10 border-gold'
-                            : 'bg-surface-deep border-white/[0.08] hover:border-gold/40'
-                        }`}
-                      >
-                        <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all shrink-0 ${
-                          selected ? 'border-gold' : 'border-slate-500'
-                        }`}>
-                          {selected && <div className="w-3 h-3 rounded-full bg-gold-gradient animate-pop" />}
-                        </div>
-                        <span className={`flex-1 truncate font-medium ${selected ? 'text-gold' : 'text-fg-secondary'}`}>
-                          {option.option_text}
-                        </span>
-                      </button>
-                    )
-                  })}
-                </div>
-              ) : (
-                <p className="text-fg-secondary">{t('notAnswered')}</p>
-              )}
-            </>
+              </div>
+            )}
           </div>
 
           {/* ---------- nav ---------- */}
@@ -542,9 +441,10 @@ export default function SurveyPage() {
             </button>
             <button
               onClick={handleNext}
-              className="group flex-1 py-4 bg-gold-gradient text-brand-emerald rounded-2xl font-bold text-lg shadow-gold hover:shadow-gold-lg hover:scale-[1.01] transition-all inline-flex items-center justify-center gap-2"
+              disabled={!complete}
+              className="group flex-1 py-4 bg-lager-gradient text-white rounded-2xl font-bold text-lg shadow-lager hover:shadow-lager-lg hover:scale-[1.01] transition-all inline-flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
             >
-              {currentQuestion === questions.length - 1 ? t('review') : t('next')}
+              {currentTaste === tastes.length - 1 ? t('review') : t('next')}
               <svg className="w-5 h-5 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5-5 5M6 12h12" />
               </svg>

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useLanguage } from '../context/LanguageContext'
 import Header from '../components/Header'
+import { API_BASE } from '../lib/api'
 
 const myanmarStates = [
   'ကချင်ပြည်နယ်', 'ကယားပြည်နယ်', 'ကရင်ပြည်နယ်', 'ချင်းပြည်နယ်',
@@ -31,22 +32,54 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
 
 export default function InfoPage() {
   const router = useRouter()
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
   const [formData, setFormData] = useState({
+    fullName: '',
+    phone: '',
     dobDay: '',
     dobMonth: '',
     dobYear: '',
-    gender: '',
     nrcState: '',
     nrcType: '',
-    nrcNumber: '',
-    occupation: '',
-    city: ''
+    nrcNumber: ''
   })
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    router.push('/survey')
+    setError('')
+    setLoading(true)
+
+    const dob = `${formData.dobYear}-${formData.dobMonth.padStart(2, '0')}-${formData.dobDay.padStart(2, '0')}`
+
+    try {
+      const res = await fetch(`${API_BASE}/users/guest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName: formData.fullName,
+          phone: formData.phone,
+          dob,
+          nrcState: formData.nrcState,
+          nrcType: formData.nrcType,
+          nrcNumber: formData.nrcNumber,
+        })
+      })
+      const data = await res.json()
+
+      if (data.success) {
+        localStorage.setItem('survey_token', data.data.token)
+        localStorage.setItem('survey_user', JSON.stringify(data.data.user))
+        router.push('/survey')
+      } else {
+        setError(data.error?.message || t('error'))
+      }
+    } catch {
+      setError(t('connectionFailed'))
+    } finally {
+      setLoading(false)
+    }
   }
 
   const days = Array.from({ length: 31 }, (_, i) => String(i + 1))
@@ -60,7 +93,7 @@ export default function InfoPage() {
 
   return (
     <div className="min-h-screen bg-navy text-fg-bright">
-      <Header title={t('infoTitle')} backHref="/login" />
+      <Header title={t('infoTitle')} backHref="/" />
 
       <div className="relative min-h-screen overflow-hidden">
         <div className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 w-[420px] h-[300px] rounded-full bg-gold/[0.07] blur-[110px]" />
@@ -95,7 +128,7 @@ export default function InfoPage() {
 
           {/* -------- Intro -------- */}
           <div className="text-center mb-8">
-            <h2 className="font-display text-2xl md:text-3xl font-bold text-white">{t('infoTitle')}</h2>
+            <h2 className={`font-display text-2xl md:text-3xl font-bold text-white ${language === 'my' ? 'font-myanmar leading-snug' : ''}`}>{t('infoTitle')}</h2>
             <div className="mx-auto my-4 h-px w-20 bg-gradient-to-r from-transparent via-gold to-transparent" />
             <p className="text-fg-secondary">{t('infoDesc')}</p>
           </div>
@@ -103,6 +136,41 @@ export default function InfoPage() {
           {/* -------- Form -------- */}
           <form onSubmit={handleSubmit} className="rounded-[1.75rem] border border-white/[0.08] bg-surface/90 backdrop-blur p-6 md:p-9 shadow-card animate-fade-up relative overflow-hidden">
             <div className="absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-gold to-transparent" />
+
+            {error && (
+              <div className="mb-5 bg-error/10 border border-error/30 rounded-xl p-4 flex items-start gap-3">
+                <svg className="w-5 h-5 text-error mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <p className="text-error text-sm">{error}</p>
+              </div>
+            )}
+
+            {/* Full name */}
+            <div className="mb-6">
+              <FieldLabel>{t('fullName')}</FieldLabel>
+              <input
+                type="text"
+                value={formData.fullName}
+                onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                className="survey-input"
+                placeholder={t('fullNamePlaceholder')}
+                required
+              />
+            </div>
+
+            {/* Phone */}
+            <div className="mb-6">
+              <FieldLabel>{t('phone')}</FieldLabel>
+              <input
+                type="tel"
+                value={formData.phone}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                className="survey-input"
+                placeholder="09 123 456 789"
+                required
+              />
+            </div>
 
             {/* DOB */}
             <div className="mb-6">
@@ -113,6 +181,7 @@ export default function InfoPage() {
                     value={formData.dobDay}
                     onChange={(e) => setFormData({ ...formData, dobDay: e.target.value })}
                     className={selectClass}
+                    required
                   >
                     <option value="" className="bg-surface-deep">{t('day')}</option>
                     {days.map(d => <Option key={d} value={d} label={d} />)}
@@ -123,6 +192,7 @@ export default function InfoPage() {
                     value={formData.dobMonth}
                     onChange={(e) => setFormData({ ...formData, dobMonth: e.target.value })}
                     className={selectClass}
+                    required
                   >
                     <option value="" className="bg-surface-deep">{t('month')}</option>
                     {months.map(m => <Option key={m} value={m} label={m} />)}
@@ -133,36 +203,12 @@ export default function InfoPage() {
                     value={formData.dobYear}
                     onChange={(e) => setFormData({ ...formData, dobYear: e.target.value })}
                     className={selectClass}
+                    required
                   >
                     <option value="" className="bg-surface-deep">{t('year')}</option>
                     {years.map(y => <Option key={y} value={y} label={y} />)}
                   </select>
                 </div>
-              </div>
-            </div>
-
-            {/* Gender */}
-            <div className="mb-6">
-              <FieldLabel>{t('gender')}</FieldLabel>
-              <div className="grid grid-cols-3 gap-3">
-                {[
-                  { value: 'male', label: t('male') },
-                  { value: 'female', label: t('female') },
-                  { value: 'other', label: t('other') }
-                ].map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => setFormData({ ...formData, gender: option.value })}
-                    className={`py-3 rounded-2xl font-semibold text-sm transition-all border ${
-                      formData.gender === option.value
-                        ? 'bg-gold-gradient text-brand-emerald border-gold shadow-gold'
-                        : 'bg-surface-deep border-white/10 text-fg-secondary hover:border-gold/50 hover:text-gold'
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                ))}
               </div>
             </div>
 
@@ -174,6 +220,7 @@ export default function InfoPage() {
                   value={formData.nrcState}
                   onChange={(e) => setFormData({ ...formData, nrcState: e.target.value })}
                   className={`${selectClass} font-myanmar`}
+                  required
                 >
                   <option value="" className="bg-surface-deep">{t('stateRegion')}</option>
                   {myanmarStates.map(s => <Option key={s} value={s} label={s} />)}
@@ -183,6 +230,7 @@ export default function InfoPage() {
                     value={formData.nrcType}
                     onChange={(e) => setFormData({ ...formData, nrcType: e.target.value })}
                     className={`${selectClass} font-myanmar`}
+                    required
                   >
                     <option value="" className="bg-surface-deep">{t('nrcType')}</option>
                     {nrcTypes.map((n, i) => <Option key={i} value={n} label={n} />)}
@@ -194,44 +242,24 @@ export default function InfoPage() {
                     className="survey-input text-sm"
                     placeholder={t('nrcPlaceholder')}
                     maxLength={6}
+                    required
                   />
                 </div>
               </div>
               <p className="text-xs text-fg-muted">{t('nrcExample')}</p>
             </div>
 
-            {/* Occupation */}
-            <div className="mb-6">
-              <FieldLabel>{t('occupation')}</FieldLabel>
-              <input
-                type="text"
-                value={formData.occupation}
-                onChange={(e) => setFormData({ ...formData, occupation: e.target.value })}
-                className="survey-input"
-                placeholder={t('occupationPlaceholder')}
-              />
-            </div>
-
-            {/* City */}
-            <div className="mb-7">
-              <FieldLabel>{t('city')}</FieldLabel>
-              <input
-                type="text"
-                value={formData.city}
-                onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                className="survey-input"
-                placeholder={t('cityPlaceholder')}
-              />
-            </div>
-
             <button
               type="submit"
-              className="group w-full py-4 bg-gold-gradient text-brand-emerald rounded-2xl font-bold text-lg shadow-gold hover:shadow-gold-lg hover:scale-[1.01] transition-all inline-flex items-center justify-center gap-2"
+              disabled={loading}
+              className="group w-full py-4 bg-lager-gradient text-white rounded-2xl font-bold text-lg shadow-lager hover:shadow-lager-lg hover:scale-[1.01] transition-all inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {t('next')}
-              <svg className="w-5 h-5 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5-5 5M6 12h12" />
-              </svg>
+              {loading ? t('loading') : t('next')}
+              {!loading && (
+                <svg className="w-5 h-5 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5-5 5M6 12h12" />
+                </svg>
+              )}
             </button>
           </form>
         </div>
