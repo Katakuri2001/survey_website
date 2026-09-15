@@ -120,7 +120,7 @@ export default function InfoPage() {
                   </span>
                 </div>
                 {i < STEPS.length - 1 && (
-                  <div className={`mx-1.5 md:mx-3 h-px w-5 md:w-8 mb-5 ${i < 1 ? 'bg-gold/50' : 'bg-white/10'}`} />
+                  <div className={`mx-1.5 md:mx-3 h-px w-4 md:w-8 mb-5 ${i < 1 ? 'bg-gold/50' : 'bg-white/10'}`} />
                 )}
               </div>
             ))}

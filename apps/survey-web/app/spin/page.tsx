@@ -208,7 +208,7 @@ export default function SpinPage() {
 
         {/* ---------- wheel ---------- */}
         {rewards.length > 0 && (
-          <div className="relative w-80 h-80 mx-auto mb-9">
+          <div className="relative w-72 h-72 sm:w-80 sm:h-80 mx-auto mb-9">
             {/* glow */}
             <div className={`absolute -inset-4 rounded-full bg-gold/25 blur-2xl animate-pulse-gold ${spinning || result ? '' : 'opacity-70'}`} />
 

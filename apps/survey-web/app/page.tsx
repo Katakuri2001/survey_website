@@ -90,8 +90,8 @@ export default function Home() {
           </span>
 
           <h1 className={`font-display font-extrabold animate-fade-up ${myFont}`} style={{ animationDelay: '0.1s' }}>
-            <span className="block text-5xl md:text-7xl text-white drop-shadow-2xl">{t('heroTitleLine1')}</span>
-            <span className={`block text-5xl md:text-7xl gold-text mt-1 ${language === 'my' ? 'font-myanmar leading-tight tracking-widest' : ''}`}>{t('heroTitleLine2')}</span>
+            <span className="block text-4xl sm:text-5xl md:text-7xl text-white drop-shadow-2xl">{t('heroTitleLine1')}</span>
+            <span className={`block text-4xl sm:text-5xl md:text-7xl gold-text mt-1 ${language === 'my' ? 'font-myanmar leading-tight tracking-widest' : ''}`}>{t('heroTitleLine2')}</span>
           </h1>
 
           {/* gold divider */}
@@ -119,19 +119,11 @@ export default function Home() {
             </a>
           </div>
 
-          <div className="mt-8 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/[0.04] border border-white/10 text-xs text-fg-muted animate-fade-in" style={{ animationDelay: '0.7s' }}>
-            <svg className="w-4 h-4 text-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-            {t('heroBadge')}
-          </div>
-        </div>
-
-        {/* scroll hint */}
-        <div className="relative z-10 pb-8 text-center">
-          <span className="text-[10px] tracking-[0.4em] uppercase text-fg-muted">{t('scrollHint')}</span>
-          <div className="mx-auto mt-3 w-6 h-10 rounded-full border border-white/20 flex justify-center pt-2">
-            <div className="w-1 h-2 rounded-full bg-gold animate-float" />
+<div className="mt-8 text-center">
+            <span className="text-[10px] tracking-[0.4em] uppercase text-fg-muted">{t('scrollHint')}</span>
+            <div className="mx-auto mt-3 w-6 h-10 rounded-full border border-white/20 flex justify-center pt-2">
+              <div className="w-1 h-2 rounded-full bg-gold animate-float" />
+            </div>
           </div>
         </div>
       </section>
