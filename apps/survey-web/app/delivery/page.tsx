@@ -6,6 +6,10 @@ import Header from '../components/Header'
 import Link from 'next/link'
 import { API_BASE } from '../lib/api'
 
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return <label className="block text-sm font-medium text-fg-secondary mb-2">{children}</label>
+}
+
 export default function DeliveryPage() {
   const { t } = useLanguage()
   const [formData, setFormData] = useState({
@@ -65,7 +69,6 @@ export default function DeliveryPage() {
 
       if (data.success) {
         setSubmitted(true)
-        // Clean up
         if (typeof window !== 'undefined') {
           sessionStorage.removeItem('user_reward_id')
           sessionStorage.removeItem('reward_name')
@@ -83,21 +86,26 @@ export default function DeliveryPage() {
 
   if (submitted) {
     return (
-      <div className="min-h-screen bg-bg-primary flex items-center justify-center">
-        <div className="text-center px-4">
-          <div className="w-20 h-20 bg-success/10 rounded-full flex items-center justify-center mx-auto mb-6">
-            <svg className="w-10 h-10 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div className="min-h-screen bg-navy flex items-center justify-center relative overflow-hidden">
+        <div className="pointer-events-none absolute -top-20 left-1/2 -translate-x-1/2 w-[480px] h-[360px] rounded-full bg-gold/[0.08] blur-[120px]" />
+        <div className="relative text-center px-4 animate-reveal-in">
+          <div className="w-24 h-24 bg-success/15 border border-success/40 rounded-full flex items-center justify-center mx-auto mb-7 animate-ring-pulse">
+            <svg className="w-12 h-12 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h2 className="text-2xl font-bold text-accent-warm mb-4">{t('success')}</h2>
-          <p className="text-text-secondary mb-2">{t('deliveryReceived')}</p>
-          <p className="text-text-secondary text-sm mb-6">{t('thankYou')}</p>
+          <h2 className="font-display text-3xl md:text-4xl font-bold gold-text mb-4">{t('success')}</h2>
+          <div className="mx-auto my-5 h-px w-20 bg-gradient-to-r from-transparent via-gold to-transparent" />
+          <p className="text-fg-secondary mb-2">{t('deliveryReceived')}</p>
+          <p className="text-fg-muted text-sm mb-9">{t('thankYou')}</p>
           <Link
             href="/"
-            className="px-6 py-3 bg-accent-gold text-bg-primary rounded-xl font-bold hover:bg-accent-warm transition-all"
+            className="inline-flex items-center gap-2 px-9 py-4 bg-gold-gradient text-brand-emerald rounded-full font-bold text-lg shadow-gold hover:shadow-gold-lg hover:scale-[1.02] transition-all"
           >
             {t('home')}
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1h3a1 1 0 001-1V10" />
+            </svg>
           </Link>
         </div>
       </div>
@@ -105,124 +113,129 @@ export default function DeliveryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-bg-primary">
-      <Header
-        title={t('deliveryTitle')}
-        backHref="/spin"
-      />
-      
-      <div className="max-w-lg mx-auto p-4 md:p-6">
-        {/* Reward Info */}
-        <div className="bg-bg-surface rounded-2xl p-5 md:p-6 border border-border mb-6">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-accent-gold/20 rounded-xl flex items-center justify-center">
-              <span className="text-2xl">🎁</span>
+    <div className="min-h-screen bg-navy text-fg-bright overflow-hidden">
+      <Header title={t('deliveryTitle')} backHref="/spin" />
+
+      <div className="relative mx-auto max-w-xl px-4 pb-12">
+        <div className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 w-[420px] h-[280px] rounded-full bg-gold/[0.07] blur-[110px]" />
+
+        <div className="relative">
+          {/* reward banner */}
+          <div className="mt-5 mb-5 rounded-2xl border border-gold/25 bg-gradient-to-r from-surface to-surface/60 p-5 flex items-center gap-4 animate-fade-up">
+            <div className="w-12 h-12 rounded-2xl bg-gold/15 border border-gold/30 flex items-center justify-center shrink-0 gold-border">
+              <svg className="w-6 h-6 text-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l9-4 9 4-9 4-9-4zm0 0v8m9 4l9-4v-8m-9 4l-9-4m9 4v8" />
+              </svg>
             </div>
-            <div>
-              <p className="text-accent-gold font-medium mb-1">{t('congratulations')}</p>
-              <p className="text-text-secondary text-sm">{rewardName}</p>
+            <div className="min-w-0">
+              <p className="text-xs tracking-widest uppercase text-gold mb-0.5">{t('congratulations')}</p>
+              <p className="font-display font-bold text-white truncate">{rewardName}</p>
             </div>
           </div>
-        </div>
 
-        {error && (
-          <div className="bg-error/10 border border-error/30 rounded-xl p-4 mb-4">
-            <p className="text-error text-sm">{error}</p>
-          </div>
-        )}
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="bg-bg-surface rounded-2xl p-6 md:p-8 border border-border">
-          <h2 className="text-2xl font-bold text-accent-warm mb-6">{t('deliveryDesc')}</h2>
-
-          <div className="space-y-5">
-            <div>
-              <label className="block text-sm text-text-secondary mb-2">{t('fullName')}</label>
-              <input
-                type="text"
-                value={formData.fullName}
-                onChange={(e) => setFormData({...formData, fullName: e.target.value})}
-                className="w-full px-4 py-3 bg-bg-surface border border-border rounded-xl focus:border-accent-gold focus:outline-none text-text-primary placeholder-text-muted"
-                placeholder={t('fullNamePlaceholder')}
-                required
-              />
+          {error && (
+            <div className="mb-5 bg-error/10 border border-error/30 rounded-xl p-4 flex items-start gap-3">
+              <svg className="w-5 h-5 text-error mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-error text-sm">{error}</p>
             </div>
+          )}
 
-            <div>
-              <label className="block text-sm text-text-secondary mb-2">{t('phone')}</label>
-              <input
-                type="tel"
-                value={formData.phone}
-                onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                className="w-full px-4 py-3 bg-bg-surface border border-border rounded-xl focus:border-accent-gold focus:outline-none text-text-primary placeholder-text-muted"
-                placeholder="09 123 456 789"
-                required
-              />
-            </div>
+          {/* form */}
+          <form onSubmit={handleSubmit} className="rounded-[1.75rem] border border-white/[0.08] bg-surface/90 backdrop-blur p-6 md:p-9 shadow-card animate-fade-up relative overflow-hidden" style={{ animationDelay: '0.1s' }}>
+            <div className="absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-gold to-transparent" />
+            <h2 className="font-display text-xl md:text-2xl font-bold text-white mb-7">{t('deliveryDesc')}</h2>
 
-            <div>
-              <label className="block text-sm text-text-secondary mb-2">{t('address')}</label>
-              <textarea
-                value={formData.address}
-                onChange={(e) => setFormData({...formData, address: e.target.value})}
-                className="w-full px-4 py-3 bg-bg-surface border border-border rounded-xl focus:border-accent-gold focus:outline-none text-text-primary placeholder-text-muted resize-none"
-                placeholder={t('addressPlaceholder')}
-                required
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-5">
               <div>
-                <label className="block text-sm text-text-secondary mb-2">{t('city')}</label>
+                <FieldLabel>{t('fullName')}</FieldLabel>
                 <input
                   type="text"
-                  value={formData.city}
-                  onChange={(e) => setFormData({...formData, city: e.target.value})}
-                  className="w-full px-4 py-3 bg-bg-surface border border-border rounded-xl focus:border-accent-gold focus:outline-none text-text-primary placeholder-text-muted"
-                  placeholder={t('cityPlaceholder')}
+                  value={formData.fullName}
+                  onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                  className="survey-input"
+                  placeholder={t('fullNamePlaceholder')}
                   required
                 />
               </div>
+
               <div>
-                <label className="block text-sm text-text-secondary mb-2">{t('township') || 'Township'}</label>
+                <FieldLabel>{t('phone')}</FieldLabel>
                 <input
-                  type="text"
-                  value={formData.township}
-                  onChange={(e) => setFormData({...formData, township: e.target.value})}
-                  className="w-full px-4 py-3 bg-bg-surface border border-border rounded-xl focus:border-accent-gold focus:outline-none text-text-primary placeholder-text-muted"
+                  type="tel"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  className="survey-input"
+                  placeholder="09 123 456 789"
+                  required
                 />
               </div>
-            </div>
 
-            <div>
-              <label className="block text-sm text-text-secondary mb-2">{t('postalCode')}</label>
-              <input
-                type="text"
-                value={formData.postalCode}
-                onChange={(e) => setFormData({...formData, postalCode: e.target.value})}
-                className="w-full px-4 py-3 bg-bg-surface border border-border rounded-xl focus:border-accent-gold focus:outline-none text-text-primary placeholder-11111"
-              />
-            </div>
+              <div>
+                <FieldLabel>{t('address')}</FieldLabel>
+                <textarea
+                  value={formData.address}
+                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                  className="survey-input resize-none min-h-[90px]"
+                  placeholder={t('addressPlaceholder')}
+                  required
+                />
+              </div>
 
-            <div>
-              <label className="block text-sm text-text-secondary mb-2">{t('deliveryNotes')}</label>
-              <textarea
-                value={formData.notes}
-                onChange={(e) => setFormData({...formData, notes: e.target.value})}
-                className="w-full px-4 py-3 bg-bg-surface border border-border rounded-xl focus:border-accent-gold focus:outline-none text-text-primary resize-none placeholder-text-muted"
-                placeholder={t('deliveryNotesPlaceholder')}
-              />
-            </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <FieldLabel>{t('city')}</FieldLabel>
+                  <input
+                    type="text"
+                    value={formData.city}
+                    onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                    className="survey-input"
+                    placeholder={t('cityPlaceholder')}
+                    required
+                  />
+                </div>
+                <div>
+                  <FieldLabel>{t('township') || 'Township'}</FieldLabel>
+                  <input
+                    type="text"
+                    value={formData.township}
+                    onChange={(e) => setFormData({ ...formData, township: e.target.value })}
+                    className="survey-input"
+                  />
+                </div>
+              </div>
 
-            <button
-              type="submit"
-              disabled={submitting}
-              className="w-full py-4 bg-accent-gold text-bg-primary rounded-xl font-bold hover:bg-accent-warm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {submitting ? t('loading') : t('submitDelivery')}
-            </button>
-          </div>
-        </form>
+              <div>
+                <FieldLabel>{t('postalCode')}</FieldLabel>
+                <input
+                  type="text"
+                  value={formData.postalCode}
+                  onChange={(e) => setFormData({ ...formData, postalCode: e.target.value })}
+                  className="survey-input"
+                />
+              </div>
+
+              <div>
+                <FieldLabel>{t('deliveryNotes')}</FieldLabel>
+                <textarea
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  className="survey-input resize-none min-h-[80px]"
+                  placeholder={t('deliveryNotesPlaceholder')}
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={submitting || !userRewardId}
+                className="w-full py-4 bg-gold-gradient text-brand-emerald rounded-2xl font-bold text-lg shadow-gold hover:shadow-gold-lg hover:scale-[1.01] transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+              >
+                {submitting ? t('loading') : t('submitDelivery')}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   )

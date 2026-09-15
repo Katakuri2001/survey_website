@@ -33,6 +33,34 @@ interface Answer {
   value: string | number | string[]
 }
 
+function Star({ filled, onChoose, label }: { filled: boolean; onChoose: () => void; label: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onChoose}
+      aria-label={`${label} ${filled ? 'selected' : ''}`}
+      className={`group flex flex-col items-center gap-2 p-1 focus:outline-none`}
+    >
+      <svg
+        viewBox="0 0 24 24"
+        className={`w-12 h-12 md:w-14 md:h-14 transition-all drop-shadow ${
+          filled
+            ? 'text-gold fill-gold animate-pop'
+            : 'text-slate-600 fill-slate-700 group-hover:text-gold/60 group-hover:fill-gold/20'
+        }`}
+      >
+        <path d="M12 2l2.955 6.628 7.045.636-5.38 4.715 1.657 6.886L12 17.63l-6.277 3.235 1.657-6.886L2 9.264l7.045-.636L12 2z" />
+      </svg>
+    </button>
+  )
+}
+
+function hasAnswer(q: Question, a: Answer | undefined): boolean {
+  if (!a) return false
+  if (Array.isArray(a.value)) return a.value.length > 0
+  return a.value !== '' && a.value !== undefined && a.value !== null
+}
+
 export default function SurveyPage() {
   const { t, language } = useLanguage()
   const router = useRouter()
@@ -43,8 +71,8 @@ export default function SurveyPage() {
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [reviewMode, setReviewMode] = useState(false)
+  const [ready, setReady] = useState(false)
 
-  // Get product ID from URL or resolve the first active product
   const [productId, setProductId] = useState<string | null>(() => {
     if (typeof window !== 'undefined') {
       return new URLSearchParams(window.location.search).get('product')
@@ -87,7 +115,10 @@ export default function SurveyPage() {
         setQuestions([])
       })
       .finally(() => {
-        if (!cancelled) setLoading(false)
+        if (!cancelled) {
+          setLoading(false)
+          setTimeout(() => setReady(true), 50)
+        }
       })
 
     return () => { cancelled = true }
@@ -164,7 +195,6 @@ export default function SurveyPage() {
       const data = await res.json()
 
       if (data.success) {
-        // Store response ID for spin
         if (typeof window !== 'undefined') {
           sessionStorage.setItem('survey_response_id', data.data.responseId)
           sessionStorage.setItem('survey_product_id', productId)
@@ -181,274 +211,345 @@ export default function SurveyPage() {
     }
   }
 
-  // Calculate progress
-  const progress = reviewMode ? 100 : ((currentQuestion + 1) / Math.max(questions.length, 1)) * 100
+  const total = Math.max(questions.length, 1)
+  const progress = reviewMode ? 100 : ((currentQuestion + 1) / total) * 100
   const currentQ = questions[currentQuestion]
-  // Determine if can go back
   const canGoBack = currentQuestion > 0 || reviewMode
+  const answered = currentQ ? hasAnswer(currentQ, answers[currentQ.id]) : false
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-bg-primary min-h-screen">
-        <div className="flex min-h-screen items-center justify-center p-4">
-          <div className="w-16 h-16 bg-accent-gold rounded-full flex items-center justify-center mx-auto mb-4">
+      <div className="min-h-screen bg-navy flex flex-col items-center justify-center p-4">
+        <div className="relative mb-6 animate-pop">
+          <div className="absolute -inset-3 rounded-full border border-gold/30 animate-spin-slow" />
+          <div className="w-16 h-16 rounded-full gold-border bg-brand-emerald overflow-hidden p-0.5">
             <img src="/logo.png" alt="MB" className="w-full h-full object-cover rounded-full" />
           </div>
-          <p className="text-sm text-text-secondary">{t('loading')}</p>
         </div>
+        <div className="h-2 w-40 rounded-full shimmer-bg" />
+        <p className="text-sm text-fg-muted mt-4">{t('loading')}</p>
       </div>
     )
   }
 
-  // Review mode
+  // ================================ REVIEW ================================
   if (reviewMode) {
     return (
-      <div className="min-h-screen bg-bg-primary">
-        <Header
-          title={t('surveyTitle')}
-          backHref="/survey"
-          showBack={currentQuestion > 0}
-        />
-        {error && <div className="mx-auto max-w-lg px-4 py-3 mb-4 bg-error/10 text-error rounded-xl text-sm">{error}</div>}
-        <div className="min-h-screen p-4 md:p-6">
-          <div className="max-w-lg mx-auto">
-            <div className="text-center mb-8">
-              <h2 className="text-3xl font-bold text-accent-warm mb-3">{t('reviewAnswers')}</h2>
-              <p className="text-text-secondary mb-6">Please review your answers before submitting</p>
+      <div className="min-h-screen bg-navy text-fg-bright">
+        <Header title={t('surveyTitle')} backHref="/survey" showBack={currentQuestion > 0} />
+
+        <div className="relative mx-auto max-w-xl px-4 py-8">
+          <div className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 w-[420px] h-[260px] rounded-full bg-gold/[0.07] blur-[110px]" />
+
+          <div className="relative text-center mb-8">
+            <span className="inline-block px-3 py-1 rounded-full border border-gold/30 bg-gold/10 text-[10px] tracking-[0.3em] uppercase text-gold mb-3">03 · Review</span>
+            <h2 className="font-display text-2xl md:text-3xl font-bold text-white">{t('reviewAnswers')}</h2>
+            <div className="mx-auto my-4 h-px w-20 bg-gradient-to-r from-transparent via-gold to-transparent" />
+          </div>
+
+          {error && (
+            <div className="mb-5 bg-error/10 border border-error/30 rounded-xl p-4 flex items-start gap-3">
+              <svg className="w-5 h-5 text-error mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-error text-sm">{error}</p>
             </div>
+          )}
 
-            <div className="space-y-3">
-              {questions.map((q, i) => {
-                const answer = answers[q.id]
-                let displayAnswer = ''
+          <div className="space-y-3 mb-8">
+            {questions.map((q, i) => {
+              const answer = answers[q.id]
+              const isAnswered = hasAnswer(q, answer)
+              let displayAnswer = ''
 
-                if (answer) {
-                  if (q.question_type === 'rating') {
-                    const rating = Number(answer.value)
-                    const fullStars = Math.floor(rating)
-                    const halfStar = rating - fullStars >= 0.5
-                    let stars = ''
-                    for (let j = 1; j <= 5; j++) {
-                      if (j <= fullStars) stars += '★'
-                      else if (j === fullStars + 1 && halfStar) stars += '½'
-                      else stars += '☆'
-                    }
-                    displayAnswer = stars
-                  } else if (q.question_type === 'multiple_choice' && Array.isArray(answer.value)) {
-                    displayAnswer = answer.value.map(v => {
-                      const opt = q.options?.find(o => o.option_value === v)
-                      return opt ? opt.option_text : v
-                    }).join(', ')
-                  } else if (q.question_type === 'text') {
-                    displayAnswer = String(answer.value) || '-'
-                  } else {
-                    const option = q.options?.find(o => o.option_value === answer.value)
-                    displayAnswer = option?.option_text || String(answer.value)
+              if (answer && isAnswered) {
+                if (q.question_type === 'rating') {
+                  const rating = Number(answer.value)
+                  const fullStars = Math.floor(rating)
+                  const halfStar = rating - fullStars >= 0.5
+                  let stars = ''
+                  for (let j = 1; j <= 5; j++) {
+                    if (j <= fullStars) stars += '★'
+                    else if (j === fullStars + 1 && halfStar) stars += '½'
+                    else stars += '☆'
                   }
+                  displayAnswer = stars
+                } else if (q.question_type === 'multiple_choice' && Array.isArray(answer.value)) {
+                  displayAnswer = answer.value.map(v => {
+                    const opt = q.options?.find(o => o.option_value === v)
+                    return opt ? opt.option_text : v
+                  }).join(', ')
+                } else if (q.question_type === 'text') {
+                  displayAnswer = String(answer.value) || '-'
+                } else {
+                  const option = q.options?.find(o => o.option_value === answer.value)
+                  displayAnswer = option?.option_text || String(answer.value)
                 }
+              }
 
-                return (
-                  <div key={q.id} className="bg-bg-surface rounded-xl p-5 border border-border mb-4">
-                    <div className="flex items-start gap-4">
-                      <div className="w-10 h-10 rounded-lg bg-bg-surface flex items-center justify-center flex-shrink-0">
-                        <span className="text-sm font-medium text-text-primary">{i + 1}</span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-text-primary font-medium mb-1 truncate">{q.question_text}</p>
-                        {displayAnswer && <p className="text-text-secondary text-sm mb-1">{displayAnswer}</p>}
-                      </div>
-                    </div>
+              return (
+                <div
+                  key={q.id}
+                  className={`flex items-start gap-4 rounded-2xl border p-4 md:p-5 animate-fade-up ${
+                    isAnswered ? 'border-gold/20 bg-surface' : 'border-white/[0.06] bg-surface/40 opacity-70'
+                  }`}
+                  style={{ animationDelay: `${0.04 * i}s` }}
+                >
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${isAnswered ? 'bg-gold/15 border border-gold/30' : 'bg-white/5'}`}>
+                    <span className={`text-sm font-display font-bold ${isAnswered ? 'text-gold' : 'text-fg-muted'}`}>{i + 1}</span>
                   </div>
-                )
-              })}
-            </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`font-medium mb-1 ${isAnswered ? 'text-fg-bright' : 'text-fg-secondary'}`}>{q.question_text}</p>
+                    <p className="text-sm">
+                      {isAnswered
+                        ? <span className="text-gold">{displayAnswer}</span>
+                        : <span className="text-fg-muted italic">{t('notAnswered')}</span>}
+                    </p>
+                  </div>
+                  {isAnswered && (
+                    <svg className="w-5 h-5 text-success mt-1 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  )}
+                </div>
+              )
+            })}
+          </div>
 
-            <div className="mt-8 flex gap-3 justify-end">
-              <button
-                onClick={handlePrev}
-                disabled={currentQuestion === 0 && !reviewMode}
-                className="px-4 py-2 bg-white/10 text-text-secondary rounded-lg hover:bg-bg-surface transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {t('back')}
-              </button>
-              <button
-                onClick={handleSubmit}
-                disabled={submitting}
-                className="px-6 py-3 bg-accent-gold text-bg-primary rounded-xl font-bold hover:bg-accent-warm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {submitting ? t('loading') : t('submit')}
-              </button>
-            </div>
+          <div className="flex gap-3">
+            <button
+              onClick={handlePrev}
+              disabled={currentQuestion === 0 && !reviewMode}
+              className="px-6 py-4 rounded-2xl border border-white/10 bg-white/[0.04] text-fg-secondary font-semibold hover:bg-white/10 hover:text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {t('back')}
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={submitting}
+              className="flex-1 py-4 bg-gold-gradient text-brand-emerald rounded-2xl font-bold text-lg shadow-gold hover:shadow-gold-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {submitting ? t('loading') : t('submit')}
+            </button>
           </div>
         </div>
       </div>
     )
   }
 
+  // ================================ QUESTION ================================
   return (
-    <div className="min-h-screen bg-bg-primary">
-      <Header
-        title={t('surveyTitle')}
-        backHref="/info"
-        showBack={currentQuestion > 0}
-      />
+    <div className={`min-h-screen bg-navy text-fg-bright transition-opacity duration-300 ${ready ? 'opacity-100' : 'opacity-0'}`}>
+      <Header title={t('surveyTitle')} backHref="/info" showBack={currentQuestion > 0} />
 
-      {error && <div className="mx-auto max-w-2xl px-4 py-3 mb-4 bg-error/10 text-error rounded-xl text-sm">{error}</div>}
+      <div className="relative mx-auto max-w-xl px-4 pb-10">
+        <div className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 w-[420px] h-[260px] rounded-full bg-gold/[0.06] blur-[110px]" />
 
-      <div className="bg-bg-surface rounded-2xl p-4 mb-6 border border-border">
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-sm text-text-secondary">{t('question')} {currentQuestion + 1} / {Math.max(questions.length, 1)}</span>
-          <span className="text-xs font-medium text-text-secondary">{Math.round(progress)}%</span>
-        </div>
-        <div className="h-2 bg-border rounded-full overflow-hidden">
-          <div 
-            className="h-full bg-accent-gold rounded-full transition-all duration-300" 
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-      </div>
-
-      <div className="max-w-2xl mx-auto px-4 py-6">
-        <div className="bg-bg-surface rounded-2xl p-6 border border-border">
-          <h2 className="text-xl font-bold text-accent-warm mb-6">{currentQ?.question_text}</h2>
-
-          {currentQ?.question_type === 'text' ? (
-            <div>
-              <textarea
-                value={(answers[currentQ.id]?.value as string) || ''}
-                onChange={(e) => handleTextChange(currentQ.id, e.target.value)}
-                className="w-full px-4 py-3 bg-bg-surface border border-border rounded-xl focus:border-accent-gold focus:outline-none text-text-primary resize-none min-h-[80px] placeholder-text-muted"
-                placeholder={t('textPlaceholder')}
-                rows={4}
-              />
-              <div className="mt-3 text-xs text-text-secondary">
-                {answers[currentQ.id]?.value ? `${(answers[currentQ.id].value as string).length} / 500` : '0 / 500'}
-              </div>
+        <div className="relative">
+          {/* ---------- progress ---------- */}
+          <div className="rounded-2xl border border-white/[0.07] bg-surface/80 backdrop-blur p-4 mb-5 mt-5">
+            <div className="flex items-center justify-between mb-3">
+              <span className="flex items-center gap-3 text-sm text-fg-secondary">
+                <span className="w-7 h-7 rounded-lg bg-gold/15 border border-gold/30 flex items-center justify-center text-[10px] font-bold text-gold">02</span>
+                {t('question')} {currentQuestion + 1} <span className="text-fg-muted">{t('of')} {total}</span>
+              </span>
+              <span className="text-xs font-bold text-gold px-2.5 py-1 rounded-full bg-gold/10 border border-gold/20">
+                {Math.round(progress)}%
+              </span>
             </div>
-          ) : currentQ?.question_type === 'rating' ? (
-            <div className="flex items-center gap-4 mb-6">
-              <p className="text-text-secondary">How do you rate this product?</p>
-              <div className="flex gap-1">
-                {[1, 2, 3, 4, 5].map(rating => (
+            <div className="h-2 bg-white/[0.06] rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gold-gradient rounded-full transition-all duration-500 ease-out"
+                style={{ width: `${Math.max(progress, (currentQuestion + 1) / total * 100)}%` }}
+              />
+            </div>
+          </div>
+
+          {/* ---------- question card ---------- */}
+          <div className="rounded-[1.75rem] border border-white/[0.08] bg-surface/90 backdrop-blur p-6 md:p-8 shadow-card relative overflow-hidden animate-fade-up">
+            <div className="absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-gold to-transparent" />
+
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-[10px] tracking-[0.3em] uppercase text-gold/80">Survey · Q{String(currentQuestion + 1).padStart(2, '0')}</span>
+              {currentQ?.is_required ? (
+                <span className="text-[10px] font-semibold uppercase tracking-widest text-warning px-2.5 py-1 rounded-full bg-warning/10 border border-warning/30">
+                  {t('required')}
+                </span>
+              ) : (
+                <span className="text-[10px] text-fg-muted tracking-widest uppercase">Optional</span>
+              )}
+            </div>
+
+            <h2 className="font-display text-xl md:text-2xl font-bold text-white mb-7 leading-snug">
+              {currentQ?.question_text}
+            </h2>
+
+            <>
+              {currentQ?.question_type === 'text' ? (
+                <div>
+                  <textarea
+                    value={(answers[currentQ.id]?.value as string) || ''}
+                    onChange={(e) => handleTextChange(currentQ.id, e.target.value)}
+                    className="survey-input resize-none min-h-[120px] leading-relaxed"
+                    placeholder={t('textPlaceholder')}
+                    rows={4}
+                  />
+                  <div className="mt-3 flex items-center justify-between text-xs">
+                    <span className={`flex items-center gap-1.5 ${answered ? 'text-success' : 'text-fg-muted'}`}>
+                      {answered && (
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                      {answered ? 'Answered' : t('notAnswered')}
+                    </span>
+                    <span className="text-fg-muted">
+                      {answers[currentQ.id]?.value ? `${(answers[currentQ.id].value as string).length} / 500` : '0 / 500'}
+                    </span>
+                  </div>
+                </div>
+              ) : currentQ?.question_type === 'rating' ? (
+                <div>
+                  <div className="flex items-center justify-center gap-2 md:gap-3" key={String(answers[currentQ.id]?.value ?? '')}>
+                    {[1, 2, 3, 4, 5].map(rating => (
+                      <Star
+                        key={rating}
+                        filled={!!answers[currentQ.id]?.value && Number(answers[currentQ.id].value) >= rating}
+                        onChoose={() => handleRating(currentQ.id, rating)}
+                        label={`${rating}`}
+                      />
+                    ))}
+                  </div>
+                  <div className="mt-3 flex items-center justify-between text-xs text-fg-muted px-2">
+                    <span>{t('ratingLow')}</span>
+                    <span>{t('ratingHigh')}</span>
+                  </div>
+                </div>
+              ) : currentQ?.question_type === 'yes_no' ? (
+                <div className="grid grid-cols-2 gap-3">
                   <button
-                    key={rating}
-                    onClick={() => handleRating(currentQ.id, rating)}
-                    aria-label={`${rating} out of 5`}
-                    aria-pressed={answers[currentQ.id]?.value && Number(answers[currentQ.id].value) >= rating}
-                    className={`w-14 h-14 rounded-2xl flex items-center justify-center text-3xl font-bold transition-all ${
-                      answers[currentQ.id]?.value && Number(answers[currentQ.id].value) >= rating
-                        ? 'bg-accent-gold text-bg-primary'
-                        : 'bg-bg-surface border-border hover:bg-accent-gold/20 hover:text-accent-gold'
+                    onClick={() => handleSelect(currentQ.id, 'yes', 'yes_no')}
+                    className={`rounded-2xl p-6 flex flex-col items-center gap-2 border-2 transition-all ${
+                      answers[currentQ.id]?.value === 'yes'
+                        ? 'border-gold bg-gold/15 text-gold shadow-glow'
+                        : 'border-white/10 bg-surface-deep text-fg-secondary hover:border-gold/50 hover:text-gold'
                     }`}
                   >
-                    {rating}
+                    <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span className="font-display font-bold">Yes</span>
                   </button>
-                ))}
-              </div>
-              <p className="mt-2 text-xs text-text-secondary">
-                Very dissatisfied · Very satisfied
-              </p>
-            </div>
-          ) : currentQ?.question_type === 'yes_no' ? (
-            <div className="grid grid-cols-2 gap-4 mb-6">
-              <button
-                onClick={() => handleSelect(currentQ.id, 'yes', 'yes_no')}
-                className={`w-full rounded-2xl p-5 flex items-center justify-center gap-3 ${
-                  answers[currentQ.id]?.value === 'yes'
-                    ? 'bg-accent-gold/20 border-accent-gold text-accent-gold'
-                    : 'bg-bg-surface border-border text-text-secondary hover:bg-accent-gold/20 hover:text-accent-gold'
-                }`}>
-                  <svg className="w-5 h-5 text-accent-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  <span>Yes</span>
-                </button>
-                <button
-                  onClick={() => handleSelect(currentQ.id, 'no', 'yes_no')}
-                  className={`w-full rounded-2xl p-5 flex items-center justify-center gap-3 ${
-                    answers[currentQ.id]?.value === 'no'
-                      ? 'bg-accent-gold/20 border-accent-gold text-accent-gold'
-                      : 'bg-bg-surface border-border text-text-secondary hover:bg-accent-gold/20 hover:text-accent-gold'
-                  }`}>
-                    <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002-2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"
-                    /></svg>
-                    <span>No</span>
-                </button>
-            </div>
-          ) : currentQ?.question_type === 'multiple_choice' ? (
-            <div className="space-y-2">
-              {currentQ?.options.map((option) => (
-                <button
-                  key={option.id}
-                  onClick={() => handleSelect(currentQ.id, option.option_value, currentQ.question_type)}
-                  className={`w-full px-4 py-3 bg-bg-surface border-border rounded-xl text-left transition-all hover:bg-accent-gold/20 hover:border-accent-gold/50 flex items-center gap-3 ${
-                    answers[currentQ.id]?.value && (answers[currentQ.id].value as string[]).includes(option.option_value)
-                      ? 'bg-accent-gold/30 border-accent-gold text-accent-gold'
-                      : 'bg-bg-surface border-border hover:bg-accent-gold/20 hover:border-accent-gold/50'
-                  }`}>
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                      answers[currentQ.id]?.value && (answers[currentQ.id].value as string[]).includes(option.option_value)
-                        ? 'border-accent-gold bg-accent-gold'
-                        : 'border-white/40'
-                    }`}>
-                      {(answers[currentQ.id]?.value && (answers[currentQ.id].value as string[]).includes(option.option_value)) && (
-                        <svg className="w-3 h-3 text-accent-gold" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
-                      )}
-                    </div>
-                    <span className="flex-1 truncate">{option.option_text}</span>
+                  <button
+                    onClick={() => handleSelect(currentQ.id, 'no', 'yes_no')}
+                    className={`rounded-2xl p-6 flex flex-col items-center gap-2 border-2 transition-all ${
+                      answers[currentQ.id]?.value === 'no'
+                        ? 'border-gold bg-gold/15 text-gold shadow-glow'
+                        : 'border-white/10 bg-surface-deep text-fg-secondary hover:border-gold/50 hover:text-gold'
+                    }`}
+                  >
+                    <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    <span className="font-display font-bold">No</span>
                   </button>
-                ))}
-            </div>
-          ) : currentQ?.question_type === 'single_choice' ? (
-            <div className="space-y-2">
-              {currentQ?.options.map((option) => (
-                <button
-                  key={option.id}
-                  onClick={() => handleSelect(currentQ.id, option.option_value, currentQ.question_type)}
-                  className={`w-full px-4 py-3 bg-bg-surface border-border rounded-xl text-left transition-all hover:bg-accent-gold/20 hover:border-accent-gold/50 flex items-center gap-3 ${
-                    answers[currentQ.id]?.value === option.option_value
-                      ? 'bg-accent-gold/30 border-accent-gold text-accent-gold'
-                      : 'bg-bg-surface border-border hover:bg-accent-gold/20 hover:border-accent-gold/50'
-                  }`}>
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                      answers[currentQ.id]?.value === option.option_value
-                        ? 'border-accent-gold bg-accent-gold'
-                        : 'border-white/40'
-                    }`}>
-                      {(answers[currentQ.id]?.value === option.option_value) && (
-                        <svg className="w-3 h-3 text-accent-gold" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
-                      )}
-                    </div>
-                    <span className="flex-1 truncate">{option.option_text}</span>
-                  </button>
-                ))}
-            </div>
-          ) : (
-            <p className="text-text-secondary">{t('notAnswered')}</p>
-          )}
-        </div>
-      </div>
+                </div>
+              ) : currentQ?.question_type === 'multiple_choice' ? (
+                <div className="space-y-2.5">
+                  <p className="text-sm text-fg-muted flex items-center gap-2 mb-3">
+                    <svg className="w-4 h-4 text-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    {t('selectMultiple')}
+                  </p>
+                  {currentQ?.options.map(option => {
+                    const selected = (answers[currentQ.id]?.value as string[])?.includes(option.option_value)
+                    return (
+                      <button
+                        key={option.id}
+                        onClick={() => handleSelect(currentQ.id, option.option_value, currentQ.question_type)}
+                        className={`w-full px-5 py-4 rounded-2xl border-2 text-left transition-all flex items-center gap-3.5 ${
+                          selected
+                            ? 'bg-gold/10 border-gold'
+                            : 'bg-surface-deep border-white/[0.08] hover:border-gold/40'
+                        }`}
+                      >
+                        <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all shrink-0 ${
+                          selected ? 'border-gold bg-gold-gradient' : 'border-slate-500'
+                        }`}>
+                          {selected && (
+                            <svg className="w-4 h-4 text-brand-emerald" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </div>
+                        <span className={`flex-1 truncate font-medium ${selected ? 'text-gold' : 'text-fg-secondary'}`}>
+                          {option.option_text}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : currentQ?.question_type === 'single_choice' ? (
+                <div className="space-y-2.5">
+                  <p className="text-sm text-fg-muted flex items-center gap-2 mb-3">
+                    <svg className="w-4 h-4 text-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4-.87L3 20l1.36-3.72A7.9 7.9 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                    {t('selectOne')}
+                  </p>
+                  {currentQ?.options.map(option => {
+                    const selected = answers[currentQ.id]?.value === option.option_value
+                    return (
+                      <button
+                        key={option.id}
+                        onClick={() => handleSelect(currentQ.id, option.option_value, currentQ.question_type)}
+                        className={`w-full px-5 py-4 rounded-2xl border-2 text-left transition-all flex items-center gap-3.5 ${
+                          selected
+                            ? 'bg-gold/10 border-gold'
+                            : 'bg-surface-deep border-white/[0.08] hover:border-gold/40'
+                        }`}
+                      >
+                        <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all shrink-0 ${
+                          selected ? 'border-gold' : 'border-slate-500'
+                        }`}>
+                          {selected && <div className="w-3 h-3 rounded-full bg-gold-gradient animate-pop" />}
+                        </div>
+                        <span className={`flex-1 truncate font-medium ${selected ? 'text-gold' : 'text-fg-secondary'}`}>
+                          {option.option_text}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="text-fg-secondary">{t('notAnswered')}</p>
+              )}
+            </>
+          </div>
 
-      <div className="mt-6 border-t border-border pt-6">
-        <div className="flex gap-3">
-          <button
-            onClick={handlePrev}
-            disabled={!canGoBack}
-            className="flex-1 py-3 bg-bg-surface/50 text-text-secondary rounded-lg hover:bg-bg-surface transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {t('back')}
-          </button>
-          <button
-            onClick={handleNext}
-            className="flex-1 py-3 bg-accent-gold text-bg-primary rounded-xl font-bold hover:bg-accent-warm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {currentQuestion === questions.length - 1 ? t('review') : t('next')}
-          </button>
+          {/* ---------- nav ---------- */}
+          <div className="mt-6 flex gap-3">
+            <button
+              onClick={handlePrev}
+              disabled={!canGoBack}
+              aria-label={t('back')}
+              className="w-14 h-14 rounded-2xl border border-white/10 bg-white/[0.04] text-fg-secondary hover:bg-white/10 hover:text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0 flex items-center justify-center"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <button
+              onClick={handleNext}
+              className="group flex-1 py-4 bg-gold-gradient text-brand-emerald rounded-2xl font-bold text-lg shadow-gold hover:shadow-gold-lg hover:scale-[1.01] transition-all inline-flex items-center justify-center gap-2"
+            >
+              {currentQuestion === questions.length - 1 ? t('review') : t('next')}
+              <svg className="w-5 h-5 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5-5 5M6 12h12" />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
     </div>

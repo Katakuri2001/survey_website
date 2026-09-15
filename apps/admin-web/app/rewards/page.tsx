@@ -247,12 +247,12 @@ export default function RewardsPage() {
 
   const statusBadge = (status: string) => {
     const colors: Record<string, string> = {
-      active: "bg-green-100 text-green-800",
-      inactive: "bg-gray-100 text-gray-800",
-      archived: "bg-red-100 text-red-800",
+      active: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+      inactive: "bg-slate-100 text-slate-600 ring-slate-200",
+      archived: "bg-rose-50 text-rose-700 ring-rose-200",
     };
     return (
-      <span className={`inline-block px-2 py-0.5 text-xs font-medium rounded-full ${colors[status] || "bg-gray-100 text-gray-800"}`}>
+      <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset ${colors[status] || "bg-slate-100 text-slate-600 ring-slate-200"}`}>
         {status}
       </span>
     );
@@ -260,12 +260,12 @@ export default function RewardsPage() {
 
   const deliveryBadge = (status: string) => {
     const colors: Record<string, string> = {
-      delivered: "bg-green-100 text-green-800",
-      pending: "bg-yellow-100 text-yellow-800",
-      failed: "bg-red-100 text-red-800",
+      delivered: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+      pending: "bg-amber-50 text-amber-700 ring-amber-200",
+      failed: "bg-rose-50 text-rose-700 ring-rose-200",
     };
     return (
-      <span className={`inline-block px-2 py-0.5 text-xs font-medium rounded-full ${colors[status] || "bg-gray-100 text-gray-800"}`}>
+      <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset ${colors[status] || "bg-slate-100 text-slate-600 ring-slate-200"}`}>
         {status}
       </span>
     );
@@ -274,7 +274,7 @@ export default function RewardsPage() {
   const lowStockIndicator = (reward: InventoryReward) => {
     if (reward.remaining_quantity <= reward.low_stock_threshold) {
       return (
-        <span className="ml-2 inline-block px-2 py-0.5 text-xs font-medium rounded-full bg-red-100 text-red-800">
+        <span className="ml-2 inline-block rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700 ring-1 ring-inset ring-amber-200">
           Low Stock
         </span>
       );
@@ -283,21 +283,24 @@ export default function RewardsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Rewards Management</h1>
+    <div>
+      <div className="mx-auto max-w-7xl">
+        <div className="mb-6 flex items-center justify-between">
+          <div>
+            <h1 className="font-display text-2xl font-bold text-ink">Rewards Management</h1>
+            <p className="mt-1 text-sm text-slate-500">Gifts, inventory and delivery history</p>
+          </div>
           {tab === "rewards" && (
-            <button
-              onClick={openAddModal}
-              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors"
-            >
+            <button onClick={openAddModal} className="btn-gold shadow-gold">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
               Add Reward
             </button>
           )}
         </div>
 
-        <div className="border-b border-gray-200 mb-6">
+        <div className="mb-6 border-b border-slate-200">
           <nav className="flex gap-6">
             {(["rewards", "inventory", "history"] as Tab[]).map((t) => (
               <button
@@ -306,10 +309,10 @@ export default function RewardsPage() {
                   setTab(t);
                   if (t === "history") setHistoryOffset(0);
                 }}
-                className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+                className={`border-b-2 pb-3 text-sm font-medium transition-colors ${
                   tab === t
-                    ? "border-blue-600 text-blue-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                    ? "border-gold-500 text-gold-600"
+                    : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700"
                 }`}
               >
                 {t.charAt(0).toUpperCase() + t.slice(1)}
@@ -319,9 +322,9 @@ export default function RewardsPage() {
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm">
+          <div className="mb-4 flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
             {error}
-            <button onClick={() => setError("")} className="ml-2 underline">
+            <button onClick={() => setError("")} className="ml-4 font-semibold underline">
               Dismiss
             </button>
           </div>
@@ -329,88 +332,90 @@ export default function RewardsPage() {
 
         {loading ? (
           <div className="flex items-center justify-center py-20">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+            <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-t-2 border-gold" />
           </div>
         ) : (
           <>
             {tab === "rewards" && (
-              <div className="bg-white rounded-lg shadow overflow-hidden">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reward</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Weight</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stats</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {rewards.map((r) => (
-                      <tr key={r.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
-                            {r.image_url && (
-                              <>
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={r.image_url} alt={r.name} className="h-10 w-10 rounded object-cover" />
-                              </>
-                            )}
-
-                            <div>
-                              <div className="text-sm font-medium text-gray-900">{r.name}</div>
-                              <div className="text-xs text-gray-500 line-clamp-1">{r.description}</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-700">
-                          {r.remaining_quantity} / {r.total_quantity}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-700">{r.weight}</td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-2">
-                            {statusBadge(r.status)}
-                            {!r.is_active && <span className="text-xs text-gray-400">(disabled)</span>}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-500">
-                          Rewarded: {r.rewarded_count} | Delivered: {r.delivered_count}
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => openEditModal(r)}
-                              className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => openAdjustModal(r)}
-                              className="text-amber-600 hover:text-amber-800 text-sm font-medium"
-                            >
-                              Adjust
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    {rewards.length === 0 && (
+              <div className="card overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-slate-200">
+                    <thead className="bg-slate-50">
                       <tr>
-                        <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
-                          No rewards found.
-                        </td>
+                        <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Reward</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Stock</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Weight</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Status</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Stats</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Actions</th>
                       </tr>
-                    )}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {rewards.map((r) => (
+                        <tr key={r.id} className="transition-colors hover:bg-slate-50/70">
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-3">
+                              {r.image_url && (
+                                <>
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img src={r.image_url} alt={r.name} className="h-10 w-10 rounded-lg object-cover ring-1 ring-slate-200" />
+                                </>
+                              )}
+
+                              <div>
+                                <div className="text-sm font-medium text-ink">{r.name}</div>
+                                <div className="line-clamp-1 text-xs text-slate-500">{r.description}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-slate-700">
+                            {r.remaining_quantity} / {r.total_quantity}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-slate-700">{r.weight}</td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-2">
+                              {statusBadge(r.status)}
+                              {!r.is_active && <span className="text-xs text-slate-400">(disabled)</span>}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-slate-500">
+                            Rewarded: {r.rewarded_count} | Delivered: {r.delivered_count}
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => openEditModal(r)}
+                                className="text-sm font-semibold text-gold-600 hover:text-gold-700"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => openAdjustModal(r)}
+                                className="text-sm font-semibold text-amber-600 hover:text-amber-700"
+                              >
+                                Adjust
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                      {rewards.length === 0 && (
+                        <tr>
+                          <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
+                            No rewards found.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
 
             {tab === "inventory" && (
               <>
                 {inventorySummary && (
-                  <div className="grid grid-cols-5 gap-4 mb-6">
+                  <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
                     {[
                       { label: "Total Stock", value: inventorySummary.total_stock },
                       { label: "Total Rewarded", value: inventorySummary.total_rewarded },
@@ -418,129 +423,133 @@ export default function RewardsPage() {
                       { label: "Total Delivered", value: inventorySummary.total_delivered },
                       { label: "Total Pending", value: inventorySummary.total_pending },
                     ].map((item) => (
-                      <div key={item.label} className="bg-white rounded-lg shadow p-4">
-                        <div className="text-sm text-gray-500">{item.label}</div>
-                        <div className="text-2xl font-bold text-gray-900">{item.value}</div>
+                      <div key={item.label} className="card p-4">
+                        <div className="text-sm text-slate-500">{item.label}</div>
+                        <div className="font-display text-2xl font-bold text-ink">{item.value}</div>
                       </div>
                     ))}
                   </div>
                 )}
-                <div className="bg-white rounded-lg shadow overflow-hidden">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
+                <div className="card overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-slate-200">
+                      <thead className="bg-slate-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Reward</th>
+                          <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Total</th>
+                          <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Remaining</th>
+                          <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Status</th>
+                          <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Threshold</th>
+                          <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Rewarded</th>
+                          <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Delivered</th>
+                          <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Pending</th>
+                          <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Utilization</th>
+                          <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {inventory.map((r) => (
+                          <tr key={r.id} className="transition-colors hover:bg-slate-50/70">
+                            <td className="px-6 py-4 text-sm font-medium text-ink">{r.name}</td>
+                            <td className="px-6 py-4 text-sm text-slate-700">{r.total_quantity}</td>
+                            <td className="px-6 py-4 text-sm text-slate-700">{r.remaining_quantity}</td>
+                            <td className="px-6 py-4">
+                              <div className="flex items-center">
+                                {statusBadge(r.status)}
+                                {lowStockIndicator(r)}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-slate-700">{r.low_stock_threshold}</td>
+                            <td className="px-6 py-4 text-sm text-slate-700">{r.rewarded_count}</td>
+                            <td className="px-6 py-4 text-sm text-slate-700">{r.delivered_count}</td>
+                            <td className="px-6 py-4 text-sm text-slate-700">{r.pending_count}</td>
+                            <td className="px-6 py-4 text-sm font-semibold text-gold-600">{(r.utilization_rate * 100).toFixed(1)}%</td>
+                            <td className="px-6 py-4">
+                              <button
+                                onClick={() => {
+                                  const reward = rewards.find((rew) => rew.id === r.id);
+                                  if (reward) openAdjustModal(reward);
+                                }}
+                                className="text-sm font-semibold text-amber-600 hover:text-amber-700"
+                              >
+                                Adjust
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                        {inventory.length === 0 && (
+                          <tr>
+                            <td colSpan={10} className="px-6 py-12 text-center text-slate-500">
+                              No inventory data found.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {tab === "history" && (
+              <div className="card overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-slate-200">
+                    <thead className="bg-slate-50">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reward</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Remaining</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Threshold</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rewarded</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Delivered</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pending</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Utilization</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">User</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Reward</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Product</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Status</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Won At</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Delivered At</th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {inventory.map((r) => (
-                        <tr key={r.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 text-sm font-medium text-gray-900">{r.name}</td>
-                          <td className="px-6 py-4 text-sm text-gray-700">{r.total_quantity}</td>
-                          <td className="px-6 py-4 text-sm text-gray-700">{r.remaining_quantity}</td>
+                    <tbody className="divide-y divide-slate-100">
+                      {history.map((h) => (
+                        <tr key={h.id} className="transition-colors hover:bg-slate-50/70">
                           <td className="px-6 py-4">
-                            <div className="flex items-center">
-                              {statusBadge(r.status)}
-                              {lowStockIndicator(r)}
-                            </div>
+                            <div className="text-sm font-medium text-ink">{h.user_name}</div>
+                            <div className="text-xs text-slate-500">{h.user_email}</div>
                           </td>
-                          <td className="px-6 py-4 text-sm text-gray-700">{r.low_stock_threshold}</td>
-                          <td className="px-6 py-4 text-sm text-gray-700">{r.rewarded_count}</td>
-                          <td className="px-6 py-4 text-sm text-gray-700">{r.delivered_count}</td>
-                          <td className="px-6 py-4 text-sm text-gray-700">{r.pending_count}</td>
-                          <td className="px-6 py-4 text-sm text-gray-700">{(r.utilization_rate * 100).toFixed(1)}%</td>
-                          <td className="px-6 py-4">
-                            <button
-                              onClick={() => {
-                                const reward = rewards.find((rew) => rew.id === r.id);
-                                if (reward) openAdjustModal(reward);
-                              }}
-                              className="text-amber-600 hover:text-amber-800 text-sm font-medium"
-                            >
-                              Adjust
-                            </button>
+                          <td className="px-6 py-4 text-sm text-slate-700">{h.reward_name}</td>
+                          <td className="px-6 py-4 text-sm text-slate-700">{h.product_name || "-"}</td>
+                          <td className="px-6 py-4">{deliveryBadge(h.delivery_status)}</td>
+                          <td className="px-6 py-4 text-sm text-slate-500">
+                            {new Date(h.won_at).toLocaleString()}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-slate-500">
+                            {h.delivered_at ? new Date(h.delivered_at).toLocaleString() : "-"}
                           </td>
                         </tr>
                       ))}
-                      {inventory.length === 0 && (
+                      {history.length === 0 && (
                         <tr>
-                          <td colSpan={10} className="px-6 py-12 text-center text-gray-500">
-                            No inventory data found.
+                          <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
+                            No history found.
                           </td>
                         </tr>
                       )}
                     </tbody>
                   </table>
                 </div>
-              </>
-            )}
-
-            {tab === "history" && (
-              <div className="bg-white rounded-lg shadow overflow-hidden">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reward</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Won At</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Delivered At</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {history.map((h) => (
-                      <tr key={h.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4">
-                          <div className="text-sm font-medium text-gray-900">{h.user_name}</div>
-                          <div className="text-xs text-gray-500">{h.user_email}</div>
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-700">{h.reward_name}</td>
-                        <td className="px-6 py-4 text-sm text-gray-700">{h.product_name || "-"}</td>
-                        <td className="px-6 py-4">{deliveryBadge(h.delivery_status)}</td>
-                        <td className="px-6 py-4 text-sm text-gray-500">
-                          {new Date(h.won_at).toLocaleString()}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-500">
-                          {h.delivered_at ? new Date(h.delivered_at).toLocaleString() : "-"}
-                        </td>
-                      </tr>
-                    ))}
-                    {history.length === 0 && (
-                      <tr>
-                        <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
-                          No history found.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
                 {historyTotal > historyLimit && (
-                  <div className="flex items-center justify-between px-6 py-3 border-t border-gray-200">
-                    <span className="text-sm text-gray-500">
+                  <div className="flex items-center justify-between border-t border-slate-200 px-6 py-3">
+                    <span className="text-sm text-slate-500">
                       Showing {historyOffset + 1}–{Math.min(historyOffset + historyLimit, historyTotal)} of {historyTotal}
                     </span>
                     <div className="flex gap-2">
                       <button
                         disabled={historyOffset === 0}
                         onClick={() => setHistoryOffset(Math.max(0, historyOffset - historyLimit))}
-                        className="px-3 py-1 text-sm border border-gray-300 rounded disabled:opacity-40 hover:bg-gray-50"
+                        className="rounded-lg border border-slate-200 px-3 py-1 text-sm text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-40"
                       >
                         Previous
                       </button>
                       <button
                         disabled={historyOffset + historyLimit >= historyTotal}
                         onClick={() => setHistoryOffset(historyOffset + historyLimit)}
-                        className="px-3 py-1 text-sm border border-gray-300 rounded disabled:opacity-40 hover:bg-gray-50"
+                        className="rounded-lg border border-slate-200 px-3 py-1 text-sm text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-40"
                       >
                         Next
                       </button>
@@ -554,107 +563,107 @@ export default function RewardsPage() {
 
         {showModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <h2 className="text-lg font-semibold text-gray-900">
+            <div className="w-full max-w-lg overflow-y-auto rounded-3xl bg-white shadow-2xl max-h-[90vh]">
+              <div className="border-b border-slate-200 px-6 py-4">
+                <h2 className="font-display text-lg font-semibold text-ink">
                   {editingReward ? "Edit Reward" : "Add Reward"}
                 </h2>
               </div>
-              <div className="px-6 py-4 space-y-4">
+              <div className="space-y-4 px-6 py-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Name (English) *</label>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Name (English) *</label>
                   <input
                     type="text"
                     value={form.name}
                     onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="input"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Name (Myanmar)</label>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Name (Myanmar)</label>
                   <input
                     type="text"
                     value={form.nameMy}
                     onChange={(e) => setForm({ ...form, nameMy: e.target.value })}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="input"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Description (English)</label>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Description (English)</label>
                   <textarea
                     value={form.description}
                     onChange={(e) => setForm({ ...form, description: e.target.value })}
                     rows={3}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="input resize-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Description (Myanmar)</label>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Description (Myanmar)</label>
                   <textarea
                     value={form.descriptionMy}
                     onChange={(e) => setForm({ ...form, descriptionMy: e.target.value })}
                     rows={3}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="input resize-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Image URL</label>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Image URL</label>
                   <input
                     type="url"
                     value={form.imageUrl}
                     onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="input"
                   />
                 </div>
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Total Quantity *</label>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">Total Quantity *</label>
                     <input
                       type="number"
                       min={0}
                       value={form.totalQuantity}
                       onChange={(e) => setForm({ ...form, totalQuantity: Number(e.target.value) })}
-                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="input"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Weight *</label>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">Weight *</label>
                     <input
                       type="number"
                       min={0}
                       value={form.weight}
                       onChange={(e) => setForm({ ...form, weight: Number(e.target.value) })}
-                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="input"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Low Stock Threshold</label>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">Low Stock Threshold</label>
                     <input
                       type="number"
                       min={0}
                       value={form.lowStockThreshold}
                       onChange={(e) => setForm({ ...form, lowStockThreshold: Number(e.target.value) })}
-                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="input"
                     />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Campaign ID</label>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Campaign ID</label>
                   <input
                     type="text"
                     value={form.campaignId}
                     onChange={(e) => setForm({ ...form, campaignId: e.target.value })}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="input"
                   />
                 </div>
                 {editingReward && (
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">Status</label>
                       <select
                         value={form.status}
                         onChange={(e) => setForm({ ...form, status: e.target.value })}
-                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="input"
                       >
                         <option value="active">Active</option>
                         <option value="inactive">Inactive</option>
@@ -662,12 +671,12 @@ export default function RewardsPage() {
                       </select>
                     </div>
                     <div className="flex items-end">
-                      <label className="flex items-center gap-2 text-sm text-gray-700">
+                      <label className="flex items-center gap-2 text-sm text-slate-700">
                         <input
                           type="checkbox"
                           checked={form.isActive}
                           onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
-                          className="rounded border-gray-300"
+                          className="h-4 w-4 rounded border-slate-300 text-gold-600 accent-gold focus:ring-gold"
                         />
                         Active
                       </label>
@@ -675,17 +684,17 @@ export default function RewardsPage() {
                   </div>
                 )}
               </div>
-              <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+              <div className="flex justify-end gap-3 border-t border-slate-200 px-6 py-4">
                 <button
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={saveReward}
                   disabled={saving || !form.name}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
+                  className="btn-gold disabled:opacity-50"
                 >
                   {saving ? "Saving..." : editingReward ? "Update" : "Create"}
                 </button>
@@ -696,45 +705,45 @@ export default function RewardsPage() {
 
         {adjustModal.open && adjustModal.reward && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <h2 className="text-lg font-semibold text-gray-900">Adjust Stock: {adjustModal.reward.name}</h2>
-                <p className="text-sm text-gray-500 mt-1">
+            <div className="w-full max-w-md rounded-3xl bg-white shadow-2xl">
+              <div className="border-b border-slate-200 px-6 py-4">
+                <h2 className="font-display text-lg font-semibold text-ink">Adjust Stock: {adjustModal.reward.name}</h2>
+                <p className="mt-1 text-sm text-slate-500">
                   Current stock: {adjustModal.reward.remaining_quantity} / {adjustModal.reward.total_quantity}
                 </p>
               </div>
-              <div className="px-6 py-4 space-y-4">
+              <div className="space-y-4 px-6 py-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Adjustment (positive to add, negative to subtract)</label>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Adjustment (positive to add, negative to subtract)</label>
                   <input
                     type="number"
                     value={adjustment}
                     onChange={(e) => setAdjustment(Number(e.target.value))}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="input"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Reason *</label>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Reason *</label>
                   <input
                     type="text"
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
                     placeholder="e.g. Restock, Damaged, etc."
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="input"
                   />
                 </div>
               </div>
-              <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+              <div className="flex justify-end gap-3 border-t border-slate-200 px-6 py-4">
                 <button
                   onClick={() => setAdjustModal({ open: false, reward: null })}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={saveStockAdjustment}
                   disabled={adjusting || !reason}
-                  className="px-4 py-2 text-sm font-medium text-white bg-amber-600 rounded-md hover:bg-amber-700 disabled:opacity-50"
+                  className="inline-flex items-center justify-center rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-amber-600 disabled:opacity-50"
                 >
                   {adjusting ? "Saving..." : "Apply"}
                 </button>

@@ -36,10 +36,10 @@ const STATUS_TABS: { label: string; value: DeliveryStatus | "" }[] = [
 ];
 
 const STATUS_STYLES: Record<DeliveryStatus, string> = {
-  PROCESSING: "bg-yellow-100 text-yellow-800 border-yellow-300",
-  SHIPPED: "bg-blue-100 text-blue-800 border-blue-300",
-  DELIVERED: "bg-green-100 text-green-800 border-green-300",
-  CANCELLED: "bg-red-100 text-red-800 border-red-300",
+  PROCESSING: "bg-amber-50 text-amber-700 ring-amber-200",
+  SHIPPED: "bg-gold/10 text-gold-700 ring-gold-300",
+  DELIVERED: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  CANCELLED: "bg-rose-50 text-rose-700 ring-rose-200",
 };
 
 const NEXT_STATUS_OPTIONS: { label: string; value: DeliveryStatus }[] = [
@@ -114,23 +114,26 @@ export default function DeliveriesPage() {
   const formatDate = (date: string | null) => (date ? new Date(date).toLocaleDateString() : "—");
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div>
       <div className="mx-auto max-w-7xl">
-        <h1 className="mb-6 text-2xl font-bold text-gray-900">Deliveries</h1>
+        <div className="mb-6">
+          <h1 className="font-display text-2xl font-bold text-ink">Deliveries</h1>
+          <p className="mt-1 text-sm text-slate-500">Track reward shipments from order to doorstep</p>
+        </div>
 
         {error && (
-          <div className="mb-4 rounded-md border border-red-300 bg-red-50 p-4 text-sm text-red-700">
+          <div className="mb-4 flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
             {error}
             <button
               onClick={() => setError(null)}
-              className="ml-4 font-medium underline hover:text-red-900"
+              className="ml-4 font-semibold underline hover:text-rose-900"
             >
               Dismiss
             </button>
           </div>
         )}
 
-        <div className="mb-4 flex flex-wrap gap-2 border-b border-gray-200 pb-2">
+        <div className="mb-4 flex flex-wrap gap-2 border-b border-slate-200 pb-2">
           {STATUS_TABS.map((tab) => (
             <button
               key={tab.value}
@@ -138,10 +141,10 @@ export default function DeliveriesPage() {
                 setStatusFilter(tab.value);
                 setOffset(0);
               }}
-              className={`rounded-md px-4 py-2 text-sm font-medium transition ${
+              className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
                 statusFilter === tab.value
-                  ? "bg-gray-900 text-white"
-                  : "text-gray-600 hover:bg-gray-200"
+                  ? "bg-forest text-white shadow-forest"
+                  : "text-slate-600 hover:bg-slate-100"
               }`}
             >
               {tab.label}
@@ -149,114 +152,116 @@ export default function DeliveriesPage() {
           ))}
         </div>
 
-        <p className="mb-4 text-sm text-gray-500">
+        <p className="mb-4 text-sm text-slate-500">
           {total} {total === 1 ? "delivery" : "deliveries"} found
         </p>
 
         {loading ? (
           <div className="flex items-center justify-center py-20">
-            <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-gray-900" />
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-gold" />
           </div>
         ) : deliveries.length === 0 ? (
-          <div className="rounded-lg border border-gray-200 bg-white py-16 text-center text-gray-500">
+          <div className="card py-16 text-center text-slate-500">
             No deliveries found.
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                    User
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                    Reward
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                    Status
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                    Won At
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                    Delivered At
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {deliveries.map((delivery) => (
-                  <tr key={delivery.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3">
-                      <div className="text-sm font-medium text-gray-900">{delivery.user_name}</div>
-                      <div className="text-xs text-gray-500">{delivery.user_email}</div>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-900">{delivery.reward_name}</td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`inline-block rounded-full border px-2.5 py-0.5 text-xs font-semibold ${STATUS_STYLES[delivery.delivery_status]}`}
-                      >
-                        {delivery.delivery_status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{formatDate(delivery.won_at)}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{formatDate(delivery.delivered_at)}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() =>
-                            setExpandedId(expandedId === delivery.id ? null : delivery.id)
-                          }
-                          className="rounded border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100"
-                        >
-                          {expandedId === delivery.id ? "Hide" : "Details"}
-                        </button>
-                        {NEXT_STATUS_OPTIONS.filter((opt) => opt.value !== delivery.delivery_status).map(
-                          (opt) => (
-                            <button
-                              key={opt.value}
-                              onClick={() => updateStatus(delivery.id, opt.value)}
-                              disabled={updatingId === delivery.id}
-                              className="rounded bg-gray-900 px-2.5 py-1 text-xs font-medium text-white hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              {opt.label}
-                            </button>
-                          )
-                        )}
-                      </div>
-                    </td>
+          <div className="card overflow-hidden rounded-2xl">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-slate-200">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      User
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      Reward
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      Status
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      Won At
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      Delivered At
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      Actions
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {deliveries.map((delivery) => (
+                    <tr key={delivery.id} className="transition-colors hover:bg-slate-50/70">
+                      <td className="px-4 py-3">
+                        <div className="text-sm font-medium text-ink">{delivery.user_name}</div>
+                        <div className="text-xs text-slate-500">{delivery.user_email}</div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-ink">{delivery.reward_name}</td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset ${STATUS_STYLES[delivery.delivery_status]}`}
+                        >
+                          {delivery.delivery_status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-600">{formatDate(delivery.won_at)}</td>
+                      <td className="px-4 py-3 text-sm text-slate-600">{formatDate(delivery.delivered_at)}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() =>
+                              setExpandedId(expandedId === delivery.id ? null : delivery.id)
+                            }
+                            className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                          >
+                            {expandedId === delivery.id ? "Hide" : "Details"}
+                          </button>
+                          {NEXT_STATUS_OPTIONS.filter((opt) => opt.value !== delivery.delivery_status).map(
+                            (opt) => (
+                              <button
+                                key={opt.value}
+                                onClick={() => updateStatus(delivery.id, opt.value)}
+                                disabled={updatingId === delivery.id}
+                                className="rounded-lg bg-forest px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-forest-600 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {opt.label}
+                              </button>
+                            )
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
             {deliveries.map((delivery) =>
               expandedId === delivery.id ? (
                 <div
                   key={`detail-${delivery.id}`}
-                  className="border-t border-gray-200 bg-gray-50 px-4 py-4"
+                  className="border-t border-slate-200 bg-surface-alt px-4 py-4"
                 >
-                  <h3 className="mb-2 text-sm font-semibold text-gray-900">Delivery Details</h3>
+                  <h3 className="font-display mb-2 text-sm font-semibold text-ink">Delivery Details</h3>
                   <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm md:grid-cols-3">
-                    <dt className="font-medium text-gray-500">Contact Name</dt>
-                    <dd className="text-gray-900">{delivery.delivery_name}</dd>
+                    <dt className="font-medium text-slate-500">Contact Name</dt>
+                    <dd className="text-ink">{delivery.delivery_name}</dd>
 
-                    <dt className="font-medium text-gray-500">Phone</dt>
-                    <dd className="text-gray-900">{delivery.user_phone || delivery.delivery_phone}</dd>
+                    <dt className="font-medium text-slate-500">Phone</dt>
+                    <dd className="text-ink">{delivery.user_phone || delivery.delivery_phone}</dd>
 
-                    <dt className="font-medium text-gray-500">Address</dt>
-                    <dd className="text-gray-900">{delivery.address}</dd>
+                    <dt className="font-medium text-slate-500">Address</dt>
+                    <dd className="text-ink">{delivery.address}</dd>
 
-                    <dt className="font-medium text-gray-500">City</dt>
-                    <dd className="text-gray-900">{delivery.city}</dd>
+                    <dt className="font-medium text-slate-500">City</dt>
+                    <dd className="text-ink">{delivery.city}</dd>
 
-                    <dt className="font-medium text-gray-500">Township</dt>
-                    <dd className="text-gray-900">{delivery.township}</dd>
+                    <dt className="font-medium text-slate-500">Township</dt>
+                    <dd className="text-ink">{delivery.township}</dd>
 
-                    <dt className="font-medium text-gray-500">Postal Code</dt>
-                    <dd className="text-gray-900">{delivery.postal_code}</dd>
+                    <dt className="font-medium text-slate-500">Postal Code</dt>
+                    <dd className="text-ink">{delivery.postal_code}</dd>
                   </dl>
                 </div>
               ) : null
@@ -269,17 +274,17 @@ export default function DeliveriesPage() {
             <button
               onClick={() => setOffset(Math.max(0, offset - limit))}
               disabled={offset === 0}
-              className="rounded border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Previous
             </button>
-            <span className="text-sm text-gray-600">
+            <span className="text-sm text-slate-600">
               Page {Math.floor(offset / limit) + 1} of {totalPages}
             </span>
             <button
               onClick={() => setOffset(offset + limit)}
               disabled={offset + limit >= total}
-              className="rounded border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Next
             </button>

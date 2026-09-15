@@ -5,8 +5,8 @@ import { LanguageProvider } from './context/LanguageContext'
 import Splash from './components/Splash'
 
 export const metadata: Metadata = {
-  title: 'Myanmar Beer Survey',
-  description: 'Myanmar Beer Customer Survey',
+  title: 'Myanmar Beer Survey & Rewards',
+  description: 'Share your opinion about Myanmar Beer products and win rewards. Good Beer, Better Moments.',
   icons: {
     icon: '/icon.png',
     apple: '/apple-icon.png',
@@ -24,7 +24,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${inter.variable} ${poppins.variable} ${notoMyanmar.variable} min-h-screen`}>
-      <body className="min-h-screen bg-primary text-primary-foreground">
+      <body className="min-h-screen bg-navy text-fg-bright">
         <LanguageProvider>
           <Splash />
           {children}

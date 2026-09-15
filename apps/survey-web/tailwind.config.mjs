@@ -8,47 +8,55 @@ const config = {
   theme: {
     extend: {
       colors: {
-        primary: {
-          DEFAULT: '#082D1B',
-          foreground: '#F7F3E9',
+        // Brand
+        brand: {
+          emerald: '#082D1B',
+          emeraldLight: '#0A3D25',
+          gold: '#D4AF37',
+          warm: '#F5C542',
         },
-        secondary: {
-          DEFAULT: '#0A3D25',
-          foreground: '#E8E2D2',
+        navy: {
+          DEFAULT: '#0F172A',
+          deep: '#0B1220',
         },
-        'bg-primary': '#F7F3E9',
-        'bg-secondary': '#F0EADA',
-        'bg-surface': '#FFFFFF',
-        'text-primary': '#0D2819',
-        'text-secondary': '#5A6B5F',
-        'text-muted': '#5F6E63',
+        surface: {
+          DEFAULT: '#1E293B',
+          elevated: '#243247',
+          deep: '#16202F',
+        },
+        fg: {
+          bright: '#F8FAFC',
+          secondary: '#CBD5E1',
+          muted: '#94A3B8',
+        },
+        success: '#22C55E',
+        warning: '#F59E0B',
+        error: '#EF4444',
+        info: '#38BDF8',
+        gold: '#D4AF37',
+        warm: '#F5C542',
+
+        // Backwards-compatible aliases used across the app
+        primary: { DEFAULT: '#082D1B', foreground: '#F8FAFC' },
+        secondary: { DEFAULT: '#1E293B', foreground: '#CBD5E1' },
+        'bg-primary': '#0F172A',
+        'bg-secondary': '#1E293B',
+        'bg-surface': '#243247',
+        'text-primary': '#F8FAFC',
+        'text-secondary': '#CBD5E1',
+        'text-muted': '#94A3B8',
         'accent-gold': '#D4AF37',
         'accent-warm': '#F5C542',
-        error: '#DC2626',
-        border: '#E5E0D4',
-        muted: {
-          DEFAULT: '#E8E2D2',
-          foreground: '#5A6B5F',
-        },
-        accent: {
-          DEFAULT: '#D4AF37',
-          foreground: '#082D1B',
-        },
-        destructive: {
-          DEFAULT: '#DC2626',
-          foreground: '#FFFFFF',
-        },
-        background: '#F7F3E9',
-        foreground: '#0D2819',
-        card: {
-          DEFAULT: '#FFFFFF',
-          foreground: '#0D2819',
-        },
-        popover: {
-          DEFAULT: '#FFFFFF',
-          foreground: '#0D2819',
-        },
-        input: '#E5E0D4',
+        error: '#EF4444',
+        border: '#334155',
+        muted: { DEFAULT: '#1E293B', foreground: '#94A3B8' },
+        accent: { DEFAULT: '#D4AF37', foreground: '#082D1B' },
+        destructive: { DEFAULT: '#EF4444', foreground: '#FFFFFF' },
+        background: '#0F172A',
+        foreground: '#F8FAFC',
+        card: { DEFAULT: '#1E293B', foreground: '#F8FAFC' },
+        popover: { DEFAULT: '#1E293B', foreground: '#F8FAFC' },
+        input: '#334155',
         ring: '#D4AF37',
       },
       fontFamily: {
@@ -62,8 +70,20 @@ const config = {
         md: '0.75rem',
         sm: '0.5rem',
       },
+      boxShadow: {
+        gold: '0 10px 40px -12px rgba(212, 175, 55, 0.45)',
+        'gold-lg': '0 20px 60px -15px rgba(212, 175, 55, 0.5)',
+        glow: '0 0 0 1px rgba(212,175,55,0.20), 0 10px 45px -12px rgba(212,175,55,0.35)',
+        card: '0 18px 50px -22px rgba(2, 6, 23, 0.9)',
+      },
+      backgroundImage: {
+        'gold-gradient': 'linear-gradient(135deg, #F5C542 0%, #D4AF37 55%, #B8912B 100%)',
+        'emerald-gradient': 'linear-gradient(160deg, #0A3D25 0%, #082D1B 60%, #061F14 100%)',
+        'hero-glow':
+          'radial-gradient(60% 50% at 50% 0%, rgba(212,175,55,0.15) 0%, rgba(212,175,55,0) 70%), radial-gradient(45% 40% at 85% 20%, rgba(10,61,37,0.6) 0%, rgba(10,61,37,0) 70%), linear-gradient(180deg, #0B1220 0%, #0F172A 60%, #131C2F 100%)',
+      },
     },
   },
-  plugins: [],}
-
+  plugins: [],
+}
 export default config

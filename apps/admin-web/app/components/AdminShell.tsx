@@ -15,6 +15,19 @@ const navItems = [
   { href: '/audit', label: 'Audit Logs', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4' },
 ]
 
+const navGroups = [
+  { label: 'Main', items: navItems.slice(0, 6) },
+  { label: 'Management', items: navItems.slice(6) },
+]
+
+function getPageTitle(pathname: string | null) {
+  if (!pathname) return 'Myanmar Beer'
+  const match = navItems.find(
+    (item) => pathname === item.href || pathname.startsWith(item.href + '/')
+  )
+  return match ? match.label : 'Myanmar Beer'
+}
+
 export default function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -25,80 +38,139 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Mobile header */}
-      <div className="lg:hidden bg-white shadow-sm border-b border-gray-200 sticky top-0 z-30">
-        <div className="flex items-center justify-between px-4 py-3">
-          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 rounded-lg hover:bg-gray-100">
-            <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+    <div className="min-h-screen bg-surface-canvas">
+      {/* Unified topbar (all sizes) */}
+      <header className="fixed top-0 right-0 left-0 z-30 flex h-16 items-center gap-3 border-b border-slate-200 bg-white/95 px-4 backdrop-blur lg:left-64 lg:px-6">
+        <button
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 lg:hidden"
+          aria-label="Toggle navigation"
+        >
+          <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+
+        <h1 className="font-display text-lg font-bold text-ink">{getPageTitle(pathname)}</h1>
+
+        <div className="ml-auto flex items-center gap-3 sm:gap-4">
+          <div className="relative hidden sm:block">
+            <svg
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
+            <input
+              type="text"
+              placeholder="Search…"
+              className="w-56 rounded-full border border-slate-200 bg-slate-50 py-2 pl-9 pr-4 text-sm text-ink placeholder:text-slate-400 outline-none transition focus:border-gold focus:bg-white focus:ring-2 focus:ring-gold-400/30"
+            />
+          </div>
+
+          <button
+            className="relative rounded-xl border border-slate-200 bg-white p-2.5 text-slate-500 shadow-sm transition-colors hover:border-gold hover:text-gold-600"
+            aria-label="Notifications"
+          >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+            </svg>
+            <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-gold ring-2 ring-white" />
           </button>
-          <h1 className="text-lg font-bold text-indigo-600">Myanmar Beer Admin</h1>
-          <div className="w-10" />
+
+          <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full ring-2 ring-gold/70">
+            <img src="/logo.png" alt="Admin" className="h-full w-full object-cover bg-white/10" />
+          </div>
         </div>
-      </div>
+      </header>
 
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
-        <div className="lg:hidden fixed inset-0 z-40 bg-black/50" onClick={() => setSidebarOpen(false)} />
+        <div className="fixed inset-0 z-40 bg-black/50 lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
       {/* Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 transform transition-transform duration-200 lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="flex flex-col h-full">
-          {/* Logo */}
-          <div className="flex items-center gap-3 px-6 py-5 border-b border-gray-200">
-            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center">
-              <img src="/logo.png" alt="MB" className="w-full h-full object-cover rounded-xl" />
+      <aside className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-navy transition-transform duration-300 lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        {/* Logo */}
+        <div className="flex items-center gap-3 border-b border-white/10 px-5 pb-5 pt-6">
+          <div className="relative shrink-0">
+            <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-white/10 ring-2 ring-gold ring-offset-2 ring-offset-navy">
+              <img src="/logo.png" alt="Myanmar Beer" className="h-full w-full object-cover" />
             </div>
-            <div>
-              <h1 className="font-bold text-gray-900">Myanmar Beer</h1>
-              <p className="text-xs text-gray-500">Admin Dashboard</p>
+            <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-navy bg-gold" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="font-display text-[15px] font-bold leading-tight text-white">Myanmar Beer</h1>
+            <p className="text-[11px] font-medium uppercase tracking-[0.15em] text-warm">Admin Panel</p>
+          </div>
+        </div>
+
+        {/* Navigation */}
+        <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-5">
+          {navGroups.map((group) => (
+            <div key={group.label}>
+              <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                {group.label}
+              </p>
+              <div className="space-y-1">
+                {group.items.map((item) => {
+                  const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => setSidebarOpen(false)}
+                      className={`relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-colors ${
+                        isActive
+                          ? 'bg-gold/10 text-white'
+                          : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                      }`}
+                    >
+                      {isActive && (
+                        <span className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-full bg-gold" />
+                      )}
+                      <svg
+                        className={`h-5 w-5 ${isActive ? 'text-gold' : 'text-slate-500 group-hover:text-white'}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
+                      </svg>
+                      {item.label}
+                    </Link>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+        </nav>
+
+        {/* Footer profile card */}
+        <div className="mx-3 mb-4 rounded-xl border border-white/10 bg-navy-dark p-3">
+          <div className="flex items-center gap-3">
+            <div className="relative shrink-0">
+              <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-white/10 ring-2 ring-gold/70">
+                <span className="text-sm font-semibold text-warm">A</span>
+              </div>
+              <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-navy-dark bg-success" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-white">Admin</p>
+              <p className="truncate text-xs text-slate-400">admin@myanmarbeer.com</p>
             </div>
           </div>
-
-          {/* Navigation */}
-          <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-            {navItems.map((item) => {
-              const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setSidebarOpen(false)}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                    isActive
-                      ? 'bg-indigo-50 text-indigo-700'
-                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                  }`}
-                >
-                  <svg className={`w-5 h-5 ${isActive ? 'text-indigo-600' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
-                  </svg>
-                  {item.label}
-                </Link>
-              )
-            })}
-          </nav>
-
-          {/* User info */}
-          <div className="px-4 py-4 border-t border-gray-200">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-indigo-100 rounded-full flex items-center justify-center">
-                <span className="text-indigo-600 font-medium text-sm">A</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">Admin</p>
-                <p className="text-xs text-gray-500 truncate">admin@myanmarbeer.com</p>
-              </div>
-            </div>
+          <div className="mt-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-400">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+            Signed in
           </div>
         </div>
       </aside>
 
       {/* Main content */}
-      <main className="lg:ml-64 min-h-screen">
+      <main className="min-h-screen pt-16 lg:pl-64">
         <div className="p-4 lg:p-8">
           {children}
         </div>

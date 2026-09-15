@@ -84,13 +84,13 @@ function LoadingSkeleton() {
   return (
     <div className="space-y-4 animate-pulse">
       {[1, 2, 3, 4, 5].map(i => (
-        <div key={i} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 flex items-center gap-4">
+        <div key={i} className="card flex items-center gap-4 p-4">
           <div className="flex-1">
-            <div className="h-4 bg-gray-200 rounded w-48 mb-2" />
-            <div className="h-3 bg-gray-100 rounded w-64" />
+            <div className="mb-2 h-4 w-48 rounded bg-slate-200" />
+            <div className="h-3 w-64 rounded bg-slate-100" />
           </div>
-          <div className="h-6 w-20 bg-gray-200 rounded-full" />
-          <div className="h-8 w-20 bg-gray-200 rounded" />
+          <div className="h-6 w-20 rounded-full bg-slate-200" />
+          <div className="h-8 w-20 rounded bg-slate-200" />
         </div>
       ))}
     </div>
@@ -99,19 +99,16 @@ function LoadingSkeleton() {
 
 function EmptyState({ message, onAdd }: { message: string; onAdd: () => void }) {
   return (
-    <div className="bg-white rounded-xl p-12 shadow-sm border border-gray-100 text-center">
-      <div className="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-        <svg className="w-8 h-8 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div className="card animate-fade-up p-12 text-center">
+      <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gold/10">
+        <svg className="h-8 w-8 text-gold-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
         </svg>
       </div>
-      <h3 className="text-lg font-semibold text-gray-900 mb-1">{message}</h3>
-      <p className="text-sm text-gray-500 mb-6">Get started by creating your first item.</p>
-      <button
-        onClick={onAdd}
-        className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
-      >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <h3 className="font-display mb-1 text-lg font-semibold text-ink">{message}</h3>
+      <p className="mb-6 text-sm text-slate-500">Get started by creating your first item.</p>
+      <button onClick={onAdd} className="btn-gold shadow-gold">
+        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
         </svg>
         Add
@@ -122,19 +119,16 @@ function EmptyState({ message, onAdd }: { message: string; onAdd: () => void }) 
 
 function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
-    <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-100 text-center">
-      <div className="w-12 h-12 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-3">
-        <svg className="w-6 h-6 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div className="card p-8 text-center">
+      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-rose-50">
+        <svg className="h-6 w-6 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
         </svg>
       </div>
-      <p className="text-sm font-medium text-gray-900 mb-1">Failed to load data</p>
-      <p className="text-sm text-gray-500 mb-4">{message}</p>
-      <button
-        onClick={onRetry}
-        className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-      >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <p className="mb-1 text-sm font-medium text-ink">Failed to load data</p>
+      <p className="mb-4 text-sm text-slate-500">{message}</p>
+      <button onClick={onRetry} className="btn-outline">
+        <svg className="h-4 w-4 text-gold-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
         </svg>
         Retry
@@ -149,8 +143,8 @@ function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (
       type="button"
       onClick={onChange}
       disabled={disabled}
-      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-        checked ? 'bg-indigo-600' : 'bg-gray-200'
+      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${
+        checked ? 'bg-gold' : 'bg-slate-200'
       }`}
     >
       <span
@@ -257,34 +251,34 @@ function QuestionModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h2 className="text-lg font-semibold text-gray-900">
+      <div className="relative mx-4 w-full max-w-lg overflow-y-auto rounded-3xl bg-white shadow-2xl max-h-[90vh]">
+        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+          <h2 className="font-display text-lg font-semibold text-ink">
             {isEditing ? 'Edit Question' : 'Add Question'}
           </h2>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="px-6 py-4 space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-5 px-6 py-4">
           {error && (
-            <div className="bg-rose-50 border border-rose-200 rounded-lg p-3">
+            <div className="rounded-lg border border-rose-200 bg-rose-50 p-3">
               <p className="text-sm text-rose-700">{error}</p>
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Survey Version *</label>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Survey Version *</label>
             <select
               value={form.surveyVersionId}
               onChange={e => updateField('surveyVersionId', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              className="input"
               disabled={isEditing}
             >
               <option value="">Select a version</option>
@@ -297,7 +291,7 @@ function QuestionModal({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Question Text (English) *</label>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Question Text (English) *</label>
             <textarea
               value={form.questionText}
               onChange={e => {
@@ -305,29 +299,29 @@ function QuestionModal({
                 updateTranslation('en', e.target.value)
               }}
               rows={2}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
+              className="input resize-none"
               placeholder="e.g. How satisfied are you with our product?"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Question Text (Myanmar)</label>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Question Text (Myanmar)</label>
             <input
               type="text"
               value={form.translations.my || ''}
               onChange={e => updateTranslation('my', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              className="input"
               placeholder="Question in Myanmar"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Question Type *</label>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Question Type *</label>
               <select
                 value={form.questionType}
                 onChange={e => updateField('questionType', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                className="input"
               >
                 {questionTypes.map(qt => (
                   <option key={qt.value} value={qt.value}>
@@ -337,12 +331,12 @@ function QuestionModal({
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Display Order</label>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Display Order</label>
               <input
                 type="number"
                 value={form.displayOrder}
                 onChange={e => updateField('displayOrder', parseInt(e.target.value) || 0)}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                className="input"
                 min="0"
               />
             </div>
@@ -350,17 +344,17 @@ function QuestionModal({
 
           <div className="flex items-center gap-3">
             <Toggle checked={form.isRequired} onChange={() => updateField('isRequired', !form.isRequired)} />
-            <span className="text-sm font-medium text-gray-700">Required</span>
+            <span className="text-sm font-medium text-slate-700">Required</span>
           </div>
 
           {(form.questionType === 'multiple_choice' || form.questionType === 'single_choice') && (
             <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-sm font-medium text-gray-700">Options</label>
+              <div className="mb-2 flex items-center justify-between">
+                <label className="text-sm font-medium text-slate-700">Options</label>
                 <button
                   type="button"
                   onClick={addOption}
-                  className="text-xs font-medium text-indigo-600 hover:text-indigo-700"
+                  className="text-xs font-semibold text-gold-600 hover:text-gold-700"
                 >
                   + Add Option
                 </button>
@@ -373,50 +367,50 @@ function QuestionModal({
                         type="text"
                         value={opt.text}
                         onChange={e => updateOption(i, 'text', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        className="input"
                         placeholder="Option text (English)"
                       />
                       <input
                         type="text"
                         value={opt.translations.my || ''}
                         onChange={e => updateOptionTranslation(i, 'my', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        className="input"
                         placeholder="Option text (Myanmar)"
                       />
                     </div>
                     <button
                       type="button"
                       onClick={() => removeOption(i)}
-                      className="mt-2 p-1.5 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                      className="mt-2 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600"
                     >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                       </svg>
                     </button>
                   </div>
                 ))}
                 {form.options.length === 0 && (
-                  <p className="text-sm text-gray-400 text-center py-2">No options added</p>
+                  <p className="py-2 text-center text-sm text-slate-400">No options added</p>
                 )}
               </div>
             </div>
           )}
 
-          <div className="flex items-center justify-end gap-3 pt-2 pb-1">
+          <div className="flex items-center justify-end gap-3 pb-1 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
+              className="btn-gold disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {saving && (
-                <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
@@ -494,100 +488,100 @@ function VersionModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h2 className="text-lg font-semibold text-gray-900">Create Survey Version</h2>
+      <div className="relative mx-4 w-full max-w-lg overflow-y-auto rounded-3xl bg-white shadow-2xl max-h-[90vh]">
+        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+          <h2 className="font-display text-lg font-semibold text-ink">Create Survey Version</h2>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="px-6 py-4 space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-5 px-6 py-4">
           {error && (
-            <div className="bg-rose-50 border border-rose-200 rounded-lg p-3">
+            <div className="rounded-lg border border-rose-200 bg-rose-50 p-3">
               <p className="text-sm text-rose-700">{error}</p>
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Product *</label>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Product *</label>
             <input
               type="text"
               value={form.productId}
               onChange={e => updateField('productId', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              className="input"
               placeholder="Product ID"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Title (English) *</label>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Title (English) *</label>
             <input
               type="text"
               value={form.title}
               onChange={e => updateField('title', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              className="input"
               placeholder="e.g. Customer Satisfaction Survey v2"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Description (English)</label>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Description (English)</label>
             <textarea
               value={form.description}
               onChange={e => updateField('description', e.target.value)}
               rows={2}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
+              className="input resize-none"
               placeholder="Brief description of this survey version"
             />
           </div>
 
-          <div className="border border-gray-100 rounded-lg p-4 bg-gray-50/50">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Myanmar Translation</p>
+          <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Myanmar Translation</p>
             <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Title</label>
                 <input
                   type="text"
                   value={form.translations.my.title}
                   onChange={e => updateTranslation('my', 'title', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white"
+                  className="input bg-white"
                   placeholder="Title in Myanmar"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Description</label>
                 <input
                   type="text"
                   value={form.translations.my.description}
                   onChange={e => updateTranslation('my', 'description', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white"
+                  className="input bg-white"
                   placeholder="Description in Myanmar"
                 />
               </div>
             </div>
           </div>
 
-          <div className="flex items-center justify-end gap-3 pt-2 pb-1">
+          <div className="flex items-center justify-end gap-3 pb-1 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
+              className="btn-gold disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {saving && (
-                <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
@@ -775,41 +769,37 @@ export default function SurveysPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Surveys</h1>
-        <p className="text-sm text-gray-500 mt-1">Manage survey questions and versions</p>
+        <h1 className="font-display text-2xl font-bold text-ink">Surveys</h1>
+        <p className="mt-1 text-sm text-slate-500">Manage survey questions and versions</p>
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200">
+      <div className="border-b border-slate-200">
         <nav className="flex gap-6">
           <button
             onClick={() => setActiveTab('questions')}
-            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+            className={`border-b-2 pb-3 text-sm font-medium transition-colors ${
               activeTab === 'questions'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
+                ? 'border-gold-500 text-gold-600'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
             }`}
           >
             Questions
             {!loadingQuestions && (
-              <span className="ml-2 px-2 py-0.5 bg-gray-100 rounded-full text-xs">
-                {questions.length}
-              </span>
+              <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs">{questions.length}</span>
             )}
           </button>
           <button
             onClick={() => setActiveTab('versions')}
-            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+            className={`border-b-2 pb-3 text-sm font-medium transition-colors ${
               activeTab === 'versions'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
+                ? 'border-gold-500 text-gold-600'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
             }`}
           >
             Versions
             {!loadingVersions && (
-              <span className="ml-2 px-2 py-0.5 bg-gray-100 rounded-full text-xs">
-                {versions.length}
-              </span>
+              <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs">{versions.length}</span>
             )}
           </button>
         </nav>
@@ -819,15 +809,12 @@ export default function SurveysPage() {
       {activeTab === 'questions' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-slate-500">
               {loadingQuestions ? 'Loading...' : `${questions.length} questions`}
             </p>
             {!loadingQuestions && questions.length > 0 && (
-              <button
-                onClick={openAddQuestionModal}
-                className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <button onClick={openAddQuestionModal} className="btn-gold shadow-gold">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
                 Add Question
@@ -846,19 +833,19 @@ export default function SurveysPage() {
           )}
 
           {!loadingQuestions && !errorQuestions && questions.length > 0 && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="card overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-gray-100 bg-gray-50/50">
-                      <th className="text-left py-3 px-4 font-medium text-gray-500 w-8">#</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-500">Question</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-500">Type</th>
-                      <th className="text-center py-3 px-4 font-medium text-gray-500">Order</th>
-                      <th className="text-center py-3 px-4 font-medium text-gray-500">Options</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-500">Version</th>
-                      <th className="text-center py-3 px-4 font-medium text-gray-500">Active</th>
-                      <th className="text-right py-3 px-4 font-medium text-gray-500">Actions</th>
+                    <tr className="border-b border-slate-200 bg-slate-50/70">
+                      <th className="w-8 px-4 py-3 text-left font-medium text-slate-500">#</th>
+                      <th className="px-4 py-3 text-left font-medium text-slate-500">Question</th>
+                      <th className="px-4 py-3 text-left font-medium text-slate-500">Type</th>
+                      <th className="px-4 py-3 text-center font-medium text-slate-500">Order</th>
+                      <th className="px-4 py-3 text-center font-medium text-slate-500">Options</th>
+                      <th className="px-4 py-3 text-left font-medium text-slate-500">Version</th>
+                      <th className="px-4 py-3 text-center font-medium text-slate-500">Active</th>
+                      <th className="px-4 py-3 text-right font-medium text-slate-500">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -867,30 +854,30 @@ export default function SurveysPage() {
                       .map((q, index) => (
                       <tr
                         key={q.id}
-                        className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors"
+                        className="border-b border-slate-100 transition-colors hover:bg-slate-50/70"
                       >
-                        <td className="py-3 px-4 text-gray-400 font-medium">{index + 1}</td>
-                        <td className="py-3 px-4">
-                          <div className="min-w-0 max-w-xs">
-                            <p className="font-medium text-gray-900 truncate">{q.question_text}</p>
+                        <td className="px-4 py-3 font-medium text-slate-400">{index + 1}</td>
+                        <td className="px-4 py-3">
+                          <div className="max-w-xs min-w-0">
+                            <p className="truncate font-medium text-ink">{q.question_text}</p>
                             {q.product_name && (
-                              <p className="text-xs text-gray-400 truncate">{q.product_name}</p>
+                              <p className="truncate text-xs text-slate-400">{q.product_name}</p>
                             )}
                           </div>
                         </td>
-                        <td className="py-3 px-4">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700">
+                        <td className="px-4 py-3">
+                          <span className="inline-flex items-center rounded-full bg-gold/10 px-2.5 py-0.5 text-xs font-semibold text-gold-600 ring-1 ring-inset ring-gold-200">
                             {questionTypeLabel(q.question_type)}
                           </span>
                         </td>
-                        <td className="py-3 px-4 text-center text-gray-600">{q.display_order}</td>
-                        <td className="py-3 px-4 text-center">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                        <td className="px-4 py-3 text-center text-slate-600">{q.display_order}</td>
+                        <td className="px-4 py-3 text-center">
+                          <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
                             {q.option_count}
                           </span>
                         </td>
-                        <td className="py-3 px-4 text-gray-600 text-xs">{q.version_title || '—'}</td>
-                        <td className="py-3 px-4">
+                        <td className="px-4 py-3 text-xs text-slate-600">{q.version_title || '—'}</td>
+                        <td className="px-4 py-3">
                           <div className="flex justify-center">
                             <Toggle
                               checked={q.is_active}
@@ -899,23 +886,23 @@ export default function SurveysPage() {
                             />
                           </div>
                         </td>
-                        <td className="py-3 px-4">
+                        <td className="px-4 py-3">
                           <div className="flex items-center justify-end gap-1">
                             <button
                               onClick={() => openEditQuestionModal(q)}
-                              className="p-2 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                              className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-gold/10 hover:text-gold-600"
                               title="Edit question"
                             >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                               </svg>
                             </button>
                             <button
                               onClick={() => handleDeleteQuestion(q.id)}
-                              className="p-2 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                              className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600"
                               title="Delete question"
                             >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                               </svg>
                             </button>
@@ -935,15 +922,15 @@ export default function SurveysPage() {
       {activeTab === 'versions' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-slate-500">
               {loadingVersions ? 'Loading...' : `${versions.length} versions`}
             </p>
             {!loadingVersions && (
               <button
                 onClick={() => setShowVersionModal(true)}
-                className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
+                className="btn-gold shadow-gold"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
                 Create Version
@@ -962,58 +949,58 @@ export default function SurveysPage() {
           )}
 
           {!loadingVersions && !errorVersions && versions.length > 0 && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="card overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-gray-100 bg-gray-50/50">
-                      <th className="text-left py-3 px-4 font-medium text-gray-500 w-8">#</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-500">Title</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-500">Product</th>
-                      <th className="text-center py-3 px-4 font-medium text-gray-500">Version</th>
-                      <th className="text-center py-3 px-4 font-medium text-gray-500">Questions</th>
-                      <th className="text-center py-3 px-4 font-medium text-gray-500">Responses</th>
-                      <th className="text-center py-3 px-4 font-medium text-gray-500">Active</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-500">Created</th>
+                    <tr className="border-b border-slate-200 bg-slate-50/70">
+                      <th className="w-8 px-4 py-3 text-left font-medium text-slate-500">#</th>
+                      <th className="px-4 py-3 text-left font-medium text-slate-500">Title</th>
+                      <th className="px-4 py-3 text-left font-medium text-slate-500">Product</th>
+                      <th className="px-4 py-3 text-center font-medium text-slate-500">Version</th>
+                      <th className="px-4 py-3 text-center font-medium text-slate-500">Questions</th>
+                      <th className="px-4 py-3 text-center font-medium text-slate-500">Responses</th>
+                      <th className="px-4 py-3 text-center font-medium text-slate-500">Active</th>
+                      <th className="px-4 py-3 text-left font-medium text-slate-500">Created</th>
                     </tr>
                   </thead>
                   <tbody>
                     {versions.map((v, index) => (
                       <tr
                         key={v.id}
-                        className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors"
+                        className="border-b border-slate-100 transition-colors hover:bg-slate-50/70"
                       >
-                        <td className="py-3 px-4 text-gray-400 font-medium">{index + 1}</td>
-                        <td className="py-3 px-4">
+                        <td className="px-4 py-3 font-medium text-slate-400">{index + 1}</td>
+                        <td className="px-4 py-3">
                           <div className="min-w-0">
-                            <p className="font-medium text-gray-900 truncate">{v.title}</p>
+                            <p className="truncate font-medium text-ink">{v.title}</p>
                             {v.description && (
-                              <p className="text-xs text-gray-400 truncate max-w-[240px]">{v.description}</p>
+                              <p className="max-w-[240px] truncate text-xs text-slate-400">{v.description}</p>
                             )}
                           </div>
                         </td>
-                        <td className="py-3 px-4 text-gray-600">{v.product_name || '—'}</td>
-                        <td className="py-3 px-4 text-center">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
+                        <td className="px-4 py-3 text-slate-600">{v.product_name || '—'}</td>
+                        <td className="px-4 py-3 text-center">
+                          <span className="inline-flex items-center rounded-full bg-gold/10 px-2.5 py-0.5 text-xs font-semibold text-gold-600 ring-1 ring-inset ring-gold-200">
                             v{v.version}
                           </span>
                         </td>
-                        <td className="py-3 px-4 text-center">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700">
+                        <td className="px-4 py-3 text-center">
+                          <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
                             {v.question_count}
                           </span>
                         </td>
-                        <td className="py-3 px-4 text-center">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700">
+                        <td className="px-4 py-3 text-center">
+                          <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-200">
                             {v.response_count.toLocaleString()}
                           </span>
                         </td>
-                        <td className="py-3 px-4">
+                        <td className="px-4 py-3">
                           <div className="flex justify-center">
                             <Toggle checked={v.is_active} onChange={() => {}} disabled />
                           </div>
                         </td>
-                        <td className="py-3 px-4 text-gray-500 text-xs">
+                        <td className="px-4 py-3 text-xs text-slate-500">
                           {new Date(v.created_at).toLocaleDateString()}
                         </td>
                       </tr>

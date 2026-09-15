@@ -1,13 +1,18 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import {
+  ResponsiveContainer,
+  BarChart as ReBarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Cell,
+} from 'recharts'
 
 import { API_BASE } from '../lib/api'
-
-const CHART_COLORS = [
-  'bg-indigo-500', 'bg-emerald-500', 'bg-amber-500',
-  'bg-rose-500', 'bg-cyan-500', 'bg-violet-500',
-]
 
 type HorizontalBarItem = Record<string, string | number | undefined>
 interface PopularityItem { name: string; response_count: number; percentage?: number }
@@ -28,22 +33,23 @@ interface ProductItem { id: string; name: string }
 function LoadingSkeleton() {
   return (
     <div className="space-y-6 animate-pulse">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {[1, 2, 3, 4].map(i => (
-          <div key={i} className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-            <div className="h-4 bg-gray-200 rounded w-24 mb-3" />
-            <div className="h-8 bg-gray-200 rounded w-16" />
+          <div key={i} className="card p-5">
+            <div className="h-10 w-10 rounded-xl bg-slate-200" />
+            <div className="mt-4 h-3 bg-slate-200 rounded w-24" />
+            <div className="mt-2 h-7 bg-slate-200 rounded w-16" />
           </div>
         ))}
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 h-64">
-          <div className="h-4 bg-gray-200 rounded w-32 mb-6" />
-          <div className="h-40 bg-gray-100 rounded" />
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="card h-64 p-6">
+          <div className="h-4 bg-slate-200 rounded w-32 mb-6" />
+          <div className="h-40 bg-slate-100 rounded" />
         </div>
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 h-64">
-          <div className="h-4 bg-gray-200 rounded w-32 mb-6" />
-          <div className="h-40 bg-gray-100 rounded" />
+        <div className="card h-64 p-6">
+          <div className="h-4 bg-slate-200 rounded w-32 mb-6" />
+          <div className="h-40 bg-slate-100 rounded" />
         </div>
       </div>
     </div>
@@ -52,14 +58,14 @@ function LoadingSkeleton() {
 
 function ErrorState({ message }: { message: string }) {
   return (
-    <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-100 text-center">
-      <div className="w-12 h-12 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-3">
-        <svg className="w-6 h-6 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div className="card p-8 text-center">
+      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-rose-50">
+        <svg className="h-6 w-6 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
         </svg>
       </div>
-      <p className="text-sm font-medium text-gray-900 mb-1">Failed to load data</p>
-      <p className="text-sm text-gray-500">{message}</p>
+      <p className="mb-1 text-sm font-medium text-ink">Failed to load data</p>
+      <p className="text-sm text-slate-500">{message}</p>
     </div>
   )
 }
@@ -67,46 +73,92 @@ function ErrorState({ message }: { message: string }) {
 function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
     <div className="mb-4">
-      <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
-      {subtitle && <p className="text-sm text-gray-500 mt-0.5">{subtitle}</p>}
+      <h2 className="font-display text-base font-semibold text-ink">{title}</h2>
+      {subtitle && <p className="mt-0.5 text-sm text-slate-500">{subtitle}</p>}
     </div>
   )
 }
 
-function HorizontalBarChart<T extends HorizontalBarItem>({ data, labelKey, valueKey, colorKey }: {
+const EMPTY_TICK = { fill: '#94A3B8', fontSize: 11 }
+const TOOLTIP_STYLE = {
+  borderRadius: 12,
+  border: '1px solid #E2E8F0',
+  boxShadow: '0 10px 25px -5px rgb(15 23 42 / 0.1)',
+  fontSize: 12,
+}
+
+function HorizontalBarChart<T extends HorizontalBarItem>({ data, labelKey, valueKey }: {
   data: T[]
   labelKey: keyof T
   valueKey: keyof T
-  colorKey?: keyof T
 }) {
-  const maxValue = Math.max(...data.map(d => Number(d[valueKey] || 0)), 1)
+  if (data.length === 0) return <p className="py-4 text-center text-sm text-slate-400">No data available</p>
+
+  const rows = data.map((item) => ({
+    name: String(item[labelKey] ?? ''),
+    value: Number(item[valueKey] || 0),
+  }))
+
   return (
-    <div className="space-y-3">
-      {data.map((item, i) => (
-        <div key={i}>
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-sm text-gray-600 truncate max-w-[60%]">{item[labelKey]}</span>
-            <span className="text-sm font-medium text-gray-900">{typeof item[valueKey] === 'number' && item[valueKey] % 1 !== 0 ? (item[valueKey] as number).toFixed(2) : item[valueKey]}</span>
-          </div>
-          <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all duration-500 ${colorKey ? item[colorKey] : CHART_COLORS[i % CHART_COLORS.length]}`}
-              style={{ width: `${(Number(item[valueKey] || 0) / maxValue) * 100}%` }}
+    <div>
+      <div className="mb-3 flex items-center gap-4 text-[11px] font-medium text-slate-500">
+        <span className="flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-gold-400" /> Popular
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-emerald-500" /> Growing
+        </span>
+      </div>
+      <div className="h-64">
+        <ResponsiveContainer width="100%" height="100%">
+          <ReBarChart data={rows} layout="vertical" margin={{ top: 0, right: 24, left: 8, bottom: 0 }}>
+            <defs>
+              <linearGradient id="goldBar" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stopColor="#D4AF37" />
+                <stop offset="100%" stopColor="#BD9B2D" />
+              </linearGradient>
+              <linearGradient id="emeraldBar" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stopColor="#4E9A6F" />
+                <stop offset="100%" stopColor="#0E4A2A" />
+              </linearGradient>
+            </defs>
+            <XAxis type="number" hide />
+            <YAxis
+              type="category"
+              dataKey="name"
+              width={130}
+              tick={{ fontSize: 12, fill: '#475569' }}
+              axisLine={false}
+              tickLine={false}
             />
-          </div>
-        </div>
-      ))}
-      {data.length === 0 && <p className="text-sm text-gray-400 text-center py-4">No data available</p>}
+            <Tooltip
+              cursor={{ fill: 'rgba(212, 175, 55, 0.08)' }}
+              contentStyle={TOOLTIP_STYLE}
+              formatter={(value) => [String(value), 'Responses']}
+            />
+            <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={14}>
+              {rows.map((r, i) => (
+                <Cell key={i} fill={i % 2 === 0 ? 'url(#goldBar)' : 'url(#emeraldBar)'} />
+              ))}
+            </Bar>
+          </ReBarChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   )
 }
 
-function StatCard({ label, value, sublabel }: { label: string; value: string | number; sublabel?: string }) {
+function StatCard({ label, value, sublabel, icon }: { label: string; value: string | number; sublabel?: string; icon: string }) {
   return (
-    <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-      <p className="text-sm font-medium text-gray-500">{label}</p>
-      <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
-      {sublabel && <p className="text-xs text-gray-400 mt-1">{sublabel}</p>}
+    <div className="card animate-fade-up p-5 transition-shadow hover:shadow-card">
+      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gold/10">
+        <svg className="h-5 w-5 text-gold-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={icon} />
+        </svg>
+      </div>
+      <p className="mt-4 text-[13px] font-medium text-slate-500">{label}</p>
+      <p className="font-display mt-0.5 text-2xl font-bold text-ink">{value}</p>
+      {sublabel && <p className="mt-1 text-xs text-slate-400">{sublabel}</p>}
     </div>
   )
 }
@@ -117,50 +169,50 @@ function RatingStars({ rating }: { rating: number }) {
   return (
     <div className="flex items-center gap-0.5">
       {[1, 2, 3, 4, 5].map(star => (
-        <svg key={star} className={`w-4 h-4 ${star <= full ? 'text-amber-400' : star === full + 1 && half ? 'text-amber-300' : 'text-gray-200'}`} fill="currentColor" viewBox="0 0 20 20">
+        <svg key={star} className={`h-4 w-4 ${star <= full ? 'text-gold-400' : star === full + 1 && half ? 'text-gold-300' : 'text-slate-200'}`} fill="currentColor" viewBox="0 0 20 20">
           <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
         </svg>
       ))}
-      <span className="ml-1 text-sm font-medium text-gray-700">{rating.toFixed(1)}</span>
+      <span className="ml-1 text-sm font-medium text-slate-700">{rating.toFixed(1)}</span>
     </div>
   )
 }
 
 function ComparisonTable({ data }: { data: ComparisonItem[] }) {
-  if (data.length === 0) return <p className="text-sm text-gray-400 text-center py-8">No comparison data available</p>
+  if (data.length === 0) return <p className="py-8 text-center text-sm text-slate-400">No comparison data available</p>
 
   return (
-    <div className="overflow-x-auto -mx-6 px-6">
+    <div className="-mx-6 overflow-x-auto px-6">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-gray-100">
-            <th className="text-left py-3 px-3 font-medium text-gray-500">Product</th>
-            <th className="text-right py-3 px-3 font-medium text-gray-500">Responses</th>
-            <th className="text-center py-3 px-3 font-medium text-gray-500">Avg Rating</th>
-            <th className="text-center py-3 px-3 font-medium text-gray-500">Taste</th>
-            <th className="text-center py-3 px-3 font-medium text-gray-500">Packaging</th>
-            <th className="text-center py-3 px-3 font-medium text-gray-500">Value</th>
-            <th className="text-right py-3 px-3 font-medium text-gray-500">Recommend</th>
+          <tr className="border-b border-slate-200">
+            <th className="px-3 py-3 text-left font-medium text-slate-500">Product</th>
+            <th className="px-3 py-3 text-right font-medium text-slate-500">Responses</th>
+            <th className="px-3 py-3 text-center font-medium text-slate-500">Avg Rating</th>
+            <th className="px-3 py-3 text-center font-medium text-slate-500">Taste</th>
+            <th className="px-3 py-3 text-center font-medium text-slate-500">Packaging</th>
+            <th className="px-3 py-3 text-center font-medium text-slate-500">Value</th>
+            <th className="px-3 py-3 text-right font-medium text-slate-500">Recommend</th>
           </tr>
         </thead>
         <tbody>
           {data.map((row, i) => (
-            <tr key={i} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-              <td className="py-3 px-3 font-medium text-gray-900">{row.name}</td>
-              <td className="py-3 px-3 text-right text-gray-600">{row.total_responses}</td>
-              <td className="py-3 px-3">
+            <tr key={i} className="border-b border-slate-100 transition-colors hover:bg-slate-50/70">
+              <td className="px-3 py-3 font-medium text-ink">{row.name}</td>
+              <td className="px-3 py-3 text-right text-slate-600">{row.total_responses}</td>
+              <td className="px-3 py-3">
                 <div className="flex justify-center">
                   <RatingStars rating={row.avg_rating || 0} />
                 </div>
               </td>
-              <td className="py-3 px-3 text-center text-gray-600">{(row.taste_rating || 0).toFixed(1)}</td>
-              <td className="py-3 px-3 text-center text-gray-600">{(row.packaging_rating || 0).toFixed(1)}</td>
-              <td className="py-3 px-3 text-center text-gray-600">{(row.value_rating || 0).toFixed(1)}</td>
-              <td className="py-3 px-3 text-right">
-                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                  (row.recommendation_rate || 0) >= 70 ? 'bg-emerald-50 text-emerald-700' :
-                  (row.recommendation_rate || 0) >= 40 ? 'bg-amber-50 text-amber-700' :
-                  'bg-rose-50 text-rose-700'
+              <td className="px-3 py-3 text-center text-slate-600">{(row.taste_rating || 0).toFixed(1)}</td>
+              <td className="px-3 py-3 text-center text-slate-600">{(row.packaging_rating || 0).toFixed(1)}</td>
+              <td className="px-3 py-3 text-center text-slate-600">{(row.value_rating || 0).toFixed(1)}</td>
+              <td className="px-3 py-3 text-right">
+                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                  (row.recommendation_rate || 0) >= 70 ? 'bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200' :
+                  (row.recommendation_rate || 0) >= 40 ? 'bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200' :
+                  'bg-rose-50 text-rose-700 ring-1 ring-inset ring-rose-200'
                 }`}>
                   {(row.recommendation_rate || 0).toFixed(0)}%
                 </span>
@@ -174,25 +226,25 @@ function ComparisonTable({ data }: { data: ComparisonItem[] }) {
 }
 
 function AgeGroupChart({ data, productName }: { data: AgeGroupItem[]; productName: string }) {
-  if (data.length === 0) return <p className="text-sm text-gray-400 text-center py-8">No age group data available</p>
+  if (data.length === 0) return <p className="py-8 text-center text-sm text-slate-400">No age group data available</p>
 
   const maxValue = Math.max(...data.map(d => d.avg_rating || 0), 5)
 
   return (
     <div>
       {productName && (
-        <p className="text-sm text-gray-500 mb-4">Showing data for: <span className="font-medium text-gray-700">{productName}</span></p>
+        <p className="mb-4 text-sm text-slate-500">Showing data for: <span className="font-medium text-ink">{productName}</span></p>
       )}
       <div className="space-y-3">
         {data.map((item, i) => (
           <div key={i} className="flex items-center gap-4">
-            <span className="text-sm text-gray-600 w-20 shrink-0 text-right">{item.age_group}</span>
-            <div className="flex-1 h-7 bg-gray-100 rounded-lg overflow-hidden relative">
+            <span className="w-20 shrink-0 text-right text-sm text-slate-600">{item.age_group}</span>
+            <div className="relative h-7 flex-1 overflow-hidden rounded-lg bg-slate-100 ring-1 ring-inset ring-slate-200">
               <div
-                className={`h-full rounded-lg transition-all duration-500 ${CHART_COLORS[i % CHART_COLORS.length]}`}
+                className={`h-full rounded-lg transition-all duration-500 ${i % 2 === 0 ? 'bg-gradient-to-r from-gold-400 to-gold-500' : 'bg-gradient-to-r from-emerald-500 to-emerald-600'}`}
                 style={{ width: `${((item.avg_rating || 0) / maxValue) * 100}%` }}
               />
-              <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-gray-700">
+              <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-ink">
                 {item.avg_rating ? item.avg_rating.toFixed(2) : '0'} ({item.response_count} responses)
               </span>
             </div>
@@ -204,36 +256,53 @@ function AgeGroupChart({ data, productName }: { data: AgeGroupItem[]; productNam
 }
 
 function ParticipationTrend({ data }: { data: { date: string; count: number }[] }) {
-  if (data.length === 0) return <p className="text-sm text-gray-400 text-center py-8">No trend data available</p>
+  if (data.length === 0) return <p className="py-8 text-center text-sm text-slate-400">No trend data available</p>
 
-  const maxCount = Math.max(...data.map(d => d.count), 1)
   const totalResponses = data.reduce((sum, d) => sum + d.count, 0)
   const avgDaily = (totalResponses / data.length).toFixed(0)
 
   return (
     <div>
-      <div className="flex items-center gap-4 mb-4">
+      <div className="mb-4 flex items-center gap-4">
         <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-500">Total:</span>
-          <span className="text-sm font-semibold text-gray-900">{totalResponses.toLocaleString()}</span>
+          <span className="text-sm text-slate-500">Total:</span>
+          <span className="font-display text-sm font-semibold text-ink">{totalResponses.toLocaleString()}</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-500">Avg/day:</span>
-          <span className="text-sm font-semibold text-gray-900">{avgDaily}</span>
+          <span className="text-sm text-slate-500">Avg/day:</span>
+          <span className="font-display text-sm font-semibold text-ink">{avgDaily}</span>
+        </div>
+        <div className="ml-auto flex items-center gap-1.5 text-[11px] font-medium text-slate-500">
+          <span className="h-2 w-2 rounded-full bg-gold-400" /> Gold
+          <span className="ml-2 h-2 w-2 rounded-full bg-emerald-500" /> Emerald
         </div>
       </div>
-      <div className="flex items-end gap-[3px] h-40">
-        {data.map((item, i) => (
-          <div key={i} className="flex-1 flex flex-col items-center gap-1 min-w-0 group relative">
-            <div className="w-full rounded-t transition-all duration-300 bg-indigo-500 hover:bg-indigo-600" style={{ height: `${(item.count / maxCount) * 100}%`, minHeight: '2px' }} />
-            <span className="text-[10px] text-gray-400 -rotate-45 origin-top-left whitespace-nowrap">
-              {item.date.slice(5)}
-            </span>
-            <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
-              {item.date}: {item.count}
-            </div>
-          </div>
-        ))}
+      <div className="h-44">
+        <ResponsiveContainer width="100%" height="100%">
+          <ReBarChart data={data} margin={{ top: 6, right: 0, left: -16, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
+            <XAxis
+              dataKey="date"
+              tickFormatter={(d: string) => d.slice(5)}
+              tick={EMPTY_TICK}
+              tickLine={false}
+              axisLine={false}
+              minTickGap={20}
+            />
+            <YAxis tick={EMPTY_TICK} tickLine={false} axisLine={false} width={40} allowDecimals={false} />
+            <Tooltip
+              cursor={{ fill: 'rgba(212, 175, 55, 0.08)' }}
+              contentStyle={TOOLTIP_STYLE}
+              formatter={(value) => [`${value} responses`, 'Responses']}
+              labelFormatter={(label) => `Date: ${label}`}
+            />
+            <Bar dataKey="count" radius={[4, 4, 0, 0]} maxBarSize={26}>
+              {data.map((item, i) => (
+                <Cell key={i} fill={i % 2 === 0 ? '#D4AF37' : '#1F6B41'} />
+              ))}
+            </Bar>
+          </ReBarChart>
+        </ResponsiveContainer>
       </div>
     </div>
   )
@@ -362,8 +431,8 @@ export default function AnalyticsPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Analytics</h1>
-          <p className="text-sm text-gray-500 mt-1">Loading analytics data...</p>
+          <h1 className="font-display text-2xl font-bold text-ink">Analytics</h1>
+          <p className="mt-1 text-sm text-slate-500">Loading analytics data...</p>
         </div>
         <LoadingSkeleton />
       </div>
@@ -374,14 +443,14 @@ export default function AnalyticsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Analytics</h1>
-          <p className="text-sm text-gray-500 mt-1">Survey performance and product insights</p>
+          <h1 className="font-display text-2xl font-bold text-ink">Analytics</h1>
+          <p className="mt-1 text-sm text-slate-500">Survey performance and product insights</p>
         </div>
         <button
           onClick={fetchAllData}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+          className="btn-outline"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="h-4 w-4 text-gold-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
           Refresh
@@ -389,24 +458,40 @@ export default function AnalyticsPage() {
       </div>
 
       {errors.general && (
-        <div className="bg-rose-50 border border-rose-200 rounded-lg p-4">
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
           <p className="text-sm text-rose-700">{errors.general}</p>
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Total Responses" value={totalResponses.toLocaleString()} sublabel="Across all products" />
-        <StatCard label="Active Products" value={totalProducts} sublabel="In the system" />
-        <StatCard label="Avg Rating" value={avgOverallRating} sublabel="Overall satisfaction" />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          label="Total Responses"
+          value={totalResponses.toLocaleString()}
+          sublabel="Across all products"
+          icon="M8 10h.01M12 10h.01M16 10h.01M9 16H5a1 1 0 01-1-1V5a2 2 0 012-2h12a2 2 0 014 0v10a1 1 0 01-1 1h-4l-4 4v-4z"
+        />
+        <StatCard
+          label="Active Products"
+          value={totalProducts}
+          sublabel="In the system"
+          icon="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+        />
+        <StatCard
+          label="Avg Rating"
+          value={avgOverallRating}
+          sublabel="Overall satisfaction"
+          icon="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.196-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118L2.98 10.101c-.783-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"
+        />
         <StatCard
           label="Top Product"
           value={topProduct?.name || 'N/A'}
           sublabel={topProduct ? `${topProduct.response_count} responses` : 'No data yet'}
+          icon="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="card p-6">
           <SectionHeader title="Product Popularity" subtitle="Responses by product" />
           {errors.popularity ? (
             <ErrorState message={errors.popularity} />
@@ -419,33 +504,33 @@ export default function AnalyticsPage() {
           )}
         </div>
 
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+        <div className="card p-6">
           <SectionHeader title="Average Ratings" subtitle="Satisfaction score by product" />
           {errors.ratings ? (
             <ErrorState message={errors.ratings} />
           ) : (
             <div className="space-y-4">
               {ratings.map((r, i) => (
-                <div key={i} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
-                  <span className="text-sm font-medium text-gray-700">{r.name}</span>
+                <div key={i} className="flex items-center justify-between border-b border-slate-100 py-2 last:border-0">
+                  <span className="text-sm font-medium text-slate-700">{r.name}</span>
                   <RatingStars rating={r.avg_rating || 0} />
                 </div>
               ))}
-              {ratings.length === 0 && <p className="text-sm text-gray-400 text-center py-4">No ratings data</p>}
+              {ratings.length === 0 && <p className="py-4 text-center text-sm text-slate-400">No ratings data</p>}
             </div>
           )}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="card p-6">
           <SectionHeader title="Rating by Age Group" subtitle="Breakdown of ratings across demographics" />
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Select Product</label>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Select Product</label>
             <select
               value={selectedProductId}
               onChange={e => setSelectedProductId(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white"
+              className="input"
             >
               <option value="">Choose a product...</option>
               {products.map((p: ProductItem) => (
@@ -460,23 +545,23 @@ export default function AnalyticsPage() {
               <AgeGroupChart data={ageGroups} productName={selectedProductName} />
             )
           ) : (
-            <div className="text-center py-8">
-              <p className="text-sm text-gray-400">Select a product to view age group breakdown</p>
+            <div className="py-8 text-center">
+              <p className="text-sm text-slate-400">Select a product to view age group breakdown</p>
             </div>
           )}
         </div>
 
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+        <div className="card p-6">
           <SectionHeader title="Participation Trend" subtitle="Daily survey responses" />
-          <div className="flex items-center gap-2 mb-4">
+          <div className="mb-4 flex items-center gap-2">
             {[7, 14, 30, 60].map(period => (
               <button
                 key={period}
                 onClick={() => setTrendPeriod(period)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
                   trendPeriod === period
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    ? 'bg-gold text-forest'
+                    : 'bg-white text-slate-600 ring-1 ring-inset ring-slate-200 hover:bg-slate-50'
                 }`}
               >
                 {period}d
@@ -491,7 +576,7 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+      <div className="card p-6">
         <SectionHeader title="Product Comparison" subtitle="Side-by-side comparison of all products" />
         {errors.comparison ? (
           <ErrorState message={errors.comparison} />
