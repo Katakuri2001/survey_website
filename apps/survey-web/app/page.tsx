@@ -91,7 +91,7 @@ export default function Home() {
 
           <h1 className={`font-display font-extrabold animate-fade-up ${myFont}`} style={{ animationDelay: '0.1s' }}>
             <span className="block text-5xl md:text-7xl text-white drop-shadow-2xl">{t('heroTitleLine1')}</span>
-            <span className={`block text-5xl md:text-7xl gold-text mt-1 ${language === 'my' ? 'font-myanmar leading-tight' : ''}`}>{t('heroTitleLine2')}</span>
+            <span className={`block text-5xl md:text-7xl gold-text mt-1 ${language === 'my' ? 'font-myanmar leading-tight tracking-widest' : ''}`}>{t('heroTitleLine2')}</span>
           </h1>
 
           {/* gold divider */}
