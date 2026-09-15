@@ -8,11 +8,11 @@ import Header from '../components/Header'
 const myanmarStates = [
   'ကချင်ပြည်နယ်', 'ကယားပြည်နယ်', 'ကရင်ပြည်နယ်', 'ချင်းပြည်နယ်',
   'မကွေးတိုင်းဒေသကြီး', 'မန္တလေးတိုင်းဒေသကြီး', 'မွန်ပြည်နယ်', 'ရခိုင်ပြည်နယ်',
-  'ရှမ်းပြည်နယ်', 'ဧရိဝတီတိုင်းဒေသကြီး', 'ရန်ကုန်တိုင်းဒေသကြီး',
+  'ရှမ်းပြည်နယ်', 'ဧရာဝတီတိုင်းဒေသကြီး', 'ရန်ကုန်တိုင်းဒေသကြီး',
   'နေပြည်တော် ပြည်ထောင်စုနယ်မြေ'
 ]
 
-const nrcTypes = ['နိုင်ငံသား', 'နိုင်ငံသား', 'ဧရိယာ']
+const nrcTypes = ['နိုင်ငံသား', 'ဧည့်နိုင်ငံသား', 'ဧရိယာ']
 
 const STEPS = [
   { n: '01', label: 'Personal' },
@@ -169,31 +169,33 @@ export default function InfoPage() {
             {/* NRC */}
             <div className="mb-6">
               <FieldLabel>{t('nrc')}</FieldLabel>
-              <div className="grid grid-cols-[1fr_auto_auto] gap-2 mb-2">
+              <div className="mb-2 space-y-2">
                 <select
                   value={formData.nrcState}
                   onChange={(e) => setFormData({ ...formData, nrcState: e.target.value })}
-                  className={selectClass}
+                  className={`${selectClass} font-myanmar`}
                 >
                   <option value="" className="bg-surface-deep">{t('stateRegion')}</option>
                   {myanmarStates.map(s => <Option key={s} value={s} label={s} />)}
                 </select>
-                <select
-                  value={formData.nrcType}
-                  onChange={(e) => setFormData({ ...formData, nrcType: e.target.value })}
-                  className={`${selectClass} w-24`}
-                >
-                  <option value="" className="bg-surface-deep">{t('nrcType')}</option>
-                  {nrcTypes.map((n, i) => <Option key={i} value={n} label={n} />)}
-                </select>
-                <input
-                  type="text"
-                  value={formData.nrcNumber}
-                  onChange={(e) => setFormData({ ...formData, nrcNumber: e.target.value })}
-                  className="survey-input w-28 text-sm"
-                  placeholder={t('nrcPlaceholder')}
-                  maxLength={6}
-                />
+                <div className="grid grid-cols-2 gap-2">
+                  <select
+                    value={formData.nrcType}
+                    onChange={(e) => setFormData({ ...formData, nrcType: e.target.value })}
+                    className={`${selectClass} font-myanmar`}
+                  >
+                    <option value="" className="bg-surface-deep">{t('nrcType')}</option>
+                    {nrcTypes.map((n, i) => <Option key={i} value={n} label={n} />)}
+                  </select>
+                  <input
+                    type="text"
+                    value={formData.nrcNumber}
+                    onChange={(e) => setFormData({ ...formData, nrcNumber: e.target.value })}
+                    className="survey-input text-sm"
+                    placeholder={t('nrcPlaceholder')}
+                    maxLength={6}
+                  />
+                </div>
               </div>
               <p className="text-xs text-fg-muted">{t('nrcExample')}</p>
             </div>
