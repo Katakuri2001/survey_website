@@ -4,7 +4,7 @@ import { useState, useSyncExternalStore } from 'react'
 import { useLanguage } from '../context/LanguageContext'
 import Header from '../components/Header'
 import Link from 'next/link'
-import { API_BASE } from '../lib/api'
+import { API_BASE, getValidToken } from '../lib/api'
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return <label className="block text-sm font-medium text-fg-secondary mb-2">{children}</label>
@@ -47,12 +47,18 @@ export default function DeliveryPage() {
     setError('')
 
     try {
-      const token = localStorage.getItem('survey_token')
-      const res = await fetch(`${API_BASE}/rewards/delivery`, {
+      const token = await getValidToken()
+      if (!token) {
+        setSubmitting(false)
+        setError(t('failedToLoad'))
+        return
+      }
+
+      const doPost = (authToken: string) => fetch(`${API_BASE}/rewards/delivery`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          Authorization: `Bearer ${authToken}`,
         },
         body: JSON.stringify({
           userRewardId,
@@ -64,8 +70,13 @@ export default function DeliveryPage() {
           postalCode: formData.postalCode,
           notes: formData.notes,
         })
-      })
-      const data = await res.json()
+      }).then(r => r.json())
+
+      let data = await doPost(token)
+      if (!data.success && (data.error?.message === 'Invalid token' || data.error?.message === 'Unauthorized')) {
+        const refreshed = await getValidToken(true)
+        if (refreshed) data = await doPost(refreshed)
+      }
 
       if (data.success) {
         setSubmitted(true)

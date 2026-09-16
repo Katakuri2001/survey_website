@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useLanguage } from '../context/LanguageContext'
 import Header from '../components/Header'
-import { API_BASE } from '../lib/api'
+import { API_BASE, getValidToken } from '../lib/api'
 
 interface Reward {
   id: string
@@ -77,7 +77,12 @@ export default function SpinPage() {
     setError('')
 
     try {
-      const token = localStorage.getItem('survey_token')
+      const token = await getValidToken()
+      if (!token) {
+        setSpinning(false)
+        setError(t('failedToLoad'))
+        return
+      }
       const resolveContext = async (key: string, endpoint: string) => {
         const stored = sessionStorage.getItem(key)
         if (stored) return stored
@@ -92,18 +97,25 @@ export default function SpinPage() {
       }
       const productId = await resolveContext('survey_product_id', '/products')
       const campaignId = await resolveContext('survey_campaign_id', '/campaigns')
-      const res = await fetch(`${API_BASE}/rewards/spin`, {
+
+      const doSpin = (authToken: string) => fetch(`${API_BASE}/rewards/spin`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          Authorization: `Bearer ${authToken}`,
         },
         body: JSON.stringify({
           campaignId: campaignId || 'default',
           productId: productId || 'beer',
         })
-      })
-      const data = await res.json()
+      }).then(r => r.json())
+
+      let data = await doSpin(token)
+      // Token may have been rejected server-side (stale/expired); refresh once
+      if (!data.success && (data.error?.message === 'Invalid token' || data.error?.message === 'Unauthorized')) {
+        const refreshed = await getValidToken(true)
+        if (refreshed) data = await doSpin(refreshed)
+      }
 
       if (data.success) {
         const serverReward = data.data

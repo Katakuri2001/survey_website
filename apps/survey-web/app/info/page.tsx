@@ -103,6 +103,15 @@ export default function InfoPage() {
       if (data.success) {
         localStorage.setItem('survey_token', data.data.token)
         localStorage.setItem('survey_user', JSON.stringify(data.data.user))
+        // Store full profile so token can be refreshed if it expires mid-session
+        localStorage.setItem('survey_profile', JSON.stringify({
+          fullName: formData.fullName,
+          phone: formData.phone,
+          dob,
+          nrcState: formData.nrcState,
+          nrcType: formData.nrcType,
+          nrcNumber: formData.nrcNumber,
+        }))
         localStorage.removeItem(DRAFT_KEY)
         router.push('/survey')
       } else {
