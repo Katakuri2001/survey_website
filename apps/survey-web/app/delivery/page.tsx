@@ -11,7 +11,7 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
 }
 
 export default function DeliveryPage() {
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
   const [formData, setFormData] = useState({
     fullName: '',
     phone: '',
@@ -154,7 +154,7 @@ export default function DeliveryPage() {
                   type="text"
                   value={formData.fullName}
                   onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                  className="survey-input"
+                  className={`survey-input ${language === 'my' ? 'font-myanmar leading-relaxed' : ''}`}
                   placeholder={t('fullNamePlaceholder')}
                   required
                 />
@@ -166,7 +166,7 @@ export default function DeliveryPage() {
                   type="tel"
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="survey-input"
+                  className={`survey-input ${language === 'my' ? 'font-myanmar leading-relaxed' : ''}`}
                   placeholder="09 123 456 789"
                   required
                 />
@@ -177,7 +177,7 @@ export default function DeliveryPage() {
                 <textarea
                   value={formData.address}
                   onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                  className="survey-input resize-none min-h-[90px]"
+                  className={`survey-input resize-none min-h-[90px] ${language === 'my' ? 'font-myanmar leading-relaxed' : ''}`}
                   placeholder={t('addressPlaceholder')}
                   required
                 />
@@ -190,7 +190,7 @@ export default function DeliveryPage() {
                     type="text"
                     value={formData.city}
                     onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                    className="survey-input"
+                    className={`survey-input ${language === 'my' ? 'font-myanmar leading-relaxed' : ''}`}
                     placeholder={t('cityPlaceholder')}
                     required
                   />
@@ -201,7 +201,7 @@ export default function DeliveryPage() {
                     type="text"
                     value={formData.township}
                     onChange={(e) => setFormData({ ...formData, township: e.target.value })}
-                    className="survey-input"
+                    className={`survey-input ${language === 'my' ? 'font-myanmar leading-relaxed' : ''}`}
                   />
                 </div>
               </div>
@@ -212,7 +212,7 @@ export default function DeliveryPage() {
                   type="text"
                   value={formData.postalCode}
                   onChange={(e) => setFormData({ ...formData, postalCode: e.target.value })}
-                  className="survey-input"
+                  className={`survey-input ${language === 'my' ? 'font-myanmar leading-relaxed' : ''}`}
                 />
               </div>
 
@@ -221,7 +221,7 @@ export default function DeliveryPage() {
                 <textarea
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  className="survey-input resize-none min-h-[80px]"
+                  className={`survey-input resize-none min-h-[80px] ${language === 'my' ? 'font-myanmar leading-relaxed' : ''}`}
                   placeholder={t('deliveryNotesPlaceholder')}
                 />
               </div>

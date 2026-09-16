@@ -1,10 +1,38 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useLanguage } from '../context/LanguageContext'
 import Header from '../components/Header'
 import { API_BASE } from '../lib/api'
+
+const DRAFT_KEY = 'survey_info_draft'
+
+const emptyDraft = {
+  fullName: '',
+  phone: '',
+  dobDay: '',
+  dobMonth: '',
+  dobYear: '',
+  nrcState: '',
+  nrcType: '',
+  nrcNumber: ''
+}
+
+function loadDraft() {
+  if (typeof window === 'undefined') return emptyDraft
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY)
+    if (!raw) return emptyDraft
+    const parsed = JSON.parse(raw)
+    if (parsed && typeof parsed === 'object') {
+      return { ...emptyDraft, ...parsed }
+    }
+  } catch {
+    // ignore corrupted draft
+  }
+  return emptyDraft
+}
 
 const myanmarStates = [
   'ကချင်ပြည်နယ်', 'ကယားပြည်နယ်', 'ကရင်ပြည်နယ်', 'ချင်းပြည်နယ်',
@@ -33,18 +61,22 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
 export default function InfoPage() {
   const router = useRouter()
   const { t, language } = useLanguage()
-  const [formData, setFormData] = useState({
-    fullName: '',
-    phone: '',
-    dobDay: '',
-    dobMonth: '',
-    dobYear: '',
-    nrcState: '',
-    nrcType: '',
-    nrcNumber: ''
-  })
+  const [formData, setFormData] = useState(loadDraft)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [hydrated, setHydrated] = useState(false)
+
+  useEffect(() => {
+    setHydrated(true)
+  }, [])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(formData))
+    } catch {
+      // storage full or unavailable; form still works in-memory
+    }
+  }, [formData])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -71,6 +103,7 @@ export default function InfoPage() {
       if (data.success) {
         localStorage.setItem('survey_token', data.data.token)
         localStorage.setItem('survey_user', JSON.stringify(data.data.user))
+        localStorage.removeItem(DRAFT_KEY)
         router.push('/survey')
       } else {
         setError(data.error?.message || t('error'))
@@ -134,7 +167,7 @@ export default function InfoPage() {
           </div>
 
           {/* -------- Form -------- */}
-          <form onSubmit={handleSubmit} className="rounded-[1.75rem] border border-white/[0.08] bg-surface/90 backdrop-blur p-6 md:p-9 shadow-card animate-fade-up relative overflow-hidden">
+          <form key={hydrated ? 'info-form-ready' : 'info-form'} onSubmit={handleSubmit} className="rounded-[1.75rem] border border-white/[0.08] bg-surface/90 backdrop-blur p-6 md:p-9 shadow-card animate-fade-up relative overflow-hidden">
             <div className="absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-gold to-transparent" />
 
             {error && (
@@ -153,7 +186,7 @@ export default function InfoPage() {
                 type="text"
                 value={formData.fullName}
                 onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                className="survey-input"
+                className={`survey-input ${language === 'my' ? 'font-myanmar leading-relaxed' : ''}`}
                 placeholder={t('fullNamePlaceholder')}
                 required
               />
@@ -166,7 +199,7 @@ export default function InfoPage() {
                 type="tel"
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                className="survey-input"
+                className={`survey-input ${language === 'my' ? 'font-myanmar leading-relaxed' : ''}`}
                 placeholder="09 123 456 789"
                 required
               />
@@ -239,7 +272,7 @@ export default function InfoPage() {
                     type="text"
                     value={formData.nrcNumber}
                     onChange={(e) => setFormData({ ...formData, nrcNumber: e.target.value })}
-                    className="survey-input text-sm"
+                    className={`survey-input text-sm ${language === 'my' ? 'font-myanmar leading-relaxed' : ''}`}
                     placeholder={t('nrcPlaceholder')}
                     maxLength={6}
                     required

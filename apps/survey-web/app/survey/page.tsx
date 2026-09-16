@@ -405,7 +405,7 @@ export default function SurveyPage() {
                 <textarea
                   value={(answers[current.desc.id]?.value as string) || ''}
                   onChange={(e) => handleTextChange(current.desc!.id, e.target.value)}
-                  className="survey-input resize-none min-h-[120px] leading-relaxed"
+                  className={`survey-input resize-none min-h-[120px] leading-relaxed ${language === 'my' ? 'font-myanmar' : ''}`}
                   placeholder={t('textPlaceholder')}
                   rows={4}
                   required
