@@ -131,15 +131,15 @@ export default function RewardsPage() {
     try {
       if (tab === "rewards") {
         const data = await fetchRewards();
-        setRewards(data);
+        setRewards(data.data);
       } else if (tab === "inventory") {
         const data = await fetchInventory();
-        setInventory(data.rewards);
-        setInventorySummary(data.summary);
+        setInventory(data.data.rewards);
+        setInventorySummary(data.data.summary);
       } else {
         const data = await fetchHistory(historyOffset);
-        setHistory(data.history);
-        setHistoryTotal(data.total);
+        setHistory(data.data.history);
+        setHistoryTotal(data.data.total);
       }
     } catch {
       setError("Failed to load data. Please try again.");

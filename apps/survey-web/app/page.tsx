@@ -84,24 +84,24 @@ export default function Home() {
         </div>
 
         {/* Hero content */}
-        <div className="relative z-10 mx-auto max-w-3xl px-5 pt-16 pb-24 md:pt-24 md:pb-32 text-center">
-          <span className={`inline-block px-4 py-1.5 rounded-full border border-gold/30 bg-gold/10 text-[11px] tracking-[0.35em] uppercase text-gold mb-7 animate-fade-up ${language === 'my' ? 'font-myanmar tracking-normal leading-relaxed' : ''}`}>
+        <div className="relative z-10 mx-auto max-w-3xl lg:max-w-4xl px-5 pt-16 pb-24 md:pt-24 md:pb-32 text-center">
+          <span className={`inline-block px-4 py-1.5 rounded-full border border-gold/30 bg-gold/10 text-[11px] tracking-[0.35em] uppercase text-gold mb-10 animate-fade-up ${language === 'my' ? 'font-myanmar tracking-normal leading-relaxed' : ''}`}>
             {t('heroEyebrow')}
           </span>
 
           <h1 className={`font-display font-extrabold animate-fade-up ${myFont}`} style={{ animationDelay: '0.1s' }}>
-            <span className="block text-4xl sm:text-5xl md:text-7xl text-white drop-shadow-2xl">{t('heroTitleLine1')}</span>
-            <span className={`block text-4xl sm:text-5xl md:text-7xl gold-text mt-1 ${language === 'my' ? 'font-myanmar leading-tight tracking-widest' : ''}`}>{t('heroTitleLine2')}</span>
+            <span className={`block text-4xl sm:text-5xl md:text-7xl text-white drop-shadow-2xl ${language === 'my' ? 'font-myanmar leading-relaxed tracking-widest' : ''}`}>{t('heroTitleLine1')}</span>
+            <span className={`block text-4xl sm:text-5xl md:text-7xl gold-text mt-8 md:mt-16 ${language === 'my' ? 'font-myanmar leading-relaxed tracking-widest lg:tracking-normal lg:whitespace-nowrap' : ''}`}>{t('heroTitleLine2')}</span>
           </h1>
 
           {/* gold divider */}
-          <div className="mx-auto my-7 h-px w-40 bg-gradient-to-r from-transparent via-gold to-transparent animate-grow-x" style={{ animationDelay: '0.3s' }} />
+          <div className="mx-auto mt-12 mb-10 md:mt-16 md:mb-12 h-px w-40 bg-gradient-to-r from-transparent via-gold to-transparent animate-grow-x" style={{ animationDelay: '0.3s' }} />
 
           <p className="font-myanmar text-lg md:text-xl text-fg-secondary max-w-xl mx-auto animate-fade-up" style={{ animationDelay: '0.35s' }}>
             {t('heroDesc')}
           </p>
 
-          <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4 animate-fade-up" style={{ animationDelay: '0.5s' }}>
+          <div className="mt-14 md:mt-16 flex flex-col sm:flex-row items-center justify-center gap-4 animate-fade-up" style={{ animationDelay: '0.5s' }}>
             <Link
               href="/info"
               className="group w-full sm:w-auto px-9 py-4 bg-lager-gradient text-white rounded-full font-bold text-lg shadow-lager-lg hover:scale-[1.03] hover:shadow-lager transition-all inline-flex items-center justify-center gap-2"
@@ -129,7 +129,7 @@ export default function Home() {
       </section>
 
       {/* ============================ PRODUCTS ============================ */}
-      <section id="products" className="relative mx-auto max-w-6xl px-5 py-20 md:py-28">
+      <section id="products" className="relative mx-auto max-w-6xl px-5 py-20 md:py-28 overflow-hidden">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-gold/[0.06] blur-[120px] rounded-full pointer-events-none" />
         <div className="text-center mb-14">
           <span className="text-[11px] tracking-[0.35em] uppercase text-gold">{t('ourProducts').toUpperCase()}</span>

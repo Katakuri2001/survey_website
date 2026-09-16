@@ -24,7 +24,6 @@ interface RewardApiItem {
 }
 
 const COLORS = ['#00994B', '#163B2C', '#F0E826', '#1F4F35']
-const LIGHT_TEXT = new Set(['#F0E826', '#D4AF37'])
 
 const CONFETTI_COLORS = ['#F0E826', '#00994B', '#D4AF37', '#1F4F35', '#00A351', '#163B2C']
 
@@ -101,7 +100,7 @@ export default function SpinPage() {
         },
         body: JSON.stringify({
           campaignId: campaignId || 'default',
-          productId: productId || 'prod-1',
+          productId: productId || 'beer',
         })
       })
       const data = await res.json()
@@ -166,8 +165,6 @@ export default function SpinPage() {
       </div>
     )
   }
-
-  const lightText = (color: string) => LIGHT_TEXT.has(color) ? 'text-brand-emerald' : 'text-white'
 
   return (
     <div className="min-h-screen bg-navy text-fg-bright relative overflow-hidden">
@@ -240,15 +237,27 @@ export default function SpinPage() {
                         }}
                       >
                         <span
-                          className={`text-[11px] font-bold whitespace-nowrap drop-shadow ${lightText(reward.color)}`}
+                          className="relative z-10 inline-block max-w-[92px] px-2 py-1 rounded-lg text-center text-[11px] sm:text-xs font-bold leading-snug text-white bg-navy/75 border border-white/15 shadow-lg backdrop-blur-[2px]"
                           style={{
-                            transform: `rotate(${-rotation - 90 + mid}deg) translateY(-42px)`,
+                            transform: `rotate(${-rotation - 90 + mid}deg) translateY(-112px)`,
                             transition: 'transform 4000ms',
                           }}
                         >
                           {reward.name}
                         </span>
                       </div>
+                    )
+                  })}
+
+                  {/* wedge boundary spokes */}
+                  {rewards.map((_, index) => {
+                    const segmentAngle = 360 / Math.max(rewards.length, 1)
+                    return (
+                      <div
+                        key={`spoke-${index}`}
+                        className="absolute left-1/2 top-1/2 h-1/2 w-[2px] origin-top bg-white/25 pointer-events-none"
+                        style={{ transform: `rotate(${index * segmentAngle - 90}deg)` }}
+                      />
                     )
                   })}
                 </div>

@@ -79,9 +79,9 @@ export default function AuditPage() {
       });
 
       if (!res.ok) throw new Error("Failed to fetch audit logs");
-      const data: AuditLogsResponse = await res.json();
-      setLogs(data.logs);
-      setTotal(data.total);
+      const data: { success: boolean; data: AuditLogsResponse } = await res.json();
+      setLogs(data.data.logs);
+      setTotal(data.data.total);
     } catch (err) {
       setError(err instanceof Error ? err.message : "An unexpected error occurred");
     } finally {

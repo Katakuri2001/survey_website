@@ -399,36 +399,6 @@ export default function DashboardPage() {
         </div>
 
         <div className="card p-6">
-          <h3 className="font-display mb-4 text-sm font-semibold text-ink">Quick Actions</h3>
-          <div className="grid grid-cols-1 gap-2">
-            <Link href="/products" className="inline-flex items-center gap-2 rounded-xl bg-gold px-3 py-2.5 text-sm font-semibold text-forest transition-colors hover:bg-warm">
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-              </svg>
-              Manage Products
-            </Link>
-            <Link href="/surveys" className="inline-flex items-center gap-2 rounded-xl bg-forest px-3 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-forest-600">
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-              </svg>
-              Manage Surveys
-            </Link>
-            <Link href="/rewards" className="inline-flex items-center gap-2 rounded-xl bg-gold px-3 py-2.5 text-sm font-semibold text-forest transition-colors hover:bg-warm">
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
-              </svg>
-              Manage Rewards
-            </Link>
-            <Link href="/deliveries" className="inline-flex items-center gap-2 rounded-xl bg-forest px-3 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-forest-600">
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-              </svg>
-              View Deliveries
-            </Link>
-          </div>
-        </div>
-
-        <div className="card p-6">
           <h3 className="font-display mb-4 text-sm font-semibold text-ink">Platform Status</h3>
           <div className="space-y-3">
             <div className="flex justify-between text-sm">

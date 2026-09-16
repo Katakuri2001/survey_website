@@ -79,7 +79,7 @@ export default function SurveyPage() {
   }, [router])
 
   useEffect(() => {
-    if (!guarded || !productId) return
+    if (!guarded) return
 
     if (!productId) {
       fetch(`${API_BASE}/products?lang=${language}`)
@@ -88,10 +88,10 @@ export default function SurveyPage() {
           if (data.success && data.data && data.data.length > 0) {
             setProductId(data.data[0].id)
           } else {
-            setProductId('prod-1')
+            setProductId('beer')
           }
         })
-        .catch(() => setProductId('prod-1'))
+        .catch(() => setProductId('beer'))
     }
   }, [language, productId, guarded])
 
@@ -258,7 +258,7 @@ export default function SurveyPage() {
   // ================================ REVIEW ================================
   if (reviewMode) {
     return (
-      <div className="min-h-screen bg-navy text-fg-bright">
+      <div className="min-h-screen bg-navy text-fg-bright overflow-hidden">
         <Header title={t('surveyTitle')} backHref="/survey" showBack={currentTaste > 0} />
 
         <div className="relative mx-auto max-w-xl px-4 py-8">
@@ -338,7 +338,7 @@ export default function SurveyPage() {
 
   // ================================ TASTE ================================
   return (
-    <div className={`min-h-screen bg-navy text-fg-bright transition-opacity duration-300 ${ready ? 'opacity-100' : 'opacity-0'}`}>
+    <div className={`min-h-screen bg-navy text-fg-bright transition-opacity duration-300 overflow-hidden ${ready ? 'opacity-100' : 'opacity-0'}`}>
       <Header title={t('surveyTitle')} backHref="/info" showBack={currentTaste > 0} />
 
       <div className="relative mx-auto max-w-xl px-4 pb-10">

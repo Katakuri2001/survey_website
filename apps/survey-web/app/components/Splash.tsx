@@ -5,6 +5,7 @@ import { useLanguage } from '../context/LanguageContext'
 
 export default function Splash() {
   const { t, language } = useLanguage()
+  const [mounted, setMounted] = useState(false)
   const [visible, setVisible] = useState(() => {
     if (typeof window !== 'undefined' && sessionStorage.getItem('splashDisplayed')) {
       return false
@@ -13,6 +14,10 @@ export default function Splash() {
   })
   const [fading, setFading] = useState(false)
   const [exiting, setExiting] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   useEffect(() => {
     const fadeTimer = setTimeout(() => setFading(true), 3600)
@@ -33,6 +38,7 @@ export default function Splash() {
     }, 300)
   }
 
+  if (!mounted) return null
   if (!visible) return null
 
   return (

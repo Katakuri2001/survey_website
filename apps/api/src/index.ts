@@ -142,6 +142,18 @@ function jsonSuccess(data: any) {
   );
 }
 
+async function logAudit(c: any, action: string, resourceType: string, resourceId: string | null, metadata?: unknown) {
+  const adminId = c.get('userId');
+  try {
+    await c.env.survey_db.prepare(`
+      INSERT INTO audit_logs (id, admin_id, action, resource_type, resource_id, metadata)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).bind(generateId(), adminId || null, action, resourceType, resourceId, metadata !== undefined ? JSON.stringify(metadata) : null).run();
+  } catch {
+    // audit logging is best-effort
+  }
+}
+
 // ============================================================
 // AUTH MIDDLEWARE
 // ============================================================
@@ -264,6 +276,11 @@ app.post('/auth/admin/login', async (c) => {
   }
 
   const token = await createToken((user as any).id, 'admin', getJwtSecret(c.env));
+
+  await db.prepare(`
+    INSERT INTO audit_logs (id, admin_id, action, resource_type, resource_id, metadata)
+    VALUES (?, ?, 'LOGIN', 'auth', ?, ?)
+  `).bind(generateId(), (user as any).id, (user as any).id, JSON.stringify({ email })).run();
 
   return jsonSuccess({ userId: (user as any).id, token, user: { id: (user as any).id, fullName: (user as any).full_name, email: (user as any).email } });
 });
@@ -950,6 +967,8 @@ app.post('/admin/survey/questions', authMiddleware, adminMiddleware, async (c) =
     }
   }
 
+  await logAudit(c, 'CREATE', 'question', id, { questionText });
+
   return jsonSuccess({ id, message: 'Question created' });
 });
 
@@ -985,6 +1004,8 @@ app.patch('/admin/survey/questions/:id', authMiddleware, adminMiddleware, async 
     }
   }
 
+  await logAudit(c, 'UPDATE', 'question', id, { questionText, isActive });
+
   return jsonSuccess({ message: 'Question updated' });
 });
 
@@ -994,6 +1015,8 @@ app.delete('/admin/survey/questions/:id', authMiddleware, adminMiddleware, async
   const id = c.req.param('id');
 
   await db.prepare('DELETE FROM survey_questions WHERE id = ?').bind(id).run();
+
+  await logAudit(c, 'DELETE', 'question', id);
 
   return jsonSuccess({ message: 'Question deleted' });
 });
@@ -1049,6 +1072,8 @@ app.post('/admin/survey/versions', authMiddleware, adminMiddleware, async (c) =>
     }
   }
 
+  await logAudit(c, 'CREATE', 'survey_version', id, { productId, title, version: versionNumber });
+
   return jsonSuccess({ id, version: versionNumber, message: 'Survey version created' });
 });
 
@@ -1093,6 +1118,8 @@ app.post('/admin/products', authMiddleware, adminMiddleware, async (c) => {
     }
   }
 
+  await logAudit(c, 'CREATE', 'product', id, { name });
+
   return jsonSuccess({ id, message: 'Product created' });
 });
 
@@ -1125,6 +1152,8 @@ app.patch('/admin/products/:id', authMiddleware, adminMiddleware, async (c) => {
       }
     }
   }
+
+  await logAudit(c, 'UPDATE', 'product', id, { name, isActive });
 
   return jsonSuccess({ message: 'Product updated' });
 });
@@ -1177,6 +1206,8 @@ app.post('/admin/rewards', authMiddleware, adminMiddleware, async (c) => {
     }
   }
 
+  await logAudit(c, 'CREATE', 'reward', id, { name });
+
   return jsonSuccess({ id, message: 'Reward created' });
 });
 
@@ -1211,6 +1242,8 @@ app.patch('/admin/rewards/:id', authMiddleware, adminMiddleware, async (c) => {
       }
     }
   }
+
+  await logAudit(c, 'UPDATE', 'reward', id, { name, status, isActive });
 
   return jsonSuccess({ message: 'Reward updated' });
 });
@@ -1265,6 +1298,8 @@ app.patch('/admin/rewards/:id/stock', authMiddleware, adminMiddleware, async (c)
     INSERT INTO reward_inventory_transactions (id, reward_id, type, quantity, notes, created_by)
     VALUES (?, ?, 'MANUAL_ADJUSTMENT', ?, ?, ?)
   `).bind(generateId(), id, adjustment, reason || 'Manual adjustment', c.get('userId')).run();
+
+  await logAudit(c, 'UPDATE', 'reward', id, { action: 'stock_adjustment', adjustment, reason });
 
   return jsonSuccess({ message: 'Stock adjusted', newQuantity });
 });
