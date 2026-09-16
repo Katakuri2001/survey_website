@@ -1584,6 +1584,57 @@ app.get('/admin/audit-logs', authMiddleware, adminMiddleware, async (c) => {
 });
 
 // ============================================================
+// ADMIN ROUTES - ACCOUNT
+// ============================================================
+
+// Current admin profile
+app.get('/admin/account', authMiddleware, adminMiddleware, async (c) => {
+  const db = c.env.survey_db;
+  const id = c.get('userId');
+
+  const user = await db.prepare(`
+    SELECT id, full_name, email, created_at
+    FROM users WHERE id = ? AND is_admin = 1
+  `).bind(id).first();
+
+  if (!user) return jsonError('Admin not found', 404);
+
+  return jsonSuccess({ user });
+});
+
+// Change admin password
+app.patch('/admin/account/password', authMiddleware, adminMiddleware, async (c) => {
+  const db = c.env.survey_db;
+  const id = c.get('userId');
+  const { currentPassword, newPassword } = await c.req.json();
+
+  if (!currentPassword || !newPassword) {
+    return jsonError('Current and new password are required');
+  }
+  if (String(newPassword).length < 6) {
+    return jsonError('New password must be at least 6 characters');
+  }
+  if (currentPassword === newPassword) {
+    return jsonError('New password must be different from the current password');
+  }
+
+  const currentHash = await hashPassword(String(currentPassword));
+  const user = await db.prepare('SELECT id, full_name, password_hash FROM users WHERE id = ? AND is_admin = 1').bind(id).first() as any;
+
+  if (!user) return jsonError('Admin not found', 404);
+  if (user.password_hash !== currentHash) {
+    return jsonError('Current password is incorrect', 401);
+  }
+
+  const newHash = await hashPassword(String(newPassword));
+  await db.prepare('UPDATE users SET password_hash = ?, updated_at = datetime(\'now\') WHERE id = ?').bind(newHash, id).run();
+
+  await logAudit(c, 'PASSWORD_CHANGED', 'auth', id);
+
+  return jsonSuccess({ message: 'Password updated successfully' });
+});
+
+// ============================================================
 // HEALTH CHECK
 // ============================================================
 
@@ -1597,7 +1648,7 @@ app.get('/', (c) => {
       public: ['/products', '/campaigns', '/rewards'],
       survey: ['/survey/questions/:productId', '/survey/submit'],
       rewards: ['/rewards/spin', '/rewards/delivery', '/rewards/my'],
-      admin: ['/admin/dashboard', '/admin/analytics/*', '/admin/survey/*', '/admin/products', '/admin/rewards/*', '/admin/deliveries', '/admin/users', '/admin/responses', '/admin/audit-logs']
+      admin: ['/admin/dashboard', '/admin/analytics/*', '/admin/survey/*', '/admin/products', '/admin/rewards/*', '/admin/deliveries', '/admin/users', '/admin/responses', '/admin/audit-logs', '/admin/account', '/admin/account/password']
     }
   });
 });
