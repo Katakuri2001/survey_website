@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useLanguage } from '../context/LanguageContext'
 import Header from '../components/Header'
@@ -63,6 +63,8 @@ export default function SurveyPage() {
   const [submitting, setSubmitting] = useState(false)
   const [reviewMode, setReviewMode] = useState(false)
   const [ready, setReady] = useState(false)
+  const [notice, setNotice] = useState(false)
+  const questionsRef = useRef<Question[]>([])
 
   const [productId, setProductId] = useState<string | null>(() => {
     if (typeof window !== 'undefined') {
@@ -101,13 +103,26 @@ export default function SurveyPage() {
     let cancelled = false
     let initialDone = false
 
-    const loadQuestions = (silent: boolean) => {
+    const loadQuestions = (silent: boolean, forceRefresh = false) => {
       fetch(`${API_BASE}/survey/questions/${productId}?lang=${language}`, { cache: 'no-store' })
         .then(r => r.json())
         .then(data => {
           if (cancelled) return
           const qs: Question[] = data.success && data.data.questions ? data.data.questions : []
           const ordered = [...qs].sort((a, b) => a.display_order - b.display_order)
+          if (silent && forceRefresh) {
+            // Real-time sync: tell the user when admin changed the survey
+            const prev = questionsRef.current
+            const changed =
+              ordered.length !== prev.length ||
+              ordered.some((q, i) => prev[i]?.id !== q.id) ||
+              ordered.some((q, i) => q.question_text !== prev[i]?.question_text)
+            if (changed) {
+              setNotice(true)
+              setTimeout(() => setNotice(false), 4000)
+            }
+          }
+          questionsRef.current = ordered
           setQuestions(ordered)
           // Drop answers for questions the admin removed/deactivated, keep the rest
           setAnswers(prev => {
@@ -138,13 +153,18 @@ export default function SurveyPage() {
     loadQuestions(false)
 
     const onVisible = () => {
-      if (document.visibilityState === 'visible' && initialDone) loadQuestions(true)
+      if (document.visibilityState === 'visible' && initialDone) loadQuestions(true, true)
     }
     document.addEventListener('visibilitychange', onVisible)
     window.addEventListener('focus', onVisible)
+    // Live polling so admin add/remove reflects in real time while the form is open
+    const pollId = window.setInterval(() => {
+      if (!submitting) loadQuestions(true, true)
+    }, 12000)
 
     return () => {
       cancelled = true
+      window.clearInterval(pollId)
       document.removeEventListener('visibilitychange', onVisible)
       window.removeEventListener('focus', onVisible)
     }
@@ -309,6 +329,17 @@ export default function SurveyPage() {
       <div className="min-h-screen bg-navy text-fg-bright overflow-hidden">
         <Header title={t('surveyTitle')} backHref="/survey" showBack={currentIdx > 0} />
 
+        {notice && (
+          <div className="absolute top-20 inset-x-0 z-40 flex justify-center px-4">
+            <div className="flex items-center gap-2 rounded-full border border-gold/40 bg-surface/95 backdrop-blur px-4 py-2 shadow-card animate-fade-up">
+              <svg className="w-4 h-4 text-gold shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              <span className={`text-xs text-fg-bright ${language === 'my' ? 'font-myanmar' : ''}`}>{t('surveyUpdated')}</span>
+            </div>
+          </div>
+        )}
+
         <div className="relative mx-auto max-w-xl px-4 py-8">
           <div className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 w-[420px] h-[260px] rounded-full bg-gold/[0.07] blur-[110px]" />
 
@@ -397,6 +428,17 @@ export default function SurveyPage() {
   return (
     <div className={`min-h-screen bg-navy text-fg-bright transition-opacity duration-300 overflow-hidden ${ready ? 'opacity-100' : 'opacity-0'}`}>
       <Header title={t('surveyTitle')} backHref="/info" showBack={currentIdx > 0} />
+
+      {notice && (
+        <div className="absolute top-20 inset-x-0 z-40 flex justify-center px-4">
+          <div className="flex items-center gap-2 rounded-full border border-gold/40 bg-surface/95 backdrop-blur px-4 py-2 shadow-card animate-fade-up">
+            <svg className="w-4 h-4 text-gold shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            <span className={`text-xs text-fg-bright ${language === 'my' ? 'font-myanmar' : ''}`}>{t('surveyUpdated')}</span>
+          </div>
+        </div>
+      )}
 
       <div className="relative mx-auto max-w-xl px-4 pb-10">
         <div className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 w-[420px] h-[260px] rounded-full bg-gold/[0.06] blur-[110px]" />

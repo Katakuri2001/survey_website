@@ -927,10 +927,19 @@ app.post('/admin/survey/questions', authMiddleware, adminMiddleware, async (c) =
   }
 
   const id = generateId();
+  let order = displayOrder;
+  if (!order) {
+    // Auto-append new questions to the end of their version so they always
+    // appear on the client instead of silently colliding at display_order 0.
+    const maxOrder = await db.prepare(`
+      SELECT MAX(display_order) as m FROM survey_questions WHERE survey_version_id = ?
+    `).bind(surveyVersionId).first() as any;
+    order = ((maxOrder?.m as number) ?? -1) + 1;
+  }
   await db.prepare(`
     INSERT INTO survey_questions (id, survey_version_id, question_text, question_type, is_required, display_order, validation_rules)
     VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).bind(id, surveyVersionId, questionText, questionType || 'single_choice', isRequired !== false, displayOrder || 0, validationRules || null).run();
+  `).bind(id, surveyVersionId, questionText, questionType || 'single_choice', isRequired !== false, order, validationRules || null).run();
 
   // Add translations
   if (translations) {

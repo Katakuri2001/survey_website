@@ -180,7 +180,8 @@ function QuestionModal({
         options: [],
       }
     }
-    return { ...emptyQuestionForm }
+    const activeVersion = versions.find(v => v.is_active)
+    return { ...emptyQuestionForm, surveyVersionId: activeVersion?.id || '' }
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -284,7 +285,7 @@ function QuestionModal({
               <option value="">Select a version</option>
               {versions.map(v => (
                 <option key={v.id} value={v.id}>
-                  {v.title} ({v.product_name})
+                  {v.title} ({v.product_name}){v.is_active ? ' — ACTIVE' : ''}
                 </option>
               ))}
             </select>
