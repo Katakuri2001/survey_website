@@ -42,6 +42,8 @@ interface QuestionFormData {
   validationRules: string
   translations: Record<string, string>
   options: { text: string; value: string; translations: Record<string, string> }[]
+  imageUrl: string
+  productType: string
 }
 
 interface VersionFormData {
@@ -71,6 +73,8 @@ const emptyQuestionForm: QuestionFormData = {
   validationRules: '',
   translations: { en: '', my: '' },
   options: [],
+  imageUrl: '',
+  productType: 'none',
 }
 
 const emptyVersionForm: VersionFormData = {
@@ -178,6 +182,8 @@ function QuestionModal({
         validationRules: question.validation_rules || '',
         translations: { en: question.question_text, my: '' },
         options: [],
+        imageUrl: question.image_url || '',
+        productType: question.product_type || 'none',
       }
     }
     const activeVersion = versions.find(v => v.is_active)
@@ -190,6 +196,14 @@ function QuestionModal({
 
   function updateField(field: keyof QuestionFormData, value: string | number | boolean) {
     setForm(prev => ({ ...prev, [field]: value }))
+  }
+
+  function updateImageUrl(value: string) {
+    setForm(prev => ({ ...prev, imageUrl: value }))
+  }
+
+  function updateProductType(value: string) {
+    setForm(prev => ({ ...prev, productType: value }))
   }
 
   function updateTranslation(lang: string, value: string) {
@@ -316,39 +330,63 @@ function QuestionModal({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Question Type *</label>
-              <select
-                value={form.questionType}
-                onChange={e => updateField('questionType', e.target.value)}
-                className="input"
-              >
-                {questionTypes.map(qt => (
-                  <option key={qt.value} value={qt.value}>
-                    {qt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Display Order</label>
-              <input
-                type="number"
-                value={form.displayOrder}
-                onChange={e => updateField('displayOrder', parseInt(e.target.value) || 0)}
-                className="input"
-                min="0"
-              />
-            </div>
-          </div>
+<div className="grid grid-cols-2 gap-4">
+             <div>
+               <label className="mb-1 block text-sm font-medium text-slate-700">Question Type *</label>
+               <select
+                 value={form.questionType}
+                 onChange={e => updateField('questionType', e.target.value)}
+                 className="input"
+               >
+                 {questionTypes.map(qt => (
+                   <option key={qt.value} value={qt.value}>
+                     {qt.label}
+                   </option>
+                 ))}
+               </select>
+             </div>
+             <div>
+               <label className="mb-1 block text-sm font-medium text-slate-700">Display Order</label>
+               <input
+                 type="number"
+                 value={form.displayOrder}
+                 onChange={e => updateField('displayOrder', parseInt(e.target.value) || 0)}
+                 className="input"
+                 min="0"
+               />
+             </div>
+           </div>
 
-          <div className="flex items-center gap-3">
-            <Toggle checked={form.isRequired} onChange={() => updateField('isRequired', !form.isRequired)} />
-            <span className="text-sm font-medium text-slate-700">Required</span>
-          </div>
+           <div className="grid grid-cols-2 gap-4">
+             <div>
+               <label className="mb-1 block text-sm font-medium text-slate-700">Product Type</label>
+               <select
+                 value={form.productType}
+                 onChange={e => updateProductType(e.target.value)}
+                 className="input"
+               >
+                 <option value="none">None</option>
+                 <option value="photo">Photo Selection</option>
+               </select>
+             </div>
+             <div>
+               <label className="mb-1 block text-sm font-medium text-slate-700">Product Image URL</label>
+               <input
+                 type="text"
+                 value={form.imageUrl}
+                 onChange={e => updateImageUrl(e.target.value)}
+                 className="input"
+                 placeholder="https://example.com/product.jpg"
+               />
+             </div>
+           </div>
 
-          {(form.questionType === 'multiple_choice' || form.questionType === 'single_choice') && (
+           <div className="flex items-center gap-3">
+             <Toggle checked={form.isRequired} onChange={() => updateField('isRequired', !form.isRequired)} />
+             <span className="text-sm font-medium text-slate-700">Required</span>
+           </div>
+
+           {(form.questionType === 'multiple_choice' || form.questionType === 'single_choice') && (
             <div>
               <div className="mb-2 flex items-center justify-between">
                 <label className="text-sm font-medium text-slate-700">Options</label>
@@ -716,6 +754,8 @@ export default function SurveysPage() {
           isRequired: formData.isRequired,
           displayOrder: formData.displayOrder,
           translations: formData.translations,
+          imageUrl: formData.imageUrl,
+          productType: formData.productType,
         }),
       })
       const data = await res.json()

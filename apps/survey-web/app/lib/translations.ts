@@ -20,11 +20,10 @@ export const translations = {
 
     // Landing hero
     heroEyebrow: 'Myanmar Beer Survey & Rewards Program',
-    heroTitleLine1: 'Good Beer',
-    heroTitleLine2: 'Better Moments',
-    heroDesc: 'Share your opinion, spin the wheel, and win a reward — the survey is free and takes just a few minutes.',
-    heroCtaSurvey: 'Start Survey',
-    heroCtaProducts: 'View Products',
+    heroTitleLine1: 'Myanmar Beer and Together',
+    heroTitleLine2: 'Building Better Moments',
+    heroDesc: 'Your Voice, Your Reward.\nAfter spinning the wheel, claim your rewards.',
+heroCtaSurvey: 'Start Survey',
     heroBadge: 'Free delivery across Myanmar',
     scrollHint: 'Scroll to explore',
     ourProducts: 'Our Products',
@@ -36,7 +35,7 @@ export const translations = {
     productAndaman: 'Andaman Smooth & Refreshing',
     productAndamanDesc: 'Light, crisp and refreshing — perfect for every moment.',
     takeSurvey: 'Take This Survey',
-    howItWorks: 'How It Works',
+    howItWorks: 'How to Win',
     stepSurvey: 'Take the survey',
     stepSurveyDesc: 'Answer a few quick questions about your favourite beer.',
     stepSpin: 'Spin the wheel',
@@ -44,7 +43,7 @@ export const translations = {
     stepReceive: 'Get your reward',
     stepReceiveDesc: 'Your prize is credited to you instantly.',
     voiceTitle: 'Your Voice, Your Reward',
-    voiceDesc: 'Every opinion shapes the beers we brew for you.',
+    voiceDesc: 'Your Voice, Your Reward.\nYour opinions shape the beers we brew for you.',
     joinNow: 'Join the survey',
     footerRights: 'Myanmar Survey & Rewards Platform',
 
@@ -101,6 +100,7 @@ export const translations = {
     selectMultiple: 'Select all that apply',
     taste: 'Taste',
     tasteTest: 'Taste Test',
+    product: 'Product',
     answered: 'Answered',
     
     // Survey Questions
@@ -220,14 +220,16 @@ export const translations = {
     
     // Landing hero
     heroEyebrow: 'မြန်မာဘီယာ စစ်တမ်းနှင့် ဆုလက်ဆောင်အစီအစဉ်',
-    heroTitleLine1: 'ဘီယာကောင်း',
-    heroTitleLine2: 'ပိုမိုကောင်းမွန်သော အခိုက်အတန့်များ',
-    heroDesc: 'သင့်အမြင်ကို မျှဝေပါ၊ ဘီးလှည့်ပါ၊ ဆုလက်ဆောင်ရယူလိုက်ပါ — စစ်တမ်းသည် အခမဲ့ဖြစ်ပြီး မိနစ်အနည်းငယ်သာ ကြာပါမည်။',
+    heroTitleLine1: 'မြန်မာဘီယာနှင့် အတူ',
+    heroTitleLine2: 'ပိုမိုကောင်းမွန်သော အမှတ်တရများကို ဖန်တီးလိုက်ပါ',
+    heroDesc: 'သင်၏ အမြင်ကိုမျှဝေလိုက်ပါ။\nSpin Wheel လှည့်ပီးနောက် ဆုလက်ဆောင်များ ရယူလိုက်ပါ။',
     heroCtaSurvey: 'စစ်တမ်းဖြည့်ပါ',
-    heroCtaProducts: 'ထုတ်ကုန်များကြည့်ပါ',
     scrollHint: 'အောက်သို့ ဆက်ကြည့်ရန်',
-    ourProducts: 'ကျွန်ုပ်တို့၏ ထုတ်ကုန်များ',
-    ourProductsDesc: 'မြန်မာ့ထက်မြက်သော ဘီယာအမျိုးအစားများ — တစ်ခုချင်းစီတွင် ထူးခြားသော အရသာရှိသည်။',
+    howItWorks: 'ဆုရယူရန် အဆင့်များ',
+    stepSpin: 'ကံစမ်းပါ',
+    stepSpinDesc: 'ကံစမ်းသည် ပြီးပါပြီ',
+    stepReceive: 'ဆုလက်ဆောင်ကို ရယူလိုက်ပါ',
+    stepReceiveDesc: 'ဆုလက်ဆောင်များအား ချက်ချင်းလက်ခံရယူနိုင်ပါသည်။',
     productDagon: 'ဒဂုံ လာဂါဘီယာ',
     productDagonDesc: 'မြန်မာနိုင်ငံနှင့် ကြီးပြင်းခဲ့သော ရိုးရာ လာဂါဘီယာ',
     productPremium: 'Myanmar Beer Premium',
@@ -235,15 +237,6 @@ export const translations = {
     productAndaman: 'Andaman Smooth & Refreshing',
     productAndamanDesc: 'ပေါ့ပါးသန့်ရှင်းပြီး လန်းဆန်းမှုကို ပေးစွမ်းသည်',
     takeSurvey: 'စစ်တမ်းဖြည့်ရန်',
-    howItWorks: 'လုပ်ဆောင်ပုံ',
-    stepSurvey: 'စစ်တမ်းဖြည့်ပါ',
-    stepSurveyDesc: 'သင့်အကြိုက်ဆုံးဘီယာအကြောင်း မေးခွန်းအနည်းငယ်ဖြေပါ။',
-    stepSpin: 'ဘီးလှည့်ပါ',
-    stepSpinDesc: 'ဆုရယူပြီး ချက်ချင်းဆောင်ရွက်ပါ။',
-    stepReceive: 'သင့်ဆုကို ရယူလိုက်ပါ',
-    stepReceiveDesc: 'သင့်ဆုကို ချက်ချင်းပေး အသိအမှတ်ပြုပါသည်။',
-    voiceTitle: 'သင့်အသံ၊ သင့်ဆု',
-    voiceDesc: 'သင့်ထင်မြင်ချက်တိုင်းက ကျွန်ုပ်တို့ချက်သော ဘီယာများကို တိုးတက်စေသည်။',
     joinNow: 'စစ်တမ်းတွင် ပါဝင်ပါ',
     footerRights: 'မြန်မာ စစ်တမ်းနှင့် ဆုလက်ဆောင် ပလက်ဖောင်း',
 
@@ -261,7 +254,7 @@ export const translations = {
     email: 'အီးမေးလ်',
     password: 'စကားဝှက်',
     confirmPassword: 'စကားဝှက် အတည်ပြုရန်',
-    fullName: 'အပြည့်အစုံအမည်',
+    fullName: 'နာမည်အပြည့်အစုံ',
     phone: 'ဖုန်းနံပါတ်',
     loginWithGmail: 'Gmail ဖြင့် ဝင်ရောက်ပါ',
     orContinueWith: 'သို့မဟုတ် ဆက်လက်ဆောင်ရွက်ပါ',
@@ -300,6 +293,7 @@ export const translations = {
     selectMultiple: 'လိုသည်များ ရွေးချယ်ပါ',
     taste: 'အရသာ',
     tasteTest: 'အရသာစမ်းသပ်မှု',
+    product: 'ထုတ်ကုန်',
     answered: 'ဖြေပြီးပါပြီ',
     
     // Survey Questions
@@ -395,7 +389,7 @@ export const translations = {
     failedToSubmit: 'တင်သွင်းရန် မအောင်မြင်ပါ',
     failedToLoad: 'မေးခွန်းများ ဖွင့်ရန် မအောင်မြင်ပါ',
     spinFailed: 'လှည့်ရန် မအောင်မြင်ပါ',
-    fullNamePlaceholder: 'သင့်အပြည့်အစုံအမည် ထည့်ပါ',
+    fullNamePlaceholder: 'နာမည်အပြည့်အစုံ ထည့်ပါ',
     thankYou: 'ပါဝင်ဆောင်ရွက်မှုအတွက် ကျေးဇူးတင်ပါတယ်!',
   }
 }

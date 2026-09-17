@@ -21,6 +21,14 @@ interface Question {
   display_order: number
   validation_rules: string | null
   options?: Option[]
+  image_url?: string | null
+  product_type?: string | null
+}
+
+interface ProductInfo {
+  id: string
+  name: string
+  image_url?: string | null
 }
 
 interface Answer {
@@ -55,6 +63,7 @@ export default function SurveyPage() {
   const { t, language } = useLanguage()
   const router = useRouter()
   const [questions, setQuestions] = useState<Question[]>([])
+  const [products, setProducts] = useState<Record<string, { name: string; image_url?: string | null }>>({})
   const [currentIdx, setCurrentIdx] = useState(0)
   const [answers, setAnswers] = useState<Record<string, Answer>>({})
   const [loading, setLoading] = useState(true)
@@ -170,6 +179,20 @@ export default function SurveyPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [language, productId, guarded])
+
+  useEffect(() => {
+    if (!guarded) return
+    fetch(`${API_BASE}/products?lang=${language}`, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success && data.data) {
+          const map: Record<string, { name: string; image_url?: string | null }> = {}
+          for (const p of data.data) map[p.id] = { name: p.name, image_url: p.image_url }
+          setProducts(map)
+        }
+      })
+      .catch(() => {})
+  }, [language, guarded])
 
   const handleChoice = (questionId: string, value: string) => {
     setAnswers(prev => ({ ...prev, [questionId]: { questionId, type: 'single_choice', value } }))
@@ -485,6 +508,20 @@ export default function SurveyPage() {
               <h2 className={`font-display text-xl md:text-2xl font-bold text-white mb-2 leading-snug ${language === 'my' ? 'font-myanmar' : ''}`}>
                 {current.question_text}
               </h2>
+
+              {/* --- product photo card --- */}
+              {current.product_type === 'photo' && (
+                <div className="mt-4 rounded-2xl border border-gold/20 bg-surface/80 overflow-hidden animate-fade-up">
+                  {current.image_url && (
+                    <img src={current.image_url} alt="Product" className="w-full h-48 object-cover" />
+                  )}
+                  <div className="p-4">
+                    <p className={`font-display font-bold text-white ${language === 'my' ? 'font-myanmar' : ''}`}>
+                      {t('product')}
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* --- rating --- */}
               {current.question_type === 'rating' && (

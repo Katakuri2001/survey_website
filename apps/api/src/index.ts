@@ -447,12 +447,12 @@ app.get('/survey/questions/:productId', async (c) => {
 
   // Get questions with translations
   const questions = await db.prepare(`
-    SELECT q.id, q.question_type, q.is_required, q.display_order, q.validation_rules,
+    SELECT q.id, q.question_type, q.is_required, q.display_order, q.validation_rules, q.image_url, q.product_type,
            COALESCE(qt.question_text, q.question_text) as question_text
-    FROM survey_questions q
-    LEFT JOIN survey_question_translations qt ON q.id = qt.question_id AND qt.language = ?
-    WHERE q.survey_version_id = ? AND q.is_active = 1
-    ORDER BY q.display_order
+     FROM survey_questions q
+     LEFT JOIN survey_question_translations qt ON q.id = qt.question_id AND qt.language = ?
+     WHERE q.survey_version_id = ? AND q.is_active = 1
+     ORDER BY q.display_order
   `).bind(lang, version.id).all();
 
   // Get options for each question
@@ -594,13 +594,13 @@ app.get('/rewards', async (c) => {
   const lang = c.req.query('lang') || 'en';
 
   const rewards = await db.prepare(`
-    SELECT r.id, r.name, r.description, r.image_url, r.weight, r.status,
-           COALESCE(rt.name, r.name) as name,
-           COALESCE(rt.description, r.description) as description
-    FROM rewards r
-    LEFT JOIN reward_translations rt ON r.id = rt.reward_id AND rt.language = ?
-    WHERE r.is_active = 1 AND r.remaining_quantity > 0 AND r.status != 'EXHAUSTED' AND r.status != 'PAUSED'
-    ORDER BY r.weight DESC
+SELECT r.id, r.name, r.description, r.image_url, r.weight, r.status, r.winning_ratio,
+       COALESCE(rt.name, r.name) as name,
+       COALESCE(rt.description, r.description) as description
+     FROM rewards r
+     LEFT JOIN reward_translations rt ON r.id = rt.reward_id AND rt.language = ?
+     WHERE r.is_active = 1 AND r.remaining_quantity > 0 AND r.status != 'EXHAUSTED' AND r.status != 'PAUSED'
+     ORDER BY r.weight DESC
   `).bind(lang).all();
 
   return jsonSuccess(rewards.results);
@@ -634,10 +634,10 @@ app.post('/rewards/spin', authMiddleware, async (c) => {
   }
 
   const rewards = await db.prepare(`
-    SELECT id, name, weight, remaining_quantity FROM rewards
+    SELECT id, name, weight, remaining_quantity, winning_ratio
+    FROM rewards
     WHERE is_active = 1 AND remaining_quantity > 0 AND status != 'EXHAUSTED' AND status != 'PAUSED'
     AND (campaign_id = ? OR campaign_id IS NULL OR ? = 'default')
-    ORDER BY weight DESC
   `).bind(campaignKey, campaignKey).all();
 
   if (!rewards.results || (rewards.results as any[]).length === 0) {
@@ -645,17 +645,34 @@ app.post('/rewards/spin', authMiddleware, async (c) => {
     return jsonError('No rewards available');
   }
 
-  const totalWeight = (rewards.results as any[]).reduce((sum, r) => sum + r.weight, 0);
+  let selectedReward;
+  const rewardsWithRatio = (rewards.results as any[]).filter(r => r.winning_ratio != null);
+  const rewardsWithoutRatio = (rewards.results as any[]).filter(r => r.winning_ratio == null);
 
-  let random = Math.random() * totalWeight;
-  let selectedReward = (rewards.results as any[])[0];
-
-  for (const reward of rewards.results as any[]) {
-    random -= reward.weight;
-    if (random <= 0) {
-      selectedReward = reward;
-      break;
+  if (rewardsWithRatio.length > 0) {
+    const totalRatio = rewardsWithRatio.reduce((sum, r) => sum + r.winning_ratio, 0);
+    const random = Math.random() * totalRatio;
+    let acc = 0;
+    for (const reward of rewardsWithRatio) {
+      acc += reward.winning_ratio;
+      if (random <= acc) { selectedReward = reward; break; }
     }
+    if (!selectedReward) selectedReward = rewardsWithRatio[rewardsWithRatio.length - 1];
+    // If stock is out for the selected ratio reward, fall back to remaining rewards
+    if (selectedReward.remaining_quantity <= 0) {
+      const fallback = rewardsWithoutRatio.length > 0 ? rewardsWithoutRatio[0] : rewardsWithRatio.find(r => r.remaining_quantity > 0);
+      if (fallback) selectedReward = fallback;
+    }
+  } else {
+    const totalWeight = (rewards.results as any[]).reduce((sum, r) => sum + r.weight, 0);
+    let random = Math.random() * totalWeight;
+    selectedReward = (rewards.results as any[])[0];
+    for (const reward of rewards.results as any[]) {
+      random -= reward.weight;
+      if (random <= 0) { selectedReward = reward; break; }
+    }
+    // Fallback if no reward found
+    if (!selectedReward) selectedReward = (rewards.results as any[])[0];
   }
 
   const result = await db.prepare(`
@@ -939,7 +956,7 @@ app.get('/admin/survey/questions', authMiddleware, adminMiddleware, async (c) =>
 app.post('/admin/survey/questions', authMiddleware, adminMiddleware, async (c) => {
   const db = c.env.survey_db;
   const body = await c.req.json();
-  const { surveyVersionId, questionText, questionType, isRequired, displayOrder, validationRules, translations, options } = body;
+  const { surveyVersionId, questionText, questionType, isRequired, displayOrder, validationRules, translations, options, imageUrl, productType } = body;
 
   if (!surveyVersionId || !questionText) {
     return jsonError('Survey version ID and question text are required');
@@ -956,9 +973,9 @@ app.post('/admin/survey/questions', authMiddleware, adminMiddleware, async (c) =
     order = ((maxOrder?.m as number) ?? -1) + 1;
   }
   await db.prepare(`
-    INSERT INTO survey_questions (id, survey_version_id, question_text, question_type, is_required, display_order, validation_rules)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).bind(id, surveyVersionId, questionText, questionType || 'single_choice', isRequired !== false, order, validationRules || null).run();
+    INSERT INTO survey_questions (id, survey_version_id, question_text, question_type, is_required, display_order, validation_rules, image_url, product_type)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(id, surveyVersionId, questionText, questionType || 'single_choice', isRequired !== false, order, validationRules || null, imageUrl || null, productType || 'none').run();
 
   // Add translations
   if (translations) {
@@ -1006,7 +1023,7 @@ app.patch('/admin/survey/questions/:id', authMiddleware, adminMiddleware, async 
   const id = c.req.param('id');
   const body = await c.req.json();
 
-  const { questionText, questionType, isRequired, displayOrder, isActive, validationRules, translations } = body;
+  const { questionText, questionType, isRequired, displayOrder, isActive, validationRules, translations, imageUrl, productType } = body;
 
   await db.prepare(`
     UPDATE survey_questions SET
@@ -1016,9 +1033,11 @@ app.patch('/admin/survey/questions/:id', authMiddleware, adminMiddleware, async 
       display_order = COALESCE(?, display_order),
       is_active = COALESCE(?, is_active),
       validation_rules = COALESCE(?, validation_rules),
+      image_url = COALESCE(?, image_url),
+      product_type = COALESCE(?, product_type),
       updated_at = datetime('now')
     WHERE id = ?
-  `).bind(questionText || null, questionType || null, orNull(isRequired), orNull(displayOrder), orNull(isActive), validationRules || null, id).run();
+  `).bind(questionText || null, questionType || null, orNull(isRequired), orNull(displayOrder), orNull(isActive), validationRules || null, imageUrl || null, productType || null, id).run();
 
   // Update translations
   if (translations) {
@@ -1244,7 +1263,7 @@ app.patch('/admin/rewards/:id', authMiddleware, adminMiddleware, async (c) => {
   const id = c.req.param('id');
   const body = await c.req.json();
 
-  const { name, description, imageUrl, weight, lowStockThreshold, isActive, status, campaignId, translations } = body;
+  const { name, description, imageUrl, weight, lowStockThreshold, isActive, status, campaignId, translations, winningRatio } = body;
 
   await db.prepare(`
     UPDATE rewards SET
@@ -1256,9 +1275,10 @@ app.patch('/admin/rewards/:id', authMiddleware, adminMiddleware, async (c) => {
       is_active = COALESCE(?, is_active),
       status = COALESCE(?, status),
       campaign_id = COALESCE(?, campaign_id),
+      winning_ratio = COALESCE(?, winning_ratio),
       updated_at = datetime('now')
     WHERE id = ?
-  `).bind(name || null, description || null, imageUrl || null, orNull(weight), orNull(lowStockThreshold), orNull(isActive), orNull(status), orNull(campaignId), id).run();
+  `).bind(name || null, description || null, imageUrl || null, orNull(weight), orNull(lowStockThreshold), orNull(isActive), orNull(status), orNull(campaignId), orNull(winningRatio), id).run();
 
   if (translations) {
     for (const [lang, data] of Object.entries(translations) as any) {
@@ -1355,6 +1375,55 @@ app.get('/admin/rewards/history', authMiddleware, adminMiddleware, async (c) => 
   const total = await db.prepare('SELECT COUNT(*) as count FROM user_rewards').first();
 
   return jsonSuccess({ history: history.results, total: (total as any)?.count || 0 });
+});
+
+// ============================================================
+// PRODUCTS (for survey page to fetch product data with images)
+// ============================================================
+
+app.get('/products', async (c) => {
+  const db = c.env.survey_db;
+  const lang = c.req.query('lang') || 'en';
+
+  const products = await db.prepare(`
+    SELECT p.id, p.name, p.description, p.brand, p.image_url, p.display_order
+    FROM products p
+    WHERE p.is_active = 1
+    ORDER BY p.display_order
+  `).all();
+
+  return jsonSuccess(products.results);
+});
+
+// ============================================================
+// EXCEL EXPORT FOR USER SURVEY DETAILS
+// ============================================================
+
+app.get('/admin/surveys/export', authMiddleware, adminMiddleware, async (c) => {
+  const db = c.env.survey_db;
+  const limit = parseInt(c.req.query('limit') || '500');
+  const offset = parseInt(c.req.query('offset') || '0');
+
+  const data = await db.prepare(`
+    SELECT ur.id, u.full_name, u.email, u.phone,
+           r.name as reward_name, r.image_url as reward_image_url,
+           rs.won_at, ur.delivery_status, ur.delivered_at,
+           sr.id as survey_response_id, sr.language, sr.completed_at,
+           sq.question_text, sa.answer_text, sa.answer_choice, sa.answer_number, sa.answer_rating
+    FROM user_rewards ur
+    JOIN users u ON ur.user_id = u.id
+    JOIN rewards r ON ur.reward_id = r.id
+    JOIN reward_spins rs ON ur.reward_spin_id = rs.id
+    LEFT JOIN survey_responses sr ON sr.user_id = u.id
+    LEFT JOIN survey_answers sa ON sa.response_id = sr.id
+    LEFT JOIN survey_questions sq ON sa.question_id = sq.id
+    ORDER BY ur.won_at DESC
+    LIMIT ? OFFSET ?
+  `).bind(limit, offset).all();
+
+  const total = await db.prepare('SELECT COUNT(*) as count FROM user_rewards').first();
+
+  return jsonSuccess({ data: data.results, total: (total as any)?.count || 0 });
 });
 
 // ============================================================
