@@ -316,17 +316,25 @@ app.post('/users/guest', async (c) => {
   let userId: string;
   if (existing) {
     userId = existing.id;
-    await db.prepare(`
+    const result = await db.prepare(`
       UPDATE users SET full_name = ?, age = ?, age_group = ?, dob = ?, nrc_state = ?, nrc_township = ?, nrc_type = ?, nrc_number = ?, updated_at = datetime('now')
       WHERE id = ?
     `).bind(fullName, age, ageGroup, dob || null, nrcState || null, nrcTownship || null, nrcType || null, nrcNumber || null, userId).run();
+    if (result.error) {
+      console.error('Update user error:', result.error);
+      return jsonError('Failed to update user');
+    }
   } else {
     userId = generateId();
     const passwordHash = await hashPassword(crypto.randomUUID());
-    await db.prepare(`
+    const result = await db.prepare(`
       INSERT INTO users (id, full_name, phone, password_hash, age, age_group, dob, nrc_state, nrc_township, nrc_type, nrc_number, is_active)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
     `).bind(userId, fullName, phone, passwordHash, age, ageGroup, dob || null, nrcState || null, nrcTownship || null, nrcType || null, nrcNumber || null).run();
+    if (result.error) {
+      console.error('Insert user error:', result.error);
+      return jsonError('Failed to create user');
+    }
   }
 
   const token = await createToken(userId, 'user', getJwtSecret(c.env));

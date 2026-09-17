@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "buildCommand": "npm run build",
+  "devCommand": "npm run dev",
+  "installCommand": "npm install",
+  "framework": "nextjs",
+  "outputDirectory": "apps/survey-web/.next",
+  "github": {
+    "enabled": true,
+    "autoAlias": true,
+    "silent": false
+  },
+  "projects": {
+    "survey-website": {
+      "name": "survey-website",
+      "directory": "apps/survey-web",
+      "framework": "nextjs"
+    },
+    "survey-admin": {
+      "name": "survey-admin",
+      "directory": "apps/admin-web",
+      "framework": "nextjs"
+    }
+  }
+}
