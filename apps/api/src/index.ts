@@ -645,34 +645,41 @@ app.post('/rewards/spin', authMiddleware, async (c) => {
     return jsonError('No rewards available');
   }
 
-  let selectedReward;
-  const rewardsWithRatio = (rewards.results as any[]).filter(r => r.winning_ratio != null);
-  const rewardsWithoutRatio = (rewards.results as any[]).filter(r => r.winning_ratio == null);
+  const allRewards = rewards.results as any[];
+  const rewardsWithRatio = allRewards.filter(r => r.winning_ratio != null);
+  const rewardsWithoutRatio = allRewards.filter(r => r.winning_ratio == null);
 
+  let pool: { reward: any; weight: number }[];
   if (rewardsWithRatio.length > 0) {
-    const totalRatio = rewardsWithRatio.reduce((sum, r) => sum + r.winning_ratio, 0);
-    const random = Math.random() * totalRatio;
-    let acc = 0;
-    for (const reward of rewardsWithRatio) {
-      acc += reward.winning_ratio;
-      if (random <= acc) { selectedReward = reward; break; }
-    }
-    if (!selectedReward) selectedReward = rewardsWithRatio[rewardsWithRatio.length - 1];
-    // If stock is out for the selected ratio reward, fall back to remaining rewards
-    if (selectedReward.remaining_quantity <= 0) {
-      const fallback = rewardsWithoutRatio.length > 0 ? rewardsWithoutRatio[0] : rewardsWithRatio.find(r => r.remaining_quantity > 0);
-      if (fallback) selectedReward = fallback;
-    }
+    // Explicit ratios take their share; the remaining percentage is split
+    // across the other active rewards using the pre-existing weight method.
+    const totalRatio = rewardsWithRatio.reduce((sum, r) => sum + Number(r.winning_ratio), 0);
+    const remaining = Math.max(0, 100 - totalRatio);
+    const restWeight = rewardsWithoutRatio.reduce((sum, r) => sum + Number(r.weight || 0), 0);
+    pool = [
+      ...rewardsWithRatio.map(r => ({ reward: r, weight: Number(r.winning_ratio) })),
+      ...rewardsWithoutRatio.map(r => ({
+        reward: r,
+        weight: restWeight > 0
+          ? remaining * (Number(r.weight || 0) / restWeight)
+          : (rewardsWithoutRatio.length > 0 ? remaining / rewardsWithoutRatio.length : 0),
+      })),
+    ];
   } else {
-    const totalWeight = (rewards.results as any[]).reduce((sum, r) => sum + r.weight, 0);
-    let random = Math.random() * totalWeight;
-    selectedReward = (rewards.results as any[])[0];
-    for (const reward of rewards.results as any[]) {
-      random -= reward.weight;
-      if (random <= 0) { selectedReward = reward; break; }
-    }
-    // Fallback if no reward found
-    if (!selectedReward) selectedReward = (rewards.results as any[])[0];
+    // Default: weight-based selection (unchanged behaviour).
+    pool = allRewards.map(r => ({ reward: r, weight: Number(r.weight || 0) }));
+  }
+
+  const totalPoolWeight = pool.reduce((sum, p) => sum + p.weight, 0);
+  let random = Math.random() * (totalPoolWeight > 0 ? totalPoolWeight : 1);
+  let selectedReward = pool[0]?.reward;
+  for (const entry of pool) {
+    random -= entry.weight;
+    if (random <= 0 && entry.reward.remaining_quantity > 0) { selectedReward = entry.reward; break; }
+  }
+  if (!selectedReward || selectedReward.remaining_quantity <= 0) {
+    const inStock = allRewards.find(r => r.remaining_quantity > 0);
+    if (inStock) selectedReward = inStock;
   }
 
   const result = await db.prepare(`
