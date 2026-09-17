@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useLanguage } from '../context/LanguageContext'
 import Header from '../components/Header'
 import { API_BASE } from '../lib/api'
+import { useHydrated } from '../lib/useHydrated'
 
 interface Option {
   id: string
@@ -23,12 +24,6 @@ interface Question {
   options?: Option[]
   image_url?: string | null
   product_type?: string | null
-}
-
-interface ProductInfo {
-  id: string
-  name: string
-  image_url?: string | null
 }
 
 interface Answer {
@@ -67,7 +62,7 @@ export default function SurveyPage() {
   const [currentIdx, setCurrentIdx] = useState(0)
   const [answers, setAnswers] = useState<Record<string, Answer>>({})
   const [loading, setLoading] = useState(true)
-  const [guarded, setGuarded] = useState(false)
+  const guarded = useHydrated()
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [reviewMode, setReviewMode] = useState(false)
@@ -86,9 +81,7 @@ export default function SurveyPage() {
     const token = typeof window !== 'undefined' ? localStorage.getItem('survey_token') : null
     if (!token) {
       router.replace('/info')
-      return
     }
-    setGuarded(true)
   }, [router])
 
   useEffect(() => {
@@ -218,12 +211,7 @@ export default function SurveyPage() {
     setAnswers(prev => ({ ...prev, [questionId]: { questionId, type: 'yes_no', value } }))
   }
 
-  useEffect(() => {
-    if (questions.length === 0) return
-    if (currentIdx >= questions.length) {
-      setCurrentIdx(Math.max(questions.length - 1, 0))
-    }
-  }, [questions.length, currentIdx])
+  const idx = questions.length > 0 ? Math.min(currentIdx, questions.length - 1) : 0
 
   const isQuestionComplete = (q: Question): boolean => {
     if (!q.is_required) return true
@@ -249,7 +237,7 @@ export default function SurveyPage() {
   const canProceed = questions.length > 0 && questions.every(q => q.is_required ? isQuestionComplete(q) : true)
 
   const handleNext = () => {
-    if (currentIdx < questions.length - 1) {
+    if (idx < questions.length - 1) {
       setCurrentIdx(prev => prev + 1)
     } else {
       setReviewMode(true)
@@ -259,7 +247,7 @@ export default function SurveyPage() {
   const handlePrev = () => {
     if (reviewMode) {
       setReviewMode(false)
-    } else if (currentIdx > 0) {
+    } else if (idx > 0) {
       setCurrentIdx(prev => prev - 1)
     }
   }
@@ -314,8 +302,8 @@ export default function SurveyPage() {
   }
 
   const total = Math.max(questions.length, 1)
-  const progress = reviewMode ? 100 : ((currentIdx + 1) / total) * 100
-  const current = questions[Math.min(currentIdx, Math.max(questions.length - 1, 0))]
+  const progress = reviewMode ? 100 : ((idx + 1) / total) * 100
+  const current = questions[Math.min(idx, Math.max(questions.length - 1, 0))]
   const complete = current ? isQuestionComplete(current) : false
   const answeredCount = questions.filter(q => isQuestionComplete(q)).length
 
@@ -353,7 +341,7 @@ export default function SurveyPage() {
   if (reviewMode) {
     return (
       <div className="min-h-screen bg-navy text-fg-bright overflow-hidden">
-        <Header title={t('surveyTitle')} backHref="/survey" showBack={currentIdx > 0} />
+        <Header title={t('surveyTitle')} backHref="/survey" showBack={idx > 0} />
 
         {notice && (
           <div className="absolute top-20 inset-x-0 z-40 flex justify-center px-4">
@@ -453,7 +441,7 @@ export default function SurveyPage() {
   // ================================ QUESTION ================================
   return (
     <div className={`min-h-screen bg-navy text-fg-bright transition-opacity duration-300 overflow-hidden ${ready ? 'opacity-100' : 'opacity-0'}`}>
-      <Header title={t('surveyTitle')} backHref="/info" showBack={currentIdx > 0} />
+      <Header title={t('surveyTitle')} backHref="/info" showBack={idx > 0} />
 
       {notice && (
         <div className="absolute top-20 inset-x-0 z-40 flex justify-center px-4">
@@ -475,7 +463,7 @@ export default function SurveyPage() {
             <div className="flex items-center justify-between mb-3">
               <span className="flex items-center gap-3 text-sm text-fg-secondary">
                 <span className="w-7 h-7 rounded-lg bg-gold/15 border border-gold/30 flex items-center justify-center text-[10px] font-bold text-gold">02</span>
-                {t('question')} {currentIdx + 1} <span className="text-fg-muted">{t('of')} {total}</span>
+                {t('question')} {idx + 1} <span className="text-fg-muted">{t('of')} {total}</span>
               </span>
               <span className="text-xs font-bold text-gold px-2.5 py-1 rounded-full bg-gold/10 border border-gold/20">
                 {Math.round(progress)}%
@@ -484,7 +472,7 @@ export default function SurveyPage() {
             <div className="h-2 bg-white/[0.06] rounded-full overflow-hidden">
               <div
                 className="h-full bg-gold-gradient rounded-full transition-all duration-500 ease-out"
-                style={{ width: `${Math.max(progress, ((currentIdx + 1) / total) * 100)}%` }}
+                style={{ width: `${Math.max(progress, ((idx + 1) / total) * 100)}%` }}
               />
             </div>
           </div>
@@ -496,7 +484,7 @@ export default function SurveyPage() {
 
               <div className="flex items-center justify-between mb-4">
                 <span className="text-[10px] tracking-[0.3em] uppercase text-gold/80">
-                  {current.question_type.replace('_', ' ')} · {String(currentIdx + 1).padStart(2, '0')}
+                  {current.question_type.replace('_', ' ')} · {String(idx + 1).padStart(2, '0')}
                 </span>
                 {current.is_required && (
                   <span className="text-[10px] font-semibold uppercase tracking-widest text-warning px-2.5 py-1 rounded-full bg-warning/10 border border-warning/30">
@@ -658,7 +646,7 @@ export default function SurveyPage() {
           <div className="mt-6 flex gap-3">
             <button
               onClick={handlePrev}
-              disabled={currentIdx === 0 && !reviewMode}
+              disabled={idx === 0 && !reviewMode}
               aria-label={t('back')}
               className="w-14 h-14 rounded-2xl border border-white/10 bg-white/[0.04] text-fg-secondary hover:bg-white/10 hover:text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0 flex items-center justify-center"
             >
@@ -671,7 +659,7 @@ export default function SurveyPage() {
               disabled={!complete}
               className="group flex-1 py-4 bg-lager-gradient text-white rounded-2xl font-bold text-lg shadow-lager hover:shadow-lager-lg hover:scale-[1.01] transition-all inline-flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
             >
-              {currentIdx === questions.length - 1 ? t('review') : t('next')}
+              {idx === questions.length - 1 ? t('review') : t('next')}
               <svg className="w-5 h-5 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5-5 5M6 12h12" />
               </svg>

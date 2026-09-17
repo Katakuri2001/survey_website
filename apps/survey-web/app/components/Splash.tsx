@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from 'react'
 import { useLanguage } from '../context/LanguageContext'
+import { useHydrated } from '../lib/useHydrated'
 
 export default function Splash() {
   const { t, language } = useLanguage()
-  const [mounted, setMounted] = useState(false)
+  const mounted = useHydrated()
   const [visible, setVisible] = useState(() => {
     if (typeof window !== 'undefined' && sessionStorage.getItem('splashDisplayed')) {
       return false
@@ -13,16 +14,10 @@ export default function Splash() {
     return true
   })
   const [fading, setFading] = useState(false)
-  const [exiting, setExiting] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
 
   useEffect(() => {
     const fadeTimer = setTimeout(() => setFading(true), 3600)
     const hideTimer = setTimeout(() => {
-      setExiting(true)
       setVisible(false)
       sessionStorage.setItem('splashDisplayed', 'true')
     }, 4200)
@@ -32,7 +27,6 @@ export default function Splash() {
   const skip = () => {
     setFading(true)
     setTimeout(() => {
-      setExiting(true)
       setVisible(false)
       sessionStorage.setItem('splashDisplayed', 'true')
     }, 300)

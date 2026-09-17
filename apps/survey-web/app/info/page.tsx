@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useLanguage } from '../context/LanguageContext'
 import Header from '../components/Header'
 import { API_BASE } from '../lib/api'
+import { useHydrated } from '../lib/useHydrated'
 
 const DRAFT_KEY = 'survey_info_draft'
 
@@ -64,11 +65,7 @@ export default function InfoPage() {
   const [formData, setFormData] = useState(loadDraft)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [hydrated, setHydrated] = useState(false)
-
-  useEffect(() => {
-    setHydrated(true)
-  }, [])
+  const hydrated = useHydrated()
 
   useEffect(() => {
     try {
