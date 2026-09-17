@@ -108,8 +108,53 @@ export default function RewardsPage() {
   const [adjustment, setAdjustment] = useState(0);
   const [reason, setReason] = useState("");
   const [adjusting, setAdjusting] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
 
   const historyLimit = 50;
+
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+    if (!allowedTypes.includes(file.type)) {
+      setUploadError('Invalid file type. Only JPEG, PNG, WebP, and GIF are allowed')
+      return
+    }
+
+    const maxSize = 5 * 1024 * 1024
+    if (file.size > maxSize) {
+      setUploadError('File too large. Maximum size is 5MB')
+      return
+    }
+
+    setUploading(true)
+    setUploadError('')
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('type', 'reward')
+      if (editingReward) {
+        formData.append('entityId', editingReward.id)
+      }
+
+      const res = await fetch(`${API_BASE}/admin/upload`, { method: 'POST', headers: adminHeaders(), body: formData })
+      const data = await res.json()
+
+      if (data.success) {
+        setForm(prev => ({ ...prev, imageUrl: data.url }))
+        setUploadError('')
+      } else {
+        setUploadError(data.message || 'Failed to upload image')
+      }
+    } catch {
+      setUploadError('Could not connect to the server')
+    } finally {
+      setUploading(false)
+    }
+  }
 
   const fetchRewards = useCallback(async () => {
     const res = await fetch(`${API_BASE}/admin/rewards`, { headers: adminHeaders() });
@@ -576,6 +621,11 @@ export default function RewardsPage() {
                 </h2>
               </div>
               <div className="space-y-4 px-6 py-4">
+                {(uploadError || error) && (
+                  <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+                    {uploadError || error}
+                  </div>
+                )}
                 <div>
                   <label className="mb-1 block text-sm font-medium text-slate-700">Name (English) *</label>
                   <input
@@ -613,13 +663,39 @@ export default function RewardsPage() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">Image URL</label>
-                  <input
-                    type="url"
-                    value={form.imageUrl}
-                    onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
-                    className="input"
-                  />
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Reward Image</label>
+                  <div className="space-y-3">
+                    {form.imageUrl && (
+                      <div className="relative w-full max-w-xs">
+                        <img
+                          src={form.imageUrl}
+                          alt="Reward preview"
+                          className="w-full h-48 object-cover rounded-lg border border-slate-200"
+                        />
+                      </div>
+                    )}
+                    <label className="cursor-pointer">
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/gif"
+                        onChange={handleImageUpload}
+                        className="sr-only"
+                        disabled={uploading || saving}
+                      />
+                      <div className={`border-2 border-dashed rounded-xl p-6 text-center transition-colors ${
+                        form.imageUrl ? 'border-slate-300 bg-slate-50' : 'border-gold/50 bg-gold/5'
+                      }`}>
+                        <svg className="mx-auto h-10 w-10 text-gold-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        <p className="mt-2 text-sm font-medium text-slate-700">
+                          {form.imageUrl ? 'Click to change image' : 'Click to upload image'}
+                        </p>
+                        <p className="text-xs text-slate-500">JPEG, PNG, WebP, GIF up to 5MB</p>
+                        {uploading && <p className="mt-2 text-sm text-gold-600">Uploading...</p>}
+                      </div>
+                    </label>
+                  </div>
                 </div>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                   <div>

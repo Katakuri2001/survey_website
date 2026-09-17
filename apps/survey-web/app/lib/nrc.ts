@@ -86,8 +86,8 @@ export function getAllStates() {
 // NRC Type options (stable codes with localized labels)
 export const NRC_TYPES = [
   { code: 'N', labelEn: 'National', labelMy: 'နိုင်' },
-  { code: 'E', labelEn: 'Associate', labelMy: 'ဧည့်နိုင်' },
-  { code: 'P', labelEn: 'Passport', labelMy: 'ပာစပոՏ' },
+  { code: 'E', labelEn: 'Associate', labelMy: 'ဧည့်' },
+  { code: 'P', labelEn: 'Passport', labelMy: 'ဧည့်' },
   { code: 'NRC', labelEn: 'NRC', labelMy: 'NRC' },
 ] as const
 

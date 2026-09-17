@@ -197,7 +197,17 @@ export default function NrcInput({ value, onChange, disabled = false, required =
       )}
 
       {/* Example */}
-      <p className="text-xs text-fg-muted text-center">{t('nrcExample')}</p>
+      {isValid && (
+        <p className="text-xs text-success text-center flex items-center justify-center gap-1">
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+          </svg>
+          <span>{t('valid')}</span>
+        </p>
+      )}
+      {!isValid && (
+        <p className="text-xs text-fg-muted text-center">{t('nrcExample')}</p>
+      )}
     </div>
   )
 }

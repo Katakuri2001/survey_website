@@ -58,6 +58,7 @@ interface RewardHistory {
 }
 
 const ITEMS_PER_PAGE = 50
+const MAX_LIMIT = 1000
 
 interface SurveyExportRow {
   id: string
@@ -77,6 +78,35 @@ interface SurveyExportRow {
   answer_rating: number | null
 }
 
+interface UserSurveyExportRow {
+  user_id: string
+  full_name: string
+  email: string
+  phone: string
+  age: number | null
+  age_group: string | null
+  gender: string | null
+  city: string | null
+  township: string | null
+  occupation: string | null
+  user_created_at: string
+  response_id: string | null
+  product_id: string | null
+  product_name: string | null
+  language: string | null
+  response_status: string | null
+  completed_at: string | null
+  response_created_at: string | null
+  question_id: string | null
+  question_text: string | null
+  question_type: string | null
+  question_order: number | null
+  answer_text: string | null
+  answer_choice: string | null
+  answer_number: number | null
+  answer_rating: number | null
+}
+
 const surveyExportColumns: ExcelColumn<SurveyExportRow>[] = [
   { header: 'Reward ID', value: r => r.id },
   { header: 'Full Name', value: r => r.full_name },
@@ -89,6 +119,35 @@ const surveyExportColumns: ExcelColumn<SurveyExportRow>[] = [
   { header: 'Language', value: r => r.language },
   { header: 'Completed At', value: r => r.completed_at },
   { header: 'Question', value: r => r.question_text },
+  { header: 'Answer Text', value: r => r.answer_text },
+  { header: 'Answer Choice', value: r => r.answer_choice },
+  { header: 'Answer Number', value: r => r.answer_number },
+  { header: 'Answer Rating', value: r => r.answer_rating },
+]
+
+const userSurveyExportColumns: ExcelColumn<UserSurveyExportRow>[] = [
+  { header: 'User ID', value: r => r.user_id },
+  { header: 'Full Name', value: r => r.full_name },
+  { header: 'Email', value: r => r.email },
+  { header: 'Phone', value: r => r.phone },
+  { header: 'Age', value: r => r.age },
+  { header: 'Age Group', value: r => r.age_group },
+  { header: 'Gender', value: r => r.gender },
+  { header: 'City', value: r => r.city },
+  { header: 'Township', value: r => r.township },
+  { header: 'Occupation', value: r => r.occupation },
+  { header: 'User Created At', value: r => r.user_created_at },
+  { header: 'Response ID', value: r => r.response_id },
+  { header: 'Product ID', value: r => r.product_id },
+  { header: 'Product Name', value: r => r.product_name },
+  { header: 'Language', value: r => r.language },
+  { header: 'Response Status', value: r => r.response_status },
+  { header: 'Completed At', value: r => r.completed_at },
+  { header: 'Response Created At', value: r => r.response_created_at },
+  { header: 'Question ID', value: r => r.question_id },
+  { header: 'Question Text', value: r => r.question_text },
+  { header: 'Question Type', value: r => r.question_type },
+  { header: 'Question Order', value: r => r.question_order },
   { header: 'Answer Text', value: r => r.answer_text },
   { header: 'Answer Choice', value: r => r.answer_choice },
   { header: 'Answer Number', value: r => r.answer_number },
@@ -424,6 +483,7 @@ export default function UsersPage() {
   const [total, setTotal] = useState(0)
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
+  const [showExportMenu, setShowExportMenu] = useState(false)
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -488,6 +548,28 @@ export default function UsersPage() {
     }
   }, [])
 
+  const exportUserSurveys = useCallback(async (days: number, sortBy: 'created_at' | 'completed_at') => {
+    setExporting(true)
+    setError('')
+    try {
+      const token = localStorage.getItem('admin_token')
+      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
+      const res = await fetch(`${API_BASE}/admin/users/export?days=${days}&sortBy=${sortBy}&limit=${MAX_LIMIT}`, { headers })
+      const data = await res.json()
+      if (!data.success) {
+        setError(data.message || 'Failed to export user surveys')
+        return
+      }
+      const rows: UserSurveyExportRow[] = data.data.data || []
+      const stamp = new Date().toISOString().slice(0, 10)
+      exportToExcel(`user-surveys-${days}d-${stamp}.xls`, 'User Surveys', userSurveyExportColumns, rows)
+    } catch {
+      setError('Could not connect to the server')
+    } finally {
+      setExporting(false)
+    }
+  }, [])
+
   const totalPages = Math.ceil(total / ITEMS_PER_PAGE)
 
   return (
@@ -498,16 +580,72 @@ export default function UsersPage() {
           <h1 className="font-display text-2xl font-bold text-ink">Users</h1>
           <p className="mt-1 text-sm text-slate-500">Manage and view registered users</p>
         </div>
-        <button
-          onClick={exportSurveys}
-          disabled={exporting}
-          className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-          {exporting ? 'Exporting...' : 'Export Excel'}
-        </button>
+        <div className="relative">
+          <button
+            onClick={() => setShowExportMenu(!showExportMenu)}
+            disabled={exporting}
+            className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            {exporting ? 'Exporting...' : 'Export Excel'}
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {showExportMenu && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setShowExportMenu(false)} />
+              <div className="absolute right-0 top-full z-20 mt-2 w-72 rounded-xl border border-slate-200 bg-white shadow-lg overflow-hidden">
+                <div className="p-2">
+                  <p className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Reward-based Export</p>
+                  <button
+                    onClick={() => { exportSurveys(); setShowExportMenu(false); }}
+                    disabled={exporting}
+                    className="w-full text-left rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                  >
+                    <span className="flex items-center justify-between">
+                      <span>Survey Details (Rewards)</span>
+                      <svg className="h-4 w-4 text-gold-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/></svg>
+                    </span>
+                  </button>
+                </div>
+                <div className="border-t border-slate-200 p-2">
+                  <p className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500">User Survey Export (with Q&A)</p>
+                  <div className="space-y-1">
+                    {([7, 30, 90, 365] as const).map(days => (
+                      <button
+                        key={days}
+                        onClick={() => { exportUserSurveys(days, 'created_at'); setShowExportMenu(false); }}
+                        disabled={exporting}
+                        className="w-full text-left rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                      >
+                        <span className="flex items-center justify-between">
+                          <span>Last {days} days (by registration)</span>
+                          <svg className="h-4 w-4 text-gold-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/></svg>
+                        </span>
+                      </button>
+                    ))}
+                    {([7, 30, 90] as const).map(days => (
+                      <button
+                        key={`completed-${days}`}
+                        onClick={() => { exportUserSurveys(days, 'completed_at'); setShowExportMenu(false); }}
+                        disabled={exporting}
+                        className="w-full text-left rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                      >
+                        <span className="flex items-center justify-between">
+                          <span>Last {days} days (by completion)</span>
+                          <svg className="h-4 w-4 text-gold-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/></svg>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Search and Stats */}

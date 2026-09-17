@@ -1479,6 +1479,67 @@ app.get('/admin/surveys/export', authMiddleware, adminMiddleware, async (c) => {
   return jsonSuccess({ data: data.results, total: (total as any)?.count || 0 });
 });
 
+// Export users with survey answers (sorted by days, with all Q&A)
+app.get('/admin/users/export', authMiddleware, adminMiddleware, async (c) => {
+  const db = c.env.survey_db;
+  const days = parseInt(c.req.query('days') || '30');
+  const limit = parseInt(c.req.query('limit') || '1000');
+  const offset = parseInt(c.req.query('offset') || '0');
+  const sortBy = c.req.query('sortBy') || 'created_at'; // created_at, completed_at
+
+  const sinceDate = new Date()
+  sinceDate.setDate(sinceDate.getDate() - days)
+  const sinceStr = sinceDate.toISOString()
+
+  // Get users with their survey responses and answers
+  const data = await db.prepare(`
+    SELECT 
+      u.id as user_id,
+      u.full_name,
+      u.email,
+      u.phone,
+      u.age,
+      u.age_group,
+      u.gender,
+      u.city,
+      u.township,
+      u.occupation,
+      u.created_at as user_created_at,
+      sr.id as response_id,
+      sr.product_id,
+      p.name as product_name,
+      sr.language,
+      sr.status as response_status,
+      sr.completed_at,
+      sr.created_at as response_created_at,
+      sq.id as question_id,
+      sq.question_text,
+      sq.question_type,
+      sq.display_order as question_order,
+      sa.answer_text,
+      sa.answer_choice,
+      sa.answer_number,
+      sa.answer_rating
+    FROM users u
+    LEFT JOIN survey_responses sr ON u.id = sr.user_id AND sr.status = 'COMPLETED' AND sr.completed_at >= ?
+    LEFT JOIN products p ON sr.product_id = p.id
+    LEFT JOIN survey_answers sa ON sr.id = sa.response_id
+    LEFT JOIN survey_questions sq ON sa.question_id = sq.id AND sq.is_active = 1
+    WHERE u.is_admin = 0
+    ORDER BY u.${sortBy === 'completed_at' ? 'sr.completed_at' : 'u.created_at'} DESC
+    LIMIT ? OFFSET ?
+  `).bind(sinceStr, limit, offset).all();
+
+  const total = await db.prepare(`
+    SELECT COUNT(DISTINCT u.id) as count
+    FROM users u
+    LEFT JOIN survey_responses sr ON u.id = sr.user_id AND sr.status = 'COMPLETED' AND sr.completed_at >= ?
+    WHERE u.is_admin = 0
+  `).bind(sinceStr).first();
+
+  return jsonSuccess({ data: data.results, total: (total as any)?.count || 0 });
+});
+
 // ============================================================
 // ADMIN ROUTES - DELIVERIES
 // ============================================================
@@ -1712,25 +1773,66 @@ app.get('/admin/responses/:id', authMiddleware, adminMiddleware, async (c) => {
 });
 
 // ============================================================
-// ADMIN ROUTES - AUDIT LOGS
+// ADMIN ROUTES - FILE UPLOAD
 // ============================================================
 
-app.get('/admin/audit-logs', authMiddleware, adminMiddleware, async (c) => {
-  const db = c.env.survey_db;
-  const limit = parseInt(c.req.query('limit') || '50');
-  const offset = parseInt(c.req.query('offset') || '0');
+// Upload file (image) for products, survey questions, or rewards
+app.post('/admin/upload', authMiddleware, adminMiddleware, async (c) => {
+  const body = await c.req.parseBody();
+  const file = body.file as File;
+  const type = (body.type as string) || 'product'; // product, survey_question, reward
+  const entityId = body.entityId as string | undefined;
 
-  const logs = await db.prepare(`
-    SELECT al.*, u.full_name as admin_name
-    FROM audit_logs al
-    LEFT JOIN users u ON al.admin_id = u.id
-    ORDER BY al.created_at DESC
-    LIMIT ? OFFSET ?
-  `).bind(limit, offset).all();
+  if (!file) {
+    return jsonError('No file provided');
+  }
 
-  const total = await db.prepare('SELECT COUNT(*) as count FROM audit_logs').first();
+  // Validate file type
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+  if (!allowedTypes.includes(file.type)) {
+    return jsonError('Invalid file type. Only JPEG, PNG, WebP, and GIF are allowed');
+  }
 
-  return jsonSuccess({ logs: logs.results, total: (total as any)?.count || 0 });
+  // Validate file size (max 5MB)
+  const maxSize = 5 * 1024 * 1024;
+  if (file.size > maxSize) {
+    return jsonError('File too large. Maximum size is 5MB');
+  }
+
+  // Convert file to base64 for storage (in production, use R2/S3)
+  const arrayBuffer = await file.arrayBuffer();
+  const buffer = new Uint8Array(arrayBuffer);
+  let binary = '';
+  for (let i = 0; i < buffer.length; i++) {
+    binary += String.fromCharCode(buffer[i]);
+  }
+  const base64 = btoa(binary);
+  const dataUrl = `data:${file.type};base64,${base64}`;
+
+  // Update the entity with the image URL if entityId provided
+  if (entityId) {
+    const db = c.env.survey_db;
+    let updated = false;
+    
+    if (type === 'product') {
+      const result = await db.prepare('UPDATE products SET image_url = ?, updated_at = datetime(\'now\') WHERE id = ?').bind(dataUrl, entityId).run();
+      updated = result.meta.changes > 0;
+    } else if (type === 'reward') {
+      const result = await db.prepare('UPDATE rewards SET image_url = ?, updated_at = datetime(\'now\') WHERE id = ?').bind(dataUrl, entityId).run();
+      updated = result.meta.changes > 0;
+    } else if (type === 'survey_question') {
+      const result = await db.prepare('UPDATE survey_questions SET image_url = ?, updated_at = datetime(\'now\') WHERE id = ?').bind(dataUrl, entityId).run();
+      updated = result.meta.changes > 0;
+    }
+
+    if (!updated) {
+      return jsonError('Entity not found', 404);
+    }
+  }
+
+  await logAudit(c, 'UPLOAD', type, entityId || 'new', { fileName: file.name, fileSize: file.size });
+
+  return jsonSuccess({ url: dataUrl, message: 'File uploaded successfully' });
 });
 
 // ============================================================

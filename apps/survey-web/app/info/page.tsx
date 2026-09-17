@@ -96,6 +96,11 @@ export default function InfoPage() {
       })
       const data = await res.json()
 
+      if (!res.ok) {
+        setError(data.error?.message || `Server error: ${res.status}`)
+        return
+      }
+
       if (data.success) {
         localStorage.setItem('survey_token', data.data.token)
         localStorage.setItem('survey_user', JSON.stringify(data.data.user))
@@ -114,8 +119,9 @@ export default function InfoPage() {
       } else {
         setError(data.error?.message || t('error'))
       }
-    } catch {
-      setError(t('connectionFailed'))
+    } catch (err) {
+      console.error('Connection error:', err)
+      setError(`${t('connectionFailed')}: ${err instanceof Error ? err.message : 'Unknown error'}`)
     } finally {
       setLoading(false)
     }
