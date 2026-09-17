@@ -18,6 +18,8 @@ interface SurveyQuestion {
   version_title: string
   product_name: string
   option_count: number
+  image_url: string | null
+  product_type: string | null
 }
 
 interface SurveyVersion {
