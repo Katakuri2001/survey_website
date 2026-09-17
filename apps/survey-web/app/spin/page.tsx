@@ -159,8 +159,8 @@ export default function SpinPage() {
     }
   }
 
-  const handleClaim = () => {
-    router.push('/delivery')
+  const handleDone = () => {
+    router.push('/')
   }
 
   if (loading) {
@@ -329,10 +329,10 @@ export default function SpinPage() {
             <p className="text-xs text-fg-muted mb-7">{t('rewardAdded')}</p>
 
             <button
-              onClick={handleClaim}
+              onClick={handleDone}
               className="w-full py-4 bg-gold-gradient text-brand-emerald rounded-2xl font-bold text-lg shadow-gold hover:shadow-gold-lg hover:scale-[1.01] transition-all inline-flex items-center justify-center gap-2"
             >
-              {t('claimReward')}
+              {t('done')}
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5-5 5M6 12h12" />
               </svg>

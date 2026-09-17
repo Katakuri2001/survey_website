@@ -41,8 +41,8 @@ export const translations = {
     stepSurveyDesc: 'Answer a few quick questions about your favourite beer.',
     stepSpin: 'Spin the wheel',
     stepSpinDesc: 'Win a reward and claim it right away.',
-    stepReceive: 'Free delivery',
-    stepReceiveDesc: 'We deliver your reward anywhere in Myanmar.',
+    stepReceive: 'Get your reward',
+    stepReceiveDesc: 'Your prize is credited to you instantly.',
     voiceTitle: 'Your Voice, Your Reward',
     voiceDesc: 'Every opinion shapes the beers we brew for you.',
     joinNow: 'Join the survey',
@@ -170,22 +170,7 @@ export const translations = {
     // Result
     congratulations: 'Congratulations!',
     youWon: 'You won',
-    claimReward: 'Claim Reward',
-    
-    // Delivery
-    deliveryTitle: 'Delivery Information',
-    deliveryDesc: 'Please provide your delivery details',
-    address: 'Address',
-    addressPlaceholder: 'Enter your full address',
-    statePlaceholder: 'Enter state/region',
-    postalCode: 'Postal Code',
-    township: 'Township',
-    deliveryNotes: 'Additional Notes',
-    deliveryNotesPlaceholder: 'Any special delivery instructions?',
-    submitDelivery: 'Submit Delivery Info',
-    deliveryReceived: 'Your delivery information has been received',
-    noReward: 'No reward to deliver',
-    yourReward: 'Your Reward',
+    done: 'Done',
     
     // Survey extras
     reviewAnswers: 'Review Your Answers',
@@ -255,8 +240,8 @@ export const translations = {
     stepSurveyDesc: 'သင့်အကြိုက်ဆုံးဘီယာအကြောင်း မေးခွန်းအနည်းငယ်ဖြေပါ။',
     stepSpin: 'ဘီးလှည့်ပါ',
     stepSpinDesc: 'ဆုရယူပြီး ချက်ချင်းဆောင်ရွက်ပါ။',
-    stepReceive: 'အိမ်အရောက်ပို့',
-    stepReceiveDesc: 'မြန်မာနိုင်ငံအနှံ့ သင့်ဆုကို ပို့ဆောင်ပေးပါမည်။',
+    stepReceive: 'သင့်ဆုကို ရယူလိုက်ပါ',
+    stepReceiveDesc: 'သင့်ဆုကို ချက်ချင်းပေး အသိအမှတ်ပြုပါသည်။',
     voiceTitle: 'သင့်အသံ၊ သင့်ဆု',
     voiceDesc: 'သင့်ထင်မြင်ချက်တိုင်းက ကျွန်ုပ်တို့ချက်သော ဘီယာများကို တိုးတက်စေသည်။',
     joinNow: 'စစ်တမ်းတွင် ပါဝင်ပါ',
@@ -384,22 +369,7 @@ export const translations = {
     // Result
     congratulations: 'ဂုဏ်ယူပါတယ်!',
     youWon: 'သင်ရရှိပါပြီ',
-    claimReward: 'ဆုယူရန်',
-    
-    // Delivery
-    deliveryTitle: 'ပို့ဆောင်ရေးအချက်အလက်',
-    deliveryDesc: 'သင့်ပို့ဆောင်ရေးအသေးစိတ်ကို ဖြည့်သွင်းပါ',
-    address: 'လိပ်စာ',
-    addressPlaceholder: 'သင့်လိပ်စာအပြည့်အစုံ ထည့်ပါ',
-    statePlaceholder: 'တိုင်းဒေသကြီး ထည့်ပါ',
-    postalCode: 'စာတိုက်ကုဒ်',
-    township: 'မြို့နယ်',
-    deliveryNotes: 'အပိုမှတ်ချက်များ',
-    deliveryNotesPlaceholder: 'ပို့ဆောင်ရေးအကြံဉာဏ်များ ရှိပါသလား?',
-    submitDelivery: 'ပို့ဆောင်ရေးအချက်အလက် တင်သွင်းရန်',
-    deliveryReceived: 'သင့်ပို့ဆောင်ရေးအချက်အလက်ကို လက်ခံရရှိပါပြီ',
-    noReward: 'ပေးအပ်ရန် ဆုမရှိပါ',
-    yourReward: 'သင့်ဆု',
+    done: 'ပြီးပါပြီ',
     
     // Survey extras
     reviewAnswers: 'အဖြေများ ပြန်ကြည့်ပါ',
