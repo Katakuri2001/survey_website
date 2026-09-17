@@ -51,10 +51,18 @@ export default function Home() {
           </span>
 
            <h1 className={`relative font-display font-extrabold animate-fade-up ${myFont}`} style={{ animationDelay: '0.1s' }}>
-            <span className={`relative z-0 block text-4xl sm:text-5xl md:text-7xl text-white drop-shadow-2xl ${language === 'my' ? 'font-myanmar leading-relaxed tracking-widest' : ''}`}>
+            <span className={`block text-white drop-shadow-2xl ${
+              language === 'my'
+                ? 'font-myanmar text-[1.75rem] sm:text-[2.125rem] md:text-[2.75rem] leading-[1.7] tracking-normal'
+                : 'text-4xl sm:text-5xl md:text-6xl leading-[1.08]'
+            }`}>
               {t('heroTitleLine1')}
             </span>
-            <span className={`relative z-10 -mt-3 sm:-mt-5 md:-mt-8 block text-4xl sm:text-5xl md:text-7xl gold-text ${language === 'my' ? 'font-myanmar leading-relaxed tracking-widest lg:tracking-normal lg:whitespace-nowrap' : ''}`}>
+            <span className={`relative z-10 mt-1 block gold-text sm:mt-2 md:mt-3 ${
+              language === 'my'
+                ? 'font-myanmar text-[1.375rem] sm:text-[1.75rem] md:text-[2.25rem] leading-[1.85] tracking-normal'
+                : 'text-3xl sm:text-4xl md:text-5xl leading-[1.15]'
+            }`}>
               {t('heroTitleLine2')}
             </span>
           </h1>

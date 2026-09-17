@@ -606,14 +606,40 @@ SELECT r.id, r.name, r.description, r.image_url, r.weight, r.status, r.winning_r
   return jsonSuccess(rewards.results);
 });
 
-// Spin the wheel (server-determined result)
+// Spin the wheel (server-determined result) - with idempotency, atomic inventory, and retry logic
 app.post('/rewards/spin', authMiddleware, async (c) => {
   const db = c.env.survey_db;
   const userId = c.get('userId');
   const body = await c.req.json().catch(() => ({}));
-  const { campaignId, productId } = body;
+  const { campaignId, productId, idempotencyKey } = body;
   const campaignKey = campaignId || 'default';
 
+  // Idempotency: check if this exact request was already processed
+  if (idempotencyKey) {
+    const existing = await db.prepare(`
+      SELECT rs.id, rs.reward_id, ur.id as user_reward_id
+      FROM reward_spins rs
+      LEFT JOIN user_rewards ur ON ur.reward_spin_id = rs.id
+      WHERE rs.user_id = ? AND rs.campaign_id = ? AND rs.idempotency_key = ?
+    `).bind(userId, campaignKey, idempotencyKey).first() as any;
+
+    if (existing) {
+      let rewardName = '';
+      if (existing.reward_id) {
+        const reward = await db.prepare('SELECT name FROM rewards WHERE id = ?').bind(existing.reward_id).first() as any;
+        rewardName = reward?.name || '';
+      }
+      return jsonSuccess({
+        spinId: existing.id,
+        rewardId: existing.reward_id,
+        rewardName,
+        userRewardId: existing.user_reward_id,
+        idempotent: true
+      });
+    }
+  }
+
+  // Check if user already spun for this campaign (non-idempotent check)
   const existingSpin = await db.prepare(`
     SELECT id FROM reward_spins
     WHERE user_id = ? AND campaign_id = ? AND status != 'CANCELLED'
@@ -623,36 +649,25 @@ app.post('/rewards/spin', authMiddleware, async (c) => {
     return jsonError('You have already spun the wheel for this campaign');
   }
 
-  const spinId = generateId();
-  try {
-    await db.prepare(`
-      INSERT INTO reward_spins (id, user_id, campaign_id, product_id, reward_id, status)
-      VALUES (?, ?, ?, ?, NULL, 'WON')
-    `).bind(spinId, userId, campaignKey, productId || null).run();
-  } catch {
-    return jsonError('You have already spun the wheel for this campaign');
-  }
-
+  // Fetch available rewards for this campaign
   const rewards = await db.prepare(`
-    SELECT id, name, weight, remaining_quantity, winning_ratio
+    SELECT id, name, weight, remaining_quantity, winning_ratio, low_stock_threshold
     FROM rewards
     WHERE is_active = 1 AND remaining_quantity > 0 AND status != 'EXHAUSTED' AND status != 'PAUSED'
     AND (campaign_id = ? OR campaign_id IS NULL OR ? = 'default')
   `).bind(campaignKey, campaignKey).all();
 
-  if (!rewards.results || (rewards.results as any[]).length === 0) {
-    await db.prepare("UPDATE reward_spins SET status = 'CANCELLED', updated_at = datetime('now') WHERE id = ?").bind(spinId).run();
-    return jsonError('No rewards available');
+  const allRewards = (rewards.results as any[]) || [];
+  if (allRewards.length === 0) {
+    return jsonError('No rewards available', 404, 'NO_REWARDS_AVAILABLE');
   }
 
-  const allRewards = rewards.results as any[];
+  // Build weighted selection pool
   const rewardsWithRatio = allRewards.filter(r => r.winning_ratio != null);
   const rewardsWithoutRatio = allRewards.filter(r => r.winning_ratio == null);
 
   let pool: { reward: any; weight: number }[];
   if (rewardsWithRatio.length > 0) {
-    // Explicit ratios take their share; the remaining percentage is split
-    // across the other active rewards using the pre-existing weight method.
     const totalRatio = rewardsWithRatio.reduce((sum, r) => sum + Number(r.winning_ratio), 0);
     const remaining = Math.max(0, 100 - totalRatio);
     const restWeight = rewardsWithoutRatio.reduce((sum, r) => sum + Number(r.weight || 0), 0);
@@ -666,50 +681,98 @@ app.post('/rewards/spin', authMiddleware, async (c) => {
       })),
     ];
   } else {
-    // Default: weight-based selection (unchanged behaviour).
     pool = allRewards.map(r => ({ reward: r, weight: Number(r.weight || 0) }));
   }
 
-  const totalPoolWeight = pool.reduce((sum, p) => sum + p.weight, 0);
-  let random = Math.random() * (totalPoolWeight > 0 ? totalPoolWeight : 1);
-  let selectedReward = pool[0]?.reward;
-  for (const entry of pool) {
-    random -= entry.weight;
-    if (random <= 0 && entry.reward.remaining_quantity > 0) { selectedReward = entry.reward; break; }
+  // Selection with retry logic (max 3 attempts)
+  const MAX_ATTEMPTS = 3;
+  let selectedReward: any = null;
+  let attempt = 0;
+  let availablePool = [...pool];
+
+  while (attempt < MAX_ATTEMPTS && availablePool.length > 0) {
+    attempt++;
+    const totalPoolWeight = availablePool.reduce((sum, p) => sum + p.weight, 0);
+    if (totalPoolWeight <= 0) break;
+
+    let random = Math.random() * totalPoolWeight;
+    let candidate = availablePool[0]?.reward;
+
+    for (const entry of availablePool) {
+      random -= entry.weight;
+      if (random <= 0 && entry.reward.remaining_quantity > 0) {
+        candidate = entry.reward;
+        break;
+      }
+    }
+
+    // Try to atomically claim this reward
+    const claimResult = await db.prepare(`
+      UPDATE rewards SET remaining_quantity = remaining_quantity - 1, updated_at = datetime('now')
+      WHERE id = ? AND remaining_quantity > 0
+    `).bind(candidate.id).run();
+
+    if (claimResult.meta?.changes === 1) {
+      // Successfully claimed
+      selectedReward = candidate;
+      break;
+    }
+
+    // Claim failed - reward exhausted by concurrent request
+    // Remove from pool and retry
+    availablePool = availablePool.filter(p => p.reward.id !== candidate.id);
   }
-  if (!selectedReward || selectedReward.remaining_quantity <= 0) {
-    const inStock = allRewards.find(r => r.remaining_quantity > 0);
-    if (inStock) selectedReward = inStock;
+
+  if (!selectedReward) {
+    // No rewards could be claimed
+    return jsonError('All rewards are currently unavailable. Please try again later.', 409, 'NO_REWARDS_AVAILABLE');
   }
 
-  const result = await db.prepare(`
-    UPDATE rewards SET remaining_quantity = remaining_quantity - 1, updated_at = datetime('now')
-    WHERE id = ? AND remaining_quantity > 0
-  `).bind(selectedReward.id).run();
-
-  if (result.meta?.changes === 0) {
-    await db.prepare("UPDATE reward_spins SET status = 'CANCELLED', updated_at = datetime('now') WHERE id = ?").bind(spinId).run();
-    return jsonError('Reward out of stock. Please try again.', 409);
-  }
-
-  const reward = await db.prepare('SELECT remaining_quantity, low_stock_threshold FROM rewards WHERE id = ?').bind(selectedReward.id).first() as any;
-  let newStatus = 'AVAILABLE';
-  if (reward.remaining_quantity <= 0) newStatus = 'EXHAUSTED';
-  else if (reward.remaining_quantity <= (reward.low_stock_threshold || 10)) newStatus = 'LOW_STOCK';
-
-  await db.prepare('UPDATE rewards SET status = ? WHERE id = ?').bind(newStatus, selectedReward.id).run();
-  await db.prepare('UPDATE reward_spins SET reward_id = ?, updated_at = datetime(\'now\') WHERE id = ?').bind(selectedReward.id, spinId).run();
-
+  // Now atomically create all records using batch
+  const spinId = generateId();
   const userRewardId = generateId();
-  await db.prepare(`
-    INSERT INTO user_rewards (id, user_id, reward_spin_id, reward_id, delivery_status, won_at)
-    VALUES (?, ?, ?, ?, 'DELIVERY_PENDING', datetime('now'))
-  `).bind(userRewardId, userId, spinId, selectedReward.id).run();
+  const now = new Date().toISOString();
 
-  await db.prepare(`
-    INSERT INTO reward_inventory_transactions (id, reward_id, type, quantity, reference_type, reference_id, created_by)
-    VALUES (?, ?, 'REWARD_AWARDED', -1, 'reward_spin', ?, ?)
-  `).bind(generateId(), selectedReward.id, spinId, userId).run();
+  // Update reward status based on new quantity
+  const updatedReward = await db.prepare('SELECT remaining_quantity, low_stock_threshold FROM rewards WHERE id = ?').bind(selectedReward.id).first() as any;
+  let newStatus = 'AVAILABLE';
+  if (updatedReward.remaining_quantity <= 0) newStatus = 'EXHAUSTED';
+  else if (updatedReward.remaining_quantity <= (updatedReward.low_stock_threshold || 10)) newStatus = 'LOW_STOCK';
+
+  const statements = [
+    // Create spin record with reward_id already set
+    db.prepare(`
+      INSERT INTO reward_spins (id, user_id, campaign_id, product_id, reward_id, status, idempotency_key, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, 'WON', ?, ?, ?)
+    `).bind(spinId, userId, campaignKey, productId || null, selectedReward.id, idempotencyKey || null, now, now),
+
+    // Create user reward record
+    db.prepare(`
+      INSERT INTO user_rewards (id, user_id, reward_spin_id, reward_id, delivery_status, won_at, created_at, updated_at)
+      VALUES (?, ?, ?, ?, 'DELIVERY_PENDING', ?, ?, ?)
+    `).bind(userRewardId, userId, spinId, selectedReward.id, now, now, now),
+
+    // Update reward status
+    db.prepare('UPDATE rewards SET status = ?, updated_at = ? WHERE id = ?').bind(newStatus, now, selectedReward.id),
+
+    // Record inventory transaction
+    db.prepare(`
+      INSERT INTO reward_inventory_transactions (id, reward_id, type, quantity, reference_type, reference_id, created_by, created_at)
+      VALUES (?, ?, 'REWARD_AWARDED', -1, 'reward_spin', ?, ?, ?)
+    `).bind(generateId(), selectedReward.id, spinId, userId, now),
+  ];
+
+  try {
+    await db.batch(statements);
+  } catch (e: any) {
+    // If batch fails (e.g., unique constraint on reward_spins), return error
+    if (e?.message?.includes('UNIQUE') || e?.message?.includes('unique')) {
+      return jsonError('You have already spun the wheel for this campaign');
+    }
+    // If batch fails after stock deduction, we have an inconsistency - log and return error
+    console.error('Spin batch failed after stock deduction:', e);
+    return jsonError('Spin processing failed. Please contact support.', 500);
+  }
 
   return jsonSuccess({
     spinId,

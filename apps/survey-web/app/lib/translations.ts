@@ -166,6 +166,9 @@ heroCtaSurvey: 'Start Survey',
     spinDesc: 'Spin the wheel to win a prize!',
     spinButton: 'SPIN NOW',
     spinning: 'Spinning...',
+    noRewardsTitle: 'No Rewards Available',
+    noRewardsDesc: 'There are currently no rewards available for this campaign. Please check back later.',
+    tryAgain: 'Try Again',
     
     // Result
     congratulations: 'Congratulations!',
@@ -359,6 +362,9 @@ heroCtaSurvey: 'Start Survey',
     spinDesc: 'ဘီးလှည့်ပြီး ဆုရယူပါ!',
     spinButton: 'အခုလှည့်ပါ',
     spinning: 'လှည့်နေပါတယ်...',
+    noRewardsTitle: 'ဆုများမရှိသေးပါ',
+    noRewardsDesc: 'အချိန်အခ်ိနာတွင် ဤကမ်ပိန်းအတွက် ဆုများ ရရှိနိုင်ပါသည်။ နောက်အချိန်တွင် ပြန်စစ်ဆေးပါ။',
+    tryAgain: 'နောက်တစ်ကြိမ်ကြိုးစားပါ',
     
     // Result
     congratulations: 'ဂုဏ်ယူပါတယ်!',
