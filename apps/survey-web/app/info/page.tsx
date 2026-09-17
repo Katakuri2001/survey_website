@@ -4,10 +4,19 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useLanguage } from '../context/LanguageContext'
 import Header from '../components/Header'
+import NrcInput from '../components/NrcInput'
 import { API_BASE } from '../lib/api'
 import { useHydrated } from '../lib/useHydrated'
+import type { NrcData } from '../lib/nrc'
 
 const DRAFT_KEY = 'survey_info_draft'
+
+const emptyNrc: NrcData = {
+  stateCode: '',
+  townshipCode: '',
+  type: '',
+  serial: '',
+}
 
 const emptyDraft = {
   fullName: '',
@@ -15,9 +24,7 @@ const emptyDraft = {
   dobDay: '',
   dobMonth: '',
   dobYear: '',
-  nrcState: '',
-  nrcType: '',
-  nrcNumber: ''
+  nrc: emptyNrc,
 }
 
 function loadDraft() {
@@ -34,15 +41,6 @@ function loadDraft() {
   }
   return emptyDraft
 }
-
-const myanmarStates = [
-  '1/ကချင်ပြည်နယ်', '2/ကယားပြည်နယ်', '3/ကရင်ပြည်နယ်', '4/ချင်းပြည်နယ်',
-  '5/မကွေးတိုင်းဒေသကြီး', '6/မန္တလေးတိုင်းဒေသကြီး', '7/မွန်ပြည်နယ်', '8/ရခိုင်ပြည်နယ်',
-  '9/ရှမ်းပြည်နယ်', '10/ဧရာဝတီတိုင်းဒေသကြီး', '11/ရန်ကုန်တိုင်းဒေသကြီး',
-  '12/နေပြည်တော် ပြည်ထောင်စုနယ်မြေ'
-]
-
-const nrcTypes = ['နိုင်ငံသား', 'ဧည့်နိုင်ငံသား', 'ဧရိယာ']
 
 const STEPS = [
   { n: '01', label: 'Personal' },
@@ -90,9 +88,10 @@ export default function InfoPage() {
           fullName: formData.fullName,
           phone: formData.phone,
           dob,
-          nrcState: formData.nrcState,
-          nrcType: formData.nrcType,
-          nrcNumber: formData.nrcNumber,
+          nrcState: formData.nrc.stateCode,
+          nrcTownship: formData.nrc.townshipCode,
+          nrcType: formData.nrc.type,
+          nrcNumber: formData.nrc.serial,
         })
       })
       const data = await res.json()
@@ -105,9 +104,10 @@ export default function InfoPage() {
           fullName: formData.fullName,
           phone: formData.phone,
           dob,
-          nrcState: formData.nrcState,
-          nrcType: formData.nrcType,
-          nrcNumber: formData.nrcNumber,
+          nrcState: formData.nrc.stateCode,
+          nrcTownship: formData.nrc.townshipCode,
+          nrcType: formData.nrc.type,
+          nrcNumber: formData.nrc.serial,
         }))
         localStorage.removeItem(DRAFT_KEY)
         router.push('/survey')
@@ -253,39 +253,12 @@ export default function InfoPage() {
 
             {/* NRC */}
             <div className="mb-6">
-              <FieldLabel>{t('nrc')}</FieldLabel>
-              <div className="mb-2 space-y-2">
-                <select
-                  value={formData.nrcState}
-                  onChange={(e) => setFormData({ ...formData, nrcState: e.target.value })}
-                  className={`${selectClass} font-myanmar`}
-                  required
-                >
-                  <option value="" className="bg-surface-deep">{t('stateRegion')}</option>
-                  {myanmarStates.map(s => <Option key={s} value={s} label={s} />)}
-                </select>
-                <div className="grid grid-cols-2 gap-2">
-                  <select
-                    value={formData.nrcType}
-                    onChange={(e) => setFormData({ ...formData, nrcType: e.target.value })}
-                    className={`${selectClass} font-myanmar`}
-                    required
-                  >
-                    <option value="" className="bg-surface-deep">{t('nrcType')}</option>
-                    {nrcTypes.map((n, i) => <Option key={i} value={n} label={n} />)}
-                  </select>
-                  <input
-                    type="text"
-                    value={formData.nrcNumber}
-                    onChange={(e) => setFormData({ ...formData, nrcNumber: e.target.value })}
-                    className={`survey-input text-sm ${language === 'my' ? 'font-myanmar leading-relaxed' : ''}`}
-                    placeholder={t('nrcPlaceholder')}
-                    maxLength={6}
-                    required
-                  />
-                </div>
-              </div>
-              <p className="text-xs text-fg-muted">{t('nrcExample')}</p>
+              <NrcInput
+                value={formData.nrc}
+                onChange={(nrc) => setFormData({ ...formData, nrc })}
+                required
+                disabled={loading}
+              />
             </div>
 
             <button

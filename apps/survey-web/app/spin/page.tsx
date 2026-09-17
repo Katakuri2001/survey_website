@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useLanguage } from '../context/LanguageContext'
 import Header from '../components/Header'
 import { API_BASE, getValidToken } from '../lib/api'
+import Image from 'next/image'
 
 interface Reward {
   id: string
@@ -14,14 +15,6 @@ interface Reward {
   imageUrl?: string
   remainingQuantity: number
   status: string
-}
-
-interface SpinResult {
-  spinId: string
-  rewardId: string
-  rewardName: string
-  userRewardId: string
-  idempotent?: boolean
 }
 
 interface RewardApiItem {
@@ -56,19 +49,16 @@ export default function SpinPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [hasSpun, setHasSpun] = useState(false)
-  const [wheelRotation, setWheelRotation] = useState(0)
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false)
+  const [wheelRotation, ____setWheelRotation] = useState(0)
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    }
+    return false
+  })
   const animationRef = useRef<number | null>(null)
   const wheelRef = useRef<HTMLDivElement>(null)
-
-  // Check for reduced motion preference
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
-    setPrefersReducedMotion(mediaQuery.matches)
-    const handler = (e: MediaQueryListEvent) => setPrefersReducedMotion(e.matches)
-    mediaQuery.addEventListener('change', handler)
-    return () => mediaQuery.removeEventListener('change', handler)
-  }, [])
+  const mediaQueryRef = useRef<MediaQueryList | null>(null)
 
   // Generate consistent colors for rewards based on index
   const getRewardColor = (index: number) => SEGMENT_COLORS[index % SEGMENT_COLORS.length]
@@ -100,17 +90,12 @@ export default function SpinPage() {
     }
   }, [language, t])
 
-  useEffect(() => {
-    fetchRewards()
-    checkExistingSpin()
-  }, [fetchRewards])
-
+  // Check existing spin
   const checkExistingSpin = useCallback(async () => {
     try {
       const token = await getValidToken()
       if (!token) return
 
-      const campaignId = sessionStorage.getItem('survey_campaign_id') || 'default'
       const res = await fetch(`${API_BASE}/rewards/my`, {
         headers: { Authorization: `Bearer ${token}` },
       })
@@ -139,6 +124,25 @@ export default function SpinPage() {
       // Ignore - user hasn't spun yet
     }
   }, [rewards])
+
+  // Set up reduced motion listener on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+      mediaQueryRef.current = mediaQuery
+      const handler = (e: MediaQueryListEvent) => setPrefersReducedMotion(e.matches)
+      mediaQuery.addEventListener('change', handler)
+      return () => mediaQuery.removeEventListener('change', handler)
+    }
+  }, [])
+
+  // Fetch rewards and check existing spin on mount
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchRewards()
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    checkExistingSpin()
+  }, [fetchRewards, checkExistingSpin])
 
   // Generate idempotency key for this spin session
   const [idempotencyKey] = useState(() => crypto.randomUUID())
@@ -340,7 +344,7 @@ export default function SpinPage() {
         <div className="relative mb-6 animate-pop">
           <div className="absolute -inset-3 rounded-full border border-gold/30 animate-spin-slow" />
           <div className="w-16 h-16 rounded-full gold-border bg-brand-emerald overflow-hidden p-0.5">
-            <img src="/logo.png" alt="MB" className="w-full h-full object-cover rounded-full" />
+            <Image src="/logo.png" alt="MB" width={64} height={64} className="w-full h-full object-cover rounded-full" />
           </div>
         </div>
         <div className="h-2 w-40 rounded-full shimmer-bg" />
@@ -405,7 +409,7 @@ export default function SpinPage() {
 
         {/* Reward legend */}
         <div className="flex flex-wrap items-center justify-center gap-2 mb-8">
-          {rewards.map((reward, index) => (
+          {rewards.map((reward, _index) => (
             <span
               key={reward.id}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-white/10 bg-white/[0.04] text-xs text-fg-secondary transition-all"
@@ -441,9 +445,9 @@ export default function SpinPage() {
                 className="absolute inset-0"
                 style={{ transform: `rotate(${wheelRotation}deg)` }}
               >
-                {rewards.map((reward, index) => {
+                {rewards.map((reward, _index) => {
                   const segmentAngle = 360 / rewards.length
-                  const startAngle = index * segmentAngle
+                  const startAngle = _index * segmentAngle
                   const midAngle = startAngle + segmentAngle / 2
 
                   return (
@@ -502,7 +506,7 @@ export default function SpinPage() {
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
                 <div className="w-[74px] h-[74px] rounded-full p-[3px] bg-gradient-to-br from-warm via-gold to-[#8a6d1c] shadow-gold-lg animate-pulse-gold">
                   <div className="w-full h-full rounded-full bg-brand-emerald overflow-hidden flex items-center justify-center">
-                    <img src="/logo.png" alt="MB" className="w-full h-full object-cover rounded-full" />
+                    <Image src="/logo.png" alt="MB" width={74} height={74} className="w-full h-full object-cover rounded-full" />
                   </div>
                 </div>
               </div>

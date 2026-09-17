@@ -293,7 +293,7 @@ app.post('/auth/admin/login', async (c) => {
 app.post('/users/guest', async (c) => {
   const db = c.env.survey_db;
   const body = await c.req.json();
-  const { fullName, phone, dob, nrcState, nrcType, nrcNumber } = body || {};
+  const { fullName, phone, dob, nrcState, nrcTownship, nrcType, nrcNumber } = body || {};
 
   if (!fullName || !phone || !dob) {
     return jsonError('Full name, phone number, and date of birth are required');
@@ -317,16 +317,16 @@ app.post('/users/guest', async (c) => {
   if (existing) {
     userId = existing.id;
     await db.prepare(`
-      UPDATE users SET full_name = ?, age = ?, age_group = ?, dob = ?, nrc_state = ?, nrc_type = ?, nrc_number = ?, updated_at = datetime('now')
+      UPDATE users SET full_name = ?, age = ?, age_group = ?, dob = ?, nrc_state = ?, nrc_township = ?, nrc_type = ?, nrc_number = ?, updated_at = datetime('now')
       WHERE id = ?
-    `).bind(fullName, age, ageGroup, dob || null, nrcState || null, nrcType || null, nrcNumber || null, userId).run();
+    `).bind(fullName, age, ageGroup, dob || null, nrcState || null, nrcTownship || null, nrcType || null, nrcNumber || null, userId).run();
   } else {
     userId = generateId();
     const passwordHash = await hashPassword(crypto.randomUUID());
     await db.prepare(`
-      INSERT INTO users (id, full_name, phone, password_hash, age, age_group, dob, nrc_state, nrc_type, nrc_number, is_active)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-    `).bind(userId, fullName, phone, passwordHash, age, ageGroup, dob || null, nrcState || null, nrcType || null, nrcNumber || null).run();
+      INSERT INTO users (id, full_name, phone, password_hash, age, age_group, dob, nrc_state, nrc_township, nrc_type, nrc_number, is_active)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+    `).bind(userId, fullName, phone, passwordHash, age, ageGroup, dob || null, nrcState || null, nrcTownship || null, nrcType || null, nrcNumber || null).run();
   }
 
   const token = await createToken(userId, 'user', getJwtSecret(c.env));
@@ -340,7 +340,7 @@ app.get('/user/profile', authMiddleware, async (c) => {
   const userId = c.get('userId');
 
   const user = await db.prepare(`
-    SELECT id, full_name, email, phone, age, age_group, gender, city, township, nrc_state, nrc_type, nrc_number, occupation, created_at
+    SELECT id, full_name, email, phone, age, age_group, gender, city, township, nrc_state, nrc_township, nrc_type, nrc_number, occupation, created_at
     FROM users WHERE id = ?
   `).bind(userId).first();
 
@@ -355,7 +355,7 @@ app.patch('/user/profile', authMiddleware, async (c) => {
   const userId = c.get('userId');
   const body = await c.req.json();
 
-  const { fullName, phone, age, gender, city, township, nrcState, nrcType, nrcNumber, occupation } = body;
+  const { fullName, phone, age, gender, city, township, nrcState, nrcTownship, nrcType, nrcNumber, occupation } = body;
 
   let ageGroup = null;
   if (age) {
@@ -372,12 +372,13 @@ app.patch('/user/profile', authMiddleware, async (c) => {
       city = COALESCE(?, city),
       township = COALESCE(?, township),
       nrc_state = COALESCE(?, nrc_state),
+      nrc_township = COALESCE(?, nrc_township),
       nrc_type = COALESCE(?, nrc_type),
       nrc_number = COALESCE(?, nrc_number),
       occupation = COALESCE(?, occupation),
       updated_at = datetime('now')
     WHERE id = ?
-  `).bind(fullName || null, phone || null, age || null, ageGroup, gender || null, city || null, township || null, nrcState || null, nrcType || null, nrcNumber || null, occupation || null, userId).run();
+  `).bind(fullName || null, phone || null, age || null, ageGroup, gender || null, city || null, township || null, nrcState || null, nrcTownship || null, nrcType || null, nrcNumber || null, occupation || null, userId).run();
 
   return jsonSuccess({ message: 'Profile updated' });
 });
