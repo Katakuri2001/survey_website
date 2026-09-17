@@ -50,11 +50,11 @@ export default function Home() {
             {t('heroEyebrow')}
           </span>
 
-           <h1 className={`font-display font-extrabold animate-fade-up ${myFont}`} style={{ animationDelay: '0.1s' }}>
-            <span className={`block text-4xl sm:text-5xl md:text-7xl text-white drop-shadow-2xl ${language === 'my' ? 'font-myanmar leading-relaxed tracking-widest' : ''}`}>
+           <h1 className={`relative font-display font-extrabold animate-fade-up ${myFont}`} style={{ animationDelay: '0.1s' }}>
+            <span className={`relative z-0 block text-4xl sm:text-5xl md:text-7xl text-white drop-shadow-2xl ${language === 'my' ? 'font-myanmar leading-relaxed tracking-widest' : ''}`}>
               {t('heroTitleLine1')}
             </span>
-            <span className={`block text-4xl sm:text-5xl md:text-7xl gold-text mt-8 md:mt-16 ${language === 'my' ? 'font-myanmar leading-relaxed tracking-widest lg:tracking-normal lg:whitespace-nowrap' : ''}`}>
+            <span className={`relative z-10 -mt-3 sm:-mt-5 md:-mt-8 block text-4xl sm:text-5xl md:text-7xl gold-text ${language === 'my' ? 'font-myanmar leading-relaxed tracking-widest lg:tracking-normal lg:whitespace-nowrap' : ''}`}>
               {t('heroTitleLine2')}
             </span>
           </h1>
