@@ -242,7 +242,9 @@ export default function SurveyPage() {
   }
 
   const handleSubmit = async () => {
-    setSubmitting(true)
+    if (typeof window !== 'undefined' && sessionStorage.getItem('survey_submitting')) return;
+    if (typeof window !== 'undefined') sessionStorage.setItem('survey_submitting', '1');
+    setSubmitting(true);
     try {
       let campaignId: string | null = null
       try {
@@ -282,8 +284,9 @@ export default function SurveyPage() {
       }
     } catch {
       setError(t('connectionFailed'))
-    } finally {
-      setSubmitting(false)
+} finally {
+      sessionStorage.removeItem('survey_submitting');
+      setSubmitting(false);
     }
   }
 

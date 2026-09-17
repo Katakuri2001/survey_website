@@ -532,14 +532,23 @@ app.post('/survey/submit', async (c) => {
     }
   }
 
-  // Create response
-  const responseId = generateId();
-  await db.prepare(`
-    INSERT INTO survey_responses (id, user_id, campaign_id, product_id, survey_version_id, language, status, completed_at)
-    VALUES (?, ?, ?, ?, ?, ?, 'COMPLETED', datetime('now'))
-  `).bind(responseId, actualUserId, campaignId || null, productId, version.id, language || 'en').run();
+  // Prevent duplicate submissions (one completed response per user per product)
+  const existing = await db.prepare(`
+    SELECT id FROM survey_responses
+    WHERE user_id = ? AND product_id = ? AND status = 'COMPLETED'
+  `).bind(actualUserId, productId).first() as any;
+  if (existing) {
+    return jsonError('You have already submitted this survey');
+  }
 
-  // Insert answers
+  // Create response atomically (all-or-nothing)
+  const responseId = generateId();
+  const statements = [
+    db.prepare(`
+      INSERT INTO survey_responses (id, user_id, campaign_id, product_id, survey_version_id, language, status, completed_at)
+      VALUES (?, ?, ?, ?, ?, ?, 'COMPLETED', datetime('now'))
+    `).bind(responseId, actualUserId, campaignId || null, productId, version.id, language || 'en'),
+  ];
   for (const answer of answers) {
     const answerId = generateId();
     let answerText = null;
@@ -552,14 +561,24 @@ app.post('/survey/submit', async (c) => {
     } else if (answer.type === 'number' || answer.type === 'rating') {
       answerNumber = answer.value;
       answerRating = answer.type === 'rating' ? answer.value : null;
-    } else if (answer.type === 'single_choice' || answer.type === 'multiple_choice' || answer.type === 'yes_no' || answer.type === 'dropdown') {
+    } else if (['single_choice', 'multiple_choice', 'yes_no', 'dropdown'].includes(answer.type)) {
       answerChoice = Array.isArray(answer.value) ? answer.value.join(',') : answer.value;
     }
 
-    await db.prepare(`
-      INSERT INTO survey_answers (id, response_id, question_id, answer_text, answer_number, answer_choice, answer_rating)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).bind(answerId, responseId, answer.questionId, answerText, answerNumber, answerChoice, answerRating).run();
+    statements.push(
+      db.prepare(`
+        INSERT INTO survey_answers (id, response_id, question_id, answer_text, answer_number, answer_choice, answer_rating)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).bind(answerId, responseId, answer.questionId, answerText, answerNumber, answerChoice, answerRating)
+    );
+  }
+  try {
+    await db.batch(statements);
+  } catch (e: any) {
+    if (e?.message?.includes('UNIQUE')) {
+      return jsonError('You have already submitted this survey');
+    }
+    return jsonError('Survey submission failed');
   }
 
   return jsonSuccess({ responseId, message: 'Survey submitted successfully' });
