@@ -48,6 +48,12 @@ interface QuestionFormData {
   productType: string
 }
 
+interface ProductOption {
+  id: string
+  name: string
+  image_url?: string | null
+}
+
 interface VersionFormData {
   productId: string
   title: string
@@ -164,11 +170,13 @@ function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (
 
 function QuestionModal({
   versions,
+  products,
   question,
   onSave,
   onClose,
 }: {
   versions: SurveyVersion[]
+  products: ProductOption[]
   question: SurveyQuestion | null
   onSave: (data: QuestionFormData) => Promise<void>
   onClose: () => void
@@ -361,25 +369,29 @@ function QuestionModal({
 
            <div className="grid grid-cols-2 gap-4">
              <div>
-               <label className="mb-1 block text-sm font-medium text-slate-700">Product Type</label>
-               <select
-                 value={form.productType}
-                 onChange={e => updateProductType(e.target.value)}
-                 className="input"
-               >
-                 <option value="none">None</option>
-                 <option value="photo">Photo Selection</option>
-               </select>
-             </div>
-             <div>
-               <label className="mb-1 block text-sm font-medium text-slate-700">Product Image URL</label>
-               <input
-                 type="text"
-                 value={form.imageUrl}
-                 onChange={e => updateImageUrl(e.target.value)}
-                 className="input"
-                 placeholder="https://example.com/product.jpg"
-               />
+              <label className="mb-1 block text-sm font-medium text-slate-700">Product Type</label>
+              <select
+                value={form.productType}
+                onChange={e => updateProductType(e.target.value)}
+                className="input"
+              >
+                <option value="none">None</option>
+                {products.map(p => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Product Image URL</label>
+              <input
+                type="text"
+                value={form.imageUrl}
+                onChange={e => updateImageUrl(e.target.value)}
+                className="input"
+                placeholder="https://example.com/product.jpg"
+              />
              </div>
            </div>
 
@@ -640,6 +652,7 @@ export default function SurveysPage() {
   const [activeTab, setActiveTab] = useState<Tab>('questions')
   const [questions, setQuestions] = useState<SurveyQuestion[]>([])
   const [versions, setVersions] = useState<SurveyVersion[]>([])
+  const [products, setProducts] = useState<ProductOption[]>([])
   const [loadingQuestions, setLoadingQuestions] = useState(true)
   const [loadingVersions, setLoadingVersions] = useState(true)
   const [errorQuestions, setErrorQuestions] = useState('')
@@ -689,11 +702,24 @@ export default function SurveysPage() {
     }
   }, [])
 
+  const fetchProducts = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/products`)
+      const data = await res.json()
+      if (data.success) {
+        setProducts(data.data || [])
+      }
+    } catch {
+      // product list is optional for the question form
+    }
+  }, [])
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchQuestions()
     fetchVersions()
-  }, [fetchQuestions, fetchVersions])
+    fetchProducts()
+  }, [fetchQuestions, fetchVersions, fetchProducts])
 
   async function handleToggleQuestionActive(question: SurveyQuestion) {
     setTogglingQuestionId(question.id)
@@ -1060,6 +1086,7 @@ export default function SurveysPage() {
       {showQuestionModal && (
         <QuestionModal
           versions={versions}
+          products={products}
           question={editingQuestion}
           onSave={handleSaveQuestion}
           onClose={closeQuestionModal}

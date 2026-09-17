@@ -1226,15 +1226,15 @@ app.get('/admin/rewards', authMiddleware, adminMiddleware, async (c) => {
 app.post('/admin/rewards', authMiddleware, adminMiddleware, async (c) => {
   const db = c.env.survey_db;
   const body = await c.req.json();
-  const { name, description, imageUrl, totalQuantity, weight, lowStockThreshold, campaignId, translations } = body;
+  const { name, description, imageUrl, totalQuantity, weight, lowStockThreshold, campaignId, translations, winningRatio } = body;
 
   if (!name || !totalQuantity) return jsonError('Name and total quantity are required');
 
   const id = generateId();
   await db.prepare(`
-    INSERT INTO rewards (id, name, description, image_url, total_quantity, remaining_quantity, weight, low_stock_threshold, campaign_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(id, name, description || null, imageUrl || null, totalQuantity, totalQuantity, weight || 10, lowStockThreshold || 10, campaignId || null).run();
+    INSERT INTO rewards (id, name, description, image_url, total_quantity, remaining_quantity, weight, low_stock_threshold, campaign_id, winning_ratio)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(id, name, description || null, imageUrl || null, totalQuantity, totalQuantity, weight || 10, lowStockThreshold || 10, campaignId || null, winningRatio ?? null).run();
 
   // Record initial stock
   await db.prepare(`
@@ -1375,24 +1375,6 @@ app.get('/admin/rewards/history', authMiddleware, adminMiddleware, async (c) => 
   const total = await db.prepare('SELECT COUNT(*) as count FROM user_rewards').first();
 
   return jsonSuccess({ history: history.results, total: (total as any)?.count || 0 });
-});
-
-// ============================================================
-// PRODUCTS (for survey page to fetch product data with images)
-// ============================================================
-
-app.get('/products', async (c) => {
-  const db = c.env.survey_db;
-  const lang = c.req.query('lang') || 'en';
-
-  const products = await db.prepare(`
-    SELECT p.id, p.name, p.description, p.brand, p.image_url, p.display_order
-    FROM products p
-    WHERE p.is_active = 1
-    ORDER BY p.display_order
-  `).all();
-
-  return jsonSuccess(products.results);
 });
 
 // ============================================================

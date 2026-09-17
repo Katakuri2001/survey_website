@@ -11,6 +11,7 @@ type Reward = {
   total_quantity: number;
   remaining_quantity: number;
   weight: number;
+  winning_ratio: number | null;
   is_active: boolean;
   status: string;
   low_stock_threshold: number;
@@ -29,6 +30,7 @@ type InventoryReward = {
   delivered_count: number;
   pending_count: number;
   utilization_rate: number;
+  winning_ratio: number | null;
 };
 
 type InventorySummary = {
@@ -60,6 +62,7 @@ type RewardForm = {
   weight: number;
   lowStockThreshold: number;
   campaignId: string;
+  winningRatio: number | null;
   isActive: boolean;
   status: string;
 };
@@ -76,6 +79,7 @@ const defaultForm: RewardForm = {
   weight: 1,
   lowStockThreshold: 5,
   campaignId: "",
+  winningRatio: null,
   isActive: true,
   status: "active",
 };
@@ -171,6 +175,7 @@ export default function RewardsPage() {
       weight: reward.weight,
       lowStockThreshold: reward.low_stock_threshold,
       campaignId: "",
+      winningRatio: reward.winning_ratio,
       isActive: reward.is_active,
       status: reward.status,
     });
@@ -188,6 +193,7 @@ export default function RewardsPage() {
         totalQuantity: form.totalQuantity,
         weight: form.weight,
         lowStockThreshold: form.lowStockThreshold,
+        winningRatio: form.winningRatio,
         translations: {
           en: { name: form.name, description: form.description },
           my: { name: form.nameMy, description: form.descriptionMy },
@@ -655,6 +661,29 @@ export default function RewardsPage() {
                     onChange={(e) => setForm({ ...form, campaignId: e.target.value })}
                     className="input"
                   />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">
+                    Winning Ratio (%) <span className="font-normal text-slate-400">— optional</span>
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step="0.01"
+                    value={form.winningRatio ?? ""}
+                    placeholder="Auto (by stock)"
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        winningRatio: e.target.value === "" ? null : Number(e.target.value),
+                      })
+                    }
+                    className="input"
+                  />
+                  <p className="mt-1 text-xs text-slate-400">
+                    Leave empty to share the remaining probability by stock.
+                  </p>
                 </div>
                 {editingReward && (
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

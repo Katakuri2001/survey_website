@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 
 import { API_BASE } from '../lib/api'
+import { exportToExcel, type ExcelColumn } from '../lib/excel'
 
 interface UserList {
   id: string
@@ -57,6 +58,42 @@ interface RewardHistory {
 }
 
 const ITEMS_PER_PAGE = 50
+
+interface SurveyExportRow {
+  id: string
+  full_name: string
+  email: string
+  phone: string
+  reward_name: string
+  won_at: string
+  delivery_status: string
+  delivered_at: string | null
+  language: string
+  completed_at: string | null
+  question_text: string | null
+  answer_text: string | null
+  answer_choice: string | null
+  answer_number: number | null
+  answer_rating: number | null
+}
+
+const surveyExportColumns: ExcelColumn<SurveyExportRow>[] = [
+  { header: 'Reward ID', value: r => r.id },
+  { header: 'Full Name', value: r => r.full_name },
+  { header: 'Email', value: r => r.email },
+  { header: 'Phone', value: r => r.phone },
+  { header: 'Reward', value: r => r.reward_name },
+  { header: 'Won At', value: r => r.won_at },
+  { header: 'Delivery Status', value: r => r.delivery_status },
+  { header: 'Delivered At', value: r => r.delivered_at },
+  { header: 'Language', value: r => r.language },
+  { header: 'Completed At', value: r => r.completed_at },
+  { header: 'Question', value: r => r.question_text },
+  { header: 'Answer Text', value: r => r.answer_text },
+  { header: 'Answer Choice', value: r => r.answer_choice },
+  { header: 'Answer Number', value: r => r.answer_number },
+  { header: 'Answer Rating', value: r => r.answer_rating },
+]
 
 function LoadingSkeleton() {
   return (
@@ -386,6 +423,7 @@ export default function UsersPage() {
   const [page, setPage] = useState(0)
   const [total, setTotal] = useState(0)
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
+  const [exporting, setExporting] = useState(false)
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -428,14 +466,48 @@ export default function UsersPage() {
     fetchUsers()
   }, [fetchUsers])
 
+  const exportSurveys = useCallback(async () => {
+    setExporting(true)
+    setError('')
+    try {
+      const token = localStorage.getItem('admin_token')
+      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
+      const res = await fetch(`${API_BASE}/admin/surveys/export`, { headers })
+      const data = await res.json()
+      if (!data.success) {
+        setError(data.message || 'Failed to export surveys')
+        return
+      }
+      const rows: SurveyExportRow[] = data.data.data || []
+      const stamp = new Date().toISOString().slice(0, 10)
+      exportToExcel(`survey-details-${stamp}.xls`, 'Survey Details', surveyExportColumns, rows)
+    } catch {
+      setError('Could not connect to the server')
+    } finally {
+      setExporting(false)
+    }
+  }, [])
+
   const totalPages = Math.ceil(total / ITEMS_PER_PAGE)
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="font-display text-2xl font-bold text-ink">Users</h1>
-        <p className="mt-1 text-sm text-slate-500">Manage and view registered users</p>
+      <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+        <div>
+          <h1 className="font-display text-2xl font-bold text-ink">Users</h1>
+          <p className="mt-1 text-sm text-slate-500">Manage and view registered users</p>
+        </div>
+        <button
+          onClick={exportSurveys}
+          disabled={exporting}
+          className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          {exporting ? 'Exporting...' : 'Export Excel'}
+        </button>
       </div>
 
       {/* Search and Stats */}

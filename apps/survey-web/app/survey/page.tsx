@@ -510,18 +510,28 @@ export default function SurveyPage() {
               </h2>
 
               {/* --- product photo card --- */}
-              {current.product_type === 'photo' && (
-                <div className="mt-4 rounded-2xl border border-gold/20 bg-surface/80 overflow-hidden animate-fade-up">
-                  {current.image_url && (
-                    <img src={current.image_url} alt="Product" className="w-full h-48 object-cover" />
-                  )}
-                  <div className="p-4">
-                    <p className={`font-display font-bold text-white ${language === 'my' ? 'font-myanmar' : ''}`}>
-                      {t('product')}
-                    </p>
+              {current.product_type && current.product_type !== 'none' && (() => {
+                const product = products[current.product_type]
+                const image = current.image_url || product?.image_url || null
+                const name = product?.name || t('product')
+                return (
+                  <div className="mt-4 overflow-hidden rounded-2xl border border-gold/20 bg-surface/80 animate-fade-up">
+                    {image && (
+                      <img
+                        src={image}
+                        alt={name}
+                        className="h-48 w-full object-cover"
+                        onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                      />
+                    )}
+                    <div className="p-4">
+                      <p className={`font-display font-bold text-white ${language === 'my' ? 'font-myanmar' : ''}`}>
+                        {name}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              )}
+                )
+              })()}
 
               {/* --- rating --- */}
               {current.question_type === 'rating' && (
