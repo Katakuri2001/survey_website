@@ -293,7 +293,7 @@ app.post('/auth/admin/login', async (c) => {
 app.post('/users/guest', async (c) => {
   const db = c.env.survey_db;
   const body = await c.req.json();
-  const { fullName, phone, dob, nrcState, nrcTownship, nrcType, nrcNumber } = body || {};
+  const { fullName, phone, dob, stateCode, nrcType, nrcNumber } = body || {};
 
   if (!fullName || !phone || !dob) {
     return jsonError('Full name, phone number, and date of birth are required');
@@ -317,9 +317,9 @@ app.post('/users/guest', async (c) => {
   if (existing) {
     userId = existing.id;
     const result = await db.prepare(`
-      UPDATE users SET full_name = ?, age = ?, age_group = ?, dob = ?, nrc_state = ?, nrc_township = ?, nrc_type = ?, nrc_number = ?, updated_at = datetime('now')
+      UPDATE users SET full_name = ?, age = ?, age_group = ?, dob = ?, nrc_state = ?, nrc_type = ?, nrc_number = ?, updated_at = datetime('now')
       WHERE id = ?
-    `).bind(fullName, age, ageGroup, dob || null, nrcState || null, nrcTownship || null, nrcType || null, nrcNumber || null, userId).run();
+    `).bind(fullName, age, ageGroup, dob || null, stateCode || null, nrcType || null, nrcNumber || null, userId).run();
     if (result.error) {
       console.error('Update user error:', result.error);
       return jsonError('Failed to update user');
@@ -328,9 +328,9 @@ app.post('/users/guest', async (c) => {
     userId = generateId();
     const passwordHash = await hashPassword(crypto.randomUUID());
     const result = await db.prepare(`
-      INSERT INTO users (id, full_name, phone, password_hash, age, age_group, dob, nrc_state, nrc_township, nrc_type, nrc_number, is_active)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-    `).bind(userId, fullName, phone, passwordHash, age, ageGroup, dob || null, nrcState || null, nrcTownship || null, nrcType || null, nrcNumber || null).run();
+      INSERT INTO users (id, full_name, phone, password_hash, age, age_group, dob, nrc_state, nrc_type, nrc_number, is_active)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+    `).bind(userId, fullName, phone, passwordHash, age, ageGroup, dob || null, stateCode || null, nrcType || null, nrcNumber || null).run();
     if (result.error) {
       console.error('Insert user error:', result.error);
       return jsonError('Failed to create user');
@@ -434,10 +434,61 @@ app.get('/campaigns', async (c) => {
 });
 
 // ============================================================
-// SURVEY ROUTES
+// PUBLIC ROUTES - SURVEY ROUTES
 // ============================================================
 
-// Get survey questions for a product
+// Get survey questions (single active survey - no product filter)
+app.get('/survey/questions', async (c) => {
+  const db = c.env.survey_db;
+  const lang = c.req.query('lang') || 'en';
+
+  // Get the latest active survey version (across all products)
+  const version = await db.prepare(`
+    SELECT id, title, description FROM survey_versions
+    WHERE is_active = 1
+    ORDER BY created_at DESC LIMIT 1
+  `).first() as any;
+
+  if (!version) {
+    return jsonError('No active survey found', 404);
+  }
+
+  // Get questions with translations
+  const questions = await db.prepare(`
+    SELECT q.id, q.question_type, q.is_required, q.display_order, q.validation_rules, q.image_url, q.product_type,
+           COALESCE(qt.question_text, q.question_text) as question_text
+     FROM survey_questions q
+     LEFT JOIN survey_question_translations qt ON q.id = qt.question_id AND qt.language = ?
+     WHERE q.survey_version_id = ? AND q.is_active = 1
+     ORDER BY q.display_order
+  `).bind(lang, version.id).all();
+
+  // Get options for each question
+  const questionsWithOptions = await Promise.all(
+    (questions.results as any[]).map(async (q) => {
+      const options = await db.prepare(`
+        SELECT o.id, o.option_value, o.display_order,
+               COALESCE(ot.option_text, o.option_text) as option_text
+        FROM survey_options o
+        LEFT JOIN survey_option_translations ot ON o.id = ot.option_id AND ot.language = ?
+        WHERE o.question_id = ? AND o.is_active = 1
+        ORDER BY o.display_order
+      `).bind(lang, q.id).all();
+
+      // Get conditions
+      const conditions = await db.prepare(`
+        SELECT * FROM survey_question_conditions
+        WHERE question_id = ? AND is_active = 1
+      `).bind(q.id).all();
+
+      return { ...q, options: options.results, conditions: conditions.results };
+    })
+  );
+
+  return jsonSuccess({ version, questions: questionsWithOptions });
+});
+
+// Get survey questions for a product (legacy)
 app.get('/survey/questions/:productId', async (c) => {
   const db = c.env.survey_db;
   const productId = c.req.param('productId');
@@ -493,10 +544,10 @@ app.get('/survey/questions/:productId', async (c) => {
 app.post('/survey/submit', async (c) => {
   const db = c.env.survey_db;
   const body = await c.req.json();
-  const { userId, productId, campaignId, language, answers, profile } = body;
+  const { userId, campaignId, language, answers, profile } = body;
 
-  if (!productId || !answers || !Array.isArray(answers)) {
-    return jsonError('Product ID and answers are required');
+  if (!answers || !Array.isArray(answers)) {
+    return jsonError('Answers are required');
   }
 
   const answersByQuestion = new Map(answers.map((a: any) => [a.questionId, a]));
@@ -517,15 +568,18 @@ app.post('/survey/submit', async (c) => {
     return jsonError('User ID or profile required');
   }
 
-  // Get active survey version
+  // Get active survey version (global, not per product)
   const version = await db.prepare(`
-    SELECT id FROM survey_versions WHERE product_id = ? AND is_active = 1
-    ORDER BY version DESC LIMIT 1
-  `).bind(productId).first() as any;
+    SELECT id, product_id FROM survey_versions
+    WHERE is_active = 1
+    ORDER BY created_at DESC LIMIT 1
+  `).first() as any;
 
   if (!version) {
     return jsonError('No active survey found');
   }
+
+  const productId = version.product_id;
 
   const requiredQuestions = await db.prepare(`
     SELECT id, question_type, is_required, question_text

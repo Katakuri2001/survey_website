@@ -59,7 +59,6 @@ export default function SurveyPage() {
   const { t, language } = useLanguage()
   const router = useRouter()
   const [questions, setQuestions] = useState<Question[]>([])
-  const [products, setProducts] = useState<Record<string, { name: string; image_url?: string | null }>>({})
   const [currentIdx, setCurrentIdx] = useState(0)
   const [answers, setAnswers] = useState<Record<string, Answer>>({})
   const [loading, setLoading] = useState(true)
@@ -71,13 +70,6 @@ export default function SurveyPage() {
   const [notice, setNotice] = useState(false)
   const questionsRef = useRef<Question[]>([])
 
-  const [productId, setProductId] = useState<string | null>(() => {
-    if (typeof window !== 'undefined') {
-      return new URLSearchParams(window.location.search).get('product')
-    }
-    return null
-  })
-
   useEffect(() => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('survey_token') : null
     if (!token) {
@@ -87,27 +79,11 @@ export default function SurveyPage() {
 
   useEffect(() => {
     if (!guarded) return
-    if (!productId) {
-      fetch(`${API_BASE}/products?lang=${language}`, { cache: 'no-store' })
-        .then(r => r.json())
-        .then(data => {
-          if (data.success && data.data && data.data.length > 0) {
-            setProductId(data.data[0].id)
-          } else {
-            setProductId('beer')
-          }
-        })
-        .catch(() => setProductId('beer'))
-    }
-  }, [language, productId, guarded])
-
-  useEffect(() => {
-    if (!guarded || !productId) return
     let cancelled = false
     let initialDone = false
 
     const loadQuestions = (silent: boolean, forceRefresh = false) => {
-      fetch(`${API_BASE}/survey/questions/${productId}?lang=${language}`, { cache: 'no-store' })
+      fetch(`${API_BASE}/survey/questions?lang=${language}`, { cache: 'no-store' })
         .then(r => r.json())
         .then(data => {
           if (cancelled) return
@@ -172,21 +148,9 @@ export default function SurveyPage() {
       window.removeEventListener('focus', onVisible)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [language, productId, guarded])
-
-  useEffect(() => {
-    if (!guarded) return
-    fetch(`${API_BASE}/products?lang=${language}`, { cache: 'no-store' })
-      .then(r => r.json())
-      .then(data => {
-        if (data.success && data.data) {
-          const map: Record<string, { name: string; image_url?: string | null }> = {}
-          for (const p of data.data) map[p.id] = { name: p.name, image_url: p.image_url }
-          setProducts(map)
-        }
-      })
-      .catch(() => {})
   }, [language, guarded])
+
+  // Removed products fetch - questions now contain product_type and image_url directly
 
   const handleChoice = (questionId: string, value: string) => {
     setAnswers(prev => ({ ...prev, [questionId]: { questionId, type: 'single_choice', value } }))
@@ -280,14 +244,13 @@ export default function SurveyPage() {
       const res = await fetch(`${API_BASE}/survey/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ productId, campaignId, userId, language, answers: answerArray })
+        body: JSON.stringify({ campaignId, userId, language, answers: answerArray })
       })
       const data = await res.json()
 
       if (data.success) {
         if (typeof window !== 'undefined') {
           sessionStorage.setItem('survey_response_id', data.data.responseId)
-          sessionStorage.setItem('survey_product_id', productId || '')
           if (campaignId) sessionStorage.setItem('survey_campaign_id', campaignId)
         }
         router.push('/spin')
@@ -499,22 +462,19 @@ export default function SurveyPage() {
               </h2>
 
               {/* --- product photo card --- */}
-              {current.product_type && current.product_type !== 'none' && (() => {
-                const product = products[current.product_type]
-                const image = current.image_url || product?.image_url || null
-                const name = product?.name || t('product')
+              {current.product_type && current.product_type !== 'none' && current.image_url && (() => {
+                const image = current.image_url
+                const name = current.product_type
                 return (
                   <div className="mt-4 overflow-hidden rounded-2xl border border-gold/20 bg-surface/80 animate-fade-up">
-                    {image && (
-                      <Image
-                        src={image}
-                        alt={name}
-                        width={384}
-                        height={192}
-                        className="h-48 w-full object-cover"
-                        onError={(e) => { e.currentTarget.style.display = 'none' }}
-                      />
-                    )}
+                    <Image
+                      src={image}
+                      alt={name}
+                      width={384}
+                      height={192}
+                      className="h-48 w-full object-cover"
+                      onError={(e) => { e.currentTarget.style.display = 'none' }}
+                    />
                     <div className="p-4">
                       <p className={`font-display font-bold text-white ${language === 'my' ? 'font-myanmar' : ''}`}>
                         {name}

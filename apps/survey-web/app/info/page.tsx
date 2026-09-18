@@ -88,8 +88,7 @@ export default function InfoPage() {
           fullName: formData.fullName,
           phone: formData.phone,
           dob,
-          nrcState: formData.nrc.stateCode,
-          nrcTownship: formData.nrc.townshipCode,
+          stateCode: formData.nrc.stateCode,
           nrcType: formData.nrc.type,
           nrcNumber: formData.nrc.serial,
         })
@@ -109,8 +108,7 @@ export default function InfoPage() {
           fullName: formData.fullName,
           phone: formData.phone,
           dob,
-          nrcState: formData.nrc.stateCode,
-          nrcTownship: formData.nrc.townshipCode,
+          stateCode: formData.nrc.stateCode,
           nrcType: formData.nrc.type,
           nrcNumber: formData.nrc.serial,
         }))
