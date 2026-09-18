@@ -147,9 +147,6 @@ export default function NrcInput({ value, onChange, disabled = false, required =
         <div className={`pt-2 border-t border-white/10 ${isValid ? 'text-gold' : 'text-fg-muted'}`}>
           <div className="flex items-center justify-between text-xs mb-1">
             <span className="font-medium">{t('nrcPreview')}</span>
-            {isValid && (
-              <span className="text-[10px] px-2 py-0.5 rounded bg-success/20 text-success font-mono">{t('valid')}</span>
-            )}
           </div>
           <div className="font-mono text-base tracking-wide bg-surface-deep/50 rounded-lg px-3 py-2 text-center select-all">
             {formatNrcDisplay(value)}
@@ -160,15 +157,6 @@ export default function NrcInput({ value, onChange, disabled = false, required =
         </div>
       )}
 
-      {/* Example */}
-      {isValid && (
-        <p className="text-xs text-success text-center flex items-center justify-center gap-1">
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-          </svg>
-          <span>{t('valid')}</span>
-        </p>
-      )}
       {!isValid && (
         <p className="text-xs text-fg-muted text-center">{t('nrcExample')}</p>
       )}
