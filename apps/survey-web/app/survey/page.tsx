@@ -6,7 +6,6 @@ import { useLanguage } from '../context/LanguageContext'
 import Header from '../components/Header'
 import { API_BASE } from '../lib/api'
 import { useHydrated } from '../lib/useHydrated'
-import Image from 'next/image'
 
 interface Option {
   id: string
@@ -277,7 +276,7 @@ export default function SurveyPage() {
         <div className="relative mb-6 animate-pop">
           <div className="absolute -inset-3 rounded-full border border-gold/30 animate-spin-slow" />
           <div className="w-16 h-16 rounded-full gold-border bg-brand-emerald overflow-hidden p-0.5">
-            <Image src="/myanmarbeer.png" alt="MB" width={64} height={64} className="w-full h-full object-cover rounded-full" />
+            <img src="/myanmarbeer.png" alt="MB" width={64} height={64} className="w-full h-full object-cover rounded-full" />
           </div>
         </div>
         <div className="h-2 w-40 rounded-full shimmer-bg" />
@@ -467,7 +466,7 @@ export default function SurveyPage() {
                 const name = current.product_type
                 return (
                   <div className="mt-4 overflow-hidden rounded-2xl border border-gold/20 bg-surface/80 animate-fade-up">
-                    <Image
+                    <img
                       src={image}
                       alt={name}
                       width={384}

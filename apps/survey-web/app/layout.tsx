@@ -3,6 +3,7 @@ import './globals.css'
 import { Poppins, Inter, Noto_Sans_Myanmar } from 'next/font/google'
 import { LanguageProvider } from './context/LanguageContext'
 import Splash from './components/Splash'
+import { ToastProvider } from './components/Toast'
 
 export const metadata: Metadata = {
   title: 'Myanmar Beer Survey & Rewards',
@@ -26,8 +27,10 @@ export default function RootLayout({
     <html lang="en" className={`${inter.variable} ${poppins.variable} ${notoMyanmar.variable} min-h-screen`}>
       <body className="min-h-screen bg-navy text-fg-bright">
         <LanguageProvider>
-          <Splash />
-          {children}
+          <ToastProvider>
+            <Splash />
+            {children}
+          </ToastProvider>
         </LanguageProvider>
       </body>
     </html>

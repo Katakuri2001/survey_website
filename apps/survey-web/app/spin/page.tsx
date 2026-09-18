@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useLanguage } from '../context/LanguageContext'
 import Header from '../components/Header'
 import { API_BASE, getValidToken } from '../lib/api'
+import { useToast } from '../components/Toast'
 
 interface Reward {
   id: string
@@ -41,6 +42,7 @@ const CONFETTI_COLORS = ['#F5C542', '#D4AF37', '#F0E826', '#00994B', '#F59E0B', 
 export default function SpinPage() {
   const router = useRouter()
   const { t, language } = useLanguage()
+  const { showToast } = useToast()
   const [spinning, setSpinning] = useState(false)
   const [result, setResult] = useState<{ reward: Reward; userRewardId: string } | null>(null)
   const [rotation, setRotation] = useState(0)
@@ -313,6 +315,9 @@ export default function SpinPage() {
         setSpinning(false)
         setResult({ reward: displayReward, userRewardId: serverReward.userRewardId })
         setHasSpun(true)
+
+        // Show toast notification for reward
+        showToast(`${t('congratulations')} ${t('youWon')}: ${displayReward.name}!`, 'success', 5000)
 
         if (typeof window !== 'undefined') {
           sessionStorage.setItem('user_reward_id', serverReward.userRewardId)

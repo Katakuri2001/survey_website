@@ -2,7 +2,6 @@
 
 import { useLanguage } from '../context/LanguageContext'
 import LanguageSwitcher from './LanguageSwitcher'
-import Image from 'next/image'
 
 interface HeaderProps {
   title?: string
@@ -32,7 +31,7 @@ export default function Header({ title, subtitle, showBack = true, backHref = '/
         )}
 
         <div className="flex items-center gap-2.5 min-w-0 flex-1 justify-center">
-          <Image src="/myanmarbeer.png" alt="MB" width={28} height={28} className="w-7 h-7 rounded-full gold-border object-cover shrink-0" />
+          <img src="/myanmarbeer.png" alt="MB" width={28} height={28} className="w-7 h-7 rounded-full gold-border object-cover shrink-0" />
           <h1 className={`font-display font-bold gold-text truncate ${language === 'my' ? 'font-myanmar leading-snug tracking-normal' : 'text-base md:text-lg'}`}>
             {title || t('brandName')}
           </h1>
