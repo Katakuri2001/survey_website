@@ -7,7 +7,7 @@ compatibility_date = "2026-09-01"
   database_name = "survey-db"
   database_id = "449a4386-9e0f-4e65-b7cf-e37cc0de491c"
 
-[env.production.d1_databases]
+[[env.production.d1_databases]]
   binding = "survey_db"
   database_name = "survey-db"
   database_id = "449a4386-9e0f-4e65-b7cf-e37cc0de491c"
@@ -15,7 +15,7 @@ compatibility_date = "2026-09-01"
 [env.production.vars]
 DB_DEBUG = "false"
 
-[env.development.d1_databases]
+[[env.development.d1_databases]]
   binding = "survey_db"
   database_name = "survey-db"
   database_id = "449a4386-9e0f-4e65-b7cf-e37cc0de491c"
