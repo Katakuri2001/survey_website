@@ -7,8 +7,8 @@ export const metadata: Metadata = {
   title: 'Myanmar Beer Admin',
   description: 'Survey Platform Admin Dashboard',
   icons: {
-    icon: '/icon.png',
-    apple: '/apple-icon.png',
+    icon: '/admin/icon.png',
+    apple: '/admin/apple-icon.png',
   },
 }
 

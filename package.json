@@ -1,12 +1,19 @@
 {
   "name": "alcohol-survey-platform",
   "private": true,
-  "workspaces": [],
+  "workspaces": [
+    "apps/*"
+  ],
+  "packageManager": "npm@10.0.0",
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
     "lint": "turbo run lint",
     "test": "turbo run test",
     "wrangler": "wrangler"
+  },
+  "devDependencies": {
+    "wrangler": "^4.134.0",
+    "turbo": "^2.10.13"
   }
 }
