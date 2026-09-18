@@ -1,8 +1,6 @@
 // NRC Utility Functions
 // Shared utilities for NRC formatting, validation, and parsing
 
-import { validateNrcComponents, formatNrc, getStateName, getTownshipName, getTownships, MYANMAR_NRC_DATA } from '../data/myanmar-nrc'
-
 export interface NrcData {
   stateCode: string
   townshipCode: string
@@ -31,56 +29,46 @@ export function validateSerial(serial: string): boolean {
   return /^\d{6}$/.test(normalized)
 }
 
-// Validate NRC data
+// Validate NRC data - only stateCode, type, serial required
 export function validateNrc(data: NrcData): NrcValidationResult {
   const normalizedSerial = normalizeMyanmarNumerals(data.serial)
-  const result = validateNrcComponents(
-    data.stateCode,
-    data.townshipCode,
-    data.type,
-    normalizedSerial
-  )
+  const errors: string[] = []
+  
+  if (!data.stateCode || !['1','2','3','4','5','6','7','8','9','10','11','12','13','14'].includes(data.stateCode)) {
+    errors.push('Region is required (1-14)')
+  }
+  if (!data.type) {
+    errors.push('NRC Type is required')
+  }
+  if (!validateSerial(normalizedSerial)) {
+    errors.push('Serial number must be exactly 6 digits')
+  }
+  
   return {
-    valid: result.valid,
-    errors: result.errors,
-    formatted: result.valid ? formatNrc(data.stateCode, data.townshipCode, data.type, normalizedSerial) : undefined,
+    valid: errors.length === 0,
+    errors,
+    formatted: errors.length === 0 ? formatNrcDisplay({ ...data, serial: normalizedSerial }) : undefined,
   }
 }
 
-// Format NRC for display
+// Format NRC for display (region/type/serial only)
 export function formatNrcDisplay(data: NrcData): string {
   const normalizedSerial = normalizeMyanmarNumerals(data.serial)
-  if (data.stateCode && data.townshipCode && data.type && normalizedSerial) {
-    return formatNrc(data.stateCode, data.townshipCode, data.type, normalizedSerial)
+  if (data.stateCode && data.type && normalizedSerial) {
+    return `${data.stateCode}/${data.type}${normalizedSerial}`
   }
   // Partial display
   const parts: string[] = []
   if (data.stateCode) parts.push(data.stateCode)
-  if (data.townshipCode) parts.push(`/${data.townshipCode}`)
-  if (data.type) parts.push(` (${data.type})`)
+  if (data.type) parts.push(`/${data.type}`)
   if (normalizedSerial) parts.push(normalizedSerial)
   else if (data.serial) parts.push('______')
   return parts.join('')
 }
 
-// Get display name for state
-export function getStateDisplayName(stateCode: string, language: 'en' | 'my'): string {
-  return getStateName(stateCode, language)
-}
-
-// Get display name for township
-export function getTownshipDisplayName(stateCode: string, townshipCode: string, language: 'en' | 'my'): string {
-  return getTownshipName(stateCode, townshipCode, language)
-}
-
-// Get available townships for a state
-export function getAvailableTownships(stateCode: string) {
-  return getTownships(stateCode)
-}
-
-// Get all states
-export function getAllStates() {
-  return MYANMAR_NRC_DATA
+// Check if NRC data is complete (region, type, serial only)
+export function isNrcComplete(data: NrcData): boolean {
+  return !!data.stateCode && !!data.type && validateSerial(data.serial)
 }
 
 // NRC Type options (stable codes with localized labels)
@@ -95,18 +83,12 @@ export type NrcTypeCode = typeof NRC_TYPES[number]['code']
 
 // Parse formatted NRC string back to components (best effort)
 export function parseNrc(formatted: string): Partial<NrcData> | null {
-  // Format: 14/HATHATA (N)361920
-  const match = formatted.match(/^(\d+)\/([A-Z0-9]+)\s*\(([A-Z]+)\)(\d+)$/)
+  // Format: 14/N361920
+  const match = formatted.match(/^(\d+)\/([A-Z]+)(\d+)$/)
   if (!match) return null
   return {
     stateCode: match[1],
-    townshipCode: match[2],
-    type: match[3],
-    serial: match[4],
+    type: match[2],
+    serial: match[3],
   }
-}
-
-// Check if NRC data is complete
-export function isNrcComplete(data: NrcData): boolean {
-  return !!data.stateCode && !!data.townshipCode && !!data.type && validateSerial(data.serial)
 }

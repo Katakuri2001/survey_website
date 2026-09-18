@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import { useLanguage } from '../context/LanguageContext'
-import { getAllStates, getAvailableTownships, NRC_TYPES, validateNrc, formatNrcDisplay, isNrcComplete, type NrcData } from '../lib/nrc'
+import { NRC_TYPES, validateNrc, formatNrcDisplay, isNrcComplete, type NrcData } from '../lib/nrc'
 
 interface NrcInputProps {
   value: NrcData
@@ -28,36 +28,24 @@ function FieldLabel({ children, required = false }: FieldLabelProps) {
   )
 }
 
+const REGIONS = Array.from({ length: 14 }, (_, i) => (i + 1).toString())
+
 export default function NrcInput({ value, onChange, disabled = false, required = true, error }: NrcInputProps) {
   const { t, language } = useLanguage()
   const [touched, setTouched] = useState<Partial<Record<keyof NrcData, boolean>>>({})
   const [validationErrors, setValidationErrors] = useState<string[]>([])
 
-  const states = getAllStates()
-  const townships = getAvailableTownships(value.stateCode)
-
   // Validate helper
   const runValidation = useCallback(() => {
-    if (touched.stateCode && touched.townshipCode && touched.type && touched.serial) {
+    if (touched.stateCode && touched.type && touched.serial) {
       const result = validateNrc(value)
       setValidationErrors(result.errors)
     }
   }, [value, touched])
 
   const handleStateChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newStateCode = e.target.value
-    onChange({
-      ...value,
-      stateCode: newStateCode,
-      townshipCode: '', // Reset township when state changes
-    })
+    onChange({ ...value, stateCode: e.target.value })
     setTouched(prev => ({ ...prev, stateCode: true }))
-    runValidation()
-  }, [onChange, value, runValidation])
-
-  const handleTownshipChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-    onChange({ ...value, townshipCode: e.target.value })
-    setTouched(prev => ({ ...prev, townshipCode: true }))
     runValidation()
   }, [onChange, value, runValidation])
 
@@ -76,53 +64,29 @@ export default function NrcInput({ value, onChange, disabled = false, required =
   }, [onChange, value, runValidation])
 
   const isValid = isNrcComplete(value)
-  const showPreview = value.stateCode || value.townshipCode || value.type || value.serial
+  const showPreview = value.stateCode || value.type || value.serial
 
   return (
     <div className="space-y-4">
       <FieldLabel required={required}>{t('nrc')}</FieldLabel>
 
-      {/* State / Region */}
+      {/* Region (1-14) */}
       <div>
         <select
           value={value.stateCode}
           onChange={handleStateChange}
           disabled={disabled}
           required={required}
-          className={`${selectClass} ${touched.stateCode && validationErrors.some(e => e.includes('State')) ? 'border-error' : ''}`}
-          aria-invalid={touched.stateCode && validationErrors.some(e => e.includes('State'))}
+          className={`${selectClass} ${touched.stateCode && validationErrors.some(e => e.includes('Region')) ? 'border-error' : ''}`}
+          aria-invalid={touched.stateCode && validationErrors.some(e => e.includes('Region'))}
         >
-          <option value="" className="bg-surface-deep">{t('stateRegion')}</option>
-          {states.map(state => (
-            <option key={state.code} value={state.code} className="bg-surface-deep font-myanmar">
-              {state.code} — {language === 'my' ? state.nameMy : state.nameEn}
+          <option value="" className="bg-surface-deep">{t('region')}</option>
+          {REGIONS.map(region => (
+            <option key={region} value={region} className="bg-surface-deep font-myanmar">
+              {region}
             </option>
           ))}
         </select>
-      </div>
-
-      {/* Township */}
-      <div>
-        <select
-          value={value.townshipCode}
-          onChange={handleTownshipChange}
-          disabled={disabled || townships.length === 0}
-          required={required}
-          className={`${selectClass} ${touched.townshipCode && validationErrors.some(e => e.includes('Township')) ? 'border-error' : ''}`}
-          aria-invalid={touched.townshipCode && validationErrors.some(e => e.includes('Township'))}
-        >
-          <option value="" className="bg-surface-deep">
-            {townships.length === 0 ? t('selectStateFirst') : t('townshipCodeLabel')}
-          </option>
-          {townships.map(township => (
-            <option key={township.code} value={township.code} className="bg-surface-deep font-myanmar">
-              {township.code} — {language === 'my' ? township.nameMy : township.nameEn}
-            </option>
-          ))}
-        </select>
-        {townships.length === 0 && (
-          <p className="text-xs text-fg-muted mt-1">{t('selectStateForTownship')}</p>
-        )}
       </div>
 
       {/* Type & Serial Number - Side by side on larger screens */}
