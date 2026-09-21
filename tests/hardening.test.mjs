@@ -43,11 +43,11 @@ function check(name, condition, detail) {
   }
 }
 
-async function api(path, { method = 'GET', token, body } = {}) {
+async function api(path, { method = 'GET', token, body, ip } = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
     method,
     headers: {
-      ...(IS_LOCAL_API ? { 'CF-Connecting-IP': TEST_IP } : {}),
+      ...(IS_LOCAL_API ? { 'CF-Connecting-IP': ip || TEST_IP } : {}),
       ...(body ? { 'Content-Type': 'application/json' } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
@@ -68,10 +68,11 @@ function uniquePhone() {
   return `09${tail.slice(0, 9)}`
 }
 
-async function createGuest() {
+async function createGuest(ip) {
   const phone = uniquePhone()
   const res = await api('/users/guest', {
     method: 'POST',
+    ip,
     body: { fullName: 'Hardening Test', phone, dob: '1990-01-01' },
   })
   if (!res.body?.success) throw new Error(`guest create failed: ${JSON.stringify(res.body)}`)
@@ -101,14 +102,15 @@ function buildAnswers(questions) {
     })
 }
 
-async function submitSurvey(token) {
-  const questions = await api('/survey/questions?lang=en')
+async function submitSurvey(token, ip) {
+  const questions = await api('/survey/questions?lang=en', { ip })
   if (!questions.body?.success) throw new Error('no active survey; seed the database first')
   const answers = buildAnswers(questions.body.data.questions)
   const submissionRequestId = crypto.randomUUID()
   const first = await api('/survey/submit', {
     method: 'POST',
     token,
+    ip,
     body: { campaignId: null, language: 'en', submissionRequestId, answers },
   })
   return { first, submissionRequestId, answers }
@@ -247,6 +249,106 @@ async function testGuestConcurrencySamePhone() {
   check('all resolve to a single user id', ids.size === 1, `distinct ids=${ids.size}`)
 }
 
+// ============================================================
+// Optional destructive test (opt-in): set one reward to a single unit, drain
+// every other reward, then fire many concurrent valid spins from distinct users.
+// Only one user may win the last unit; stock must never go negative.
+//
+// Enable with: TEST_STOCK_CONTENTION=1 API_BASE=... node tests/hardening.test.mjs
+// ============================================================
+
+async function adminLogin() {
+  const email = process.env.ADMIN_EMAIL || 'admin@myanmarbeer.com'
+  const password = process.env.ADMIN_PASSWORD || 'admin'
+  const res = await api('/auth/admin/login', { method: 'POST', body: { email, password } })
+  if (!res.body?.success) throw new Error(`admin login failed: ${JSON.stringify(res.body)}`)
+  return res.body.data.token
+}
+
+async function setStock(adminToken, id, adjustment, reason) {
+  const res = await api(`/admin/rewards/${id}/stock`, {
+    method: 'PATCH',
+    token: adminToken,
+    body: { adjustment, reason },
+  })
+  if (!res.body?.success) throw new Error(`stock adjust failed for ${id}: ${JSON.stringify(res.body)}`)
+  return res.body.data.newQuantity
+}
+
+async function fetchRewards(adminToken) {
+  const res = await api('/admin/rewards', { token: adminToken })
+  return Array.isArray(res.body?.data) ? res.body.data : []
+}
+
+async function testStockContention() {
+  console.log('\nReward stock contention (stock=1, many concurrent valid spins)')
+  const admin = await adminLogin()
+  const rewards = (await fetchRewards(admin)).filter((r) => r.is_active === 1 || r.is_active === true)
+  if (rewards.length === 0) {
+    console.log('  ~ no active rewards; skipping')
+    return
+  }
+
+  const target =
+    rewards.find((r) => r.requires_delivery !== 0 && r.remaining_quantity > 0) || rewards[0]
+  const snapshot = rewards.map((r) => ({ id: r.id, remaining: r.remaining_quantity }))
+  const startedAt = Date.now()
+
+  try {
+    // Make the target the only eligible reward, with exactly one unit left.
+    // Zero-stock rewards are excluded from the pool by the spin query.
+    for (const r of rewards) {
+      if (r.id !== target.id && r.remaining_quantity > 0) {
+        await setStock(admin, r.id, -r.remaining_quantity, 'contention test: drain')
+      }
+    }
+    await setStock(admin, target.id, 1 - target.remaining_quantity, 'contention test: set to 1')
+
+    const N = Number(process.env.STOCK_CONTENTION_USERS || 30)
+    const guests = []
+    for (let i = 0; i < N; i++) {
+      // Distinct client IP per simulated participant so the per-IP rate limits
+      // do not interfere with the concurrency being measured.
+      const ip = `10.${(i * 7) % 254}.${(i * 13) % 254}.${(i * 29) % 254}`
+      const g = await createGuest(ip)
+      await submitSurvey(g.token, ip)
+      guests.push({ token: g.token, ip })
+    }
+
+    const attempts = await Promise.all(
+      guests.map((g, i) =>
+        api('/rewards/spin', {
+          method: 'POST',
+          token: g.token,
+          ip: g.ip,
+          body: { campaignId: 'default', productId: 'beer', idempotencyKey: `contention-${startedAt}-${i}` },
+        })
+      )
+    )
+
+    const wins = attempts.filter((a) => a.body?.success)
+    check('exactly one user wins the last unit', wins.length === 1, `wins=${wins.length}`)
+    check('the winner received the contested reward', wins[0]?.body?.data?.rewardId === target.id)
+    check(
+      'rejected spins are not falsely marked as duplicate submissions',
+      attempts.filter((a) => !a.body?.success).every((a) => typeof a.body?.error?.code === 'string')
+    )
+
+    const after = await fetchRewards(admin)
+    const targetAfter = after.find((r) => r.id === target.id)
+    check('contested stock is now exactly 0', targetAfter?.remaining_quantity === 0, `remaining=${targetAfter?.remaining_quantity}`)
+    check('no reward has negative stock', after.every((r) => r.remaining_quantity >= 0))
+  } finally {
+    // Always restore the original inventory, even if an assertion above threw.
+    const current = await fetchRewards(admin)
+    for (const s of snapshot) {
+      const now = current.find((r) => r.id === s.id)?.remaining_quantity ?? 0
+      const diff = s.remaining - now
+      if (diff !== 0) await setStock(admin, s.id, diff, 'contention test: restore')
+    }
+  }
+}
+
 async function main() {
   console.log(`Hardening test against ${API_BASE}`)
   try {
@@ -264,6 +366,9 @@ async function main() {
   await testSurveyIdempotency(guest)
   await testSpinConcurrency()
   await testGuestConcurrencySamePhone()
+  if (process.env.TEST_STOCK_CONTENTION === '1') {
+    await testStockContention()
+  }
 
   console.log(`\n${passed} passed, ${failed} failed`)
   process.exit(failed === 0 ? 0 : 1)

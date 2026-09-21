@@ -55,7 +55,8 @@ export default function SpinPage() {
   const [error, setError] = useState('')
   const [hasSpun, setHasSpun] = useState(false)
   const prefersReducedMotion = useRef(false)
-  const animationRef = useRef<number | null>(null)
+  const animationRef = useRef<Animation | null>(null)
+  const spinAnimationRef = useRef<Animation | null>(null)
   const wheelRef = useRef<HTMLDivElement>(null)
   const mediaQueryRef = useRef<MediaQueryList | null>(null)
   const rotationRef = useRef(0)
@@ -144,6 +145,7 @@ export default function SpinPage() {
     if (typeof window !== 'undefined') {
       const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
       mediaQueryRef.current = mediaQuery
+      prefersReducedMotion.current = mediaQuery.matches
       const handler = (e: MediaQueryListEvent) => { prefersReducedMotion.current = e.matches }
       mediaQuery.addEventListener('change', handler)
       return () => mediaQuery.removeEventListener('change', handler)
@@ -209,10 +211,11 @@ export default function SpinPage() {
         return
       }
 
-      // Cancel any existing animation
-      if (animationRef.current) {
-        wheel.getAnimations().forEach(anim => anim.cancel())
-      }
+      // Cancel any in-flight animation, including the indefinite spin started
+      // the moment the user pressed Spin.
+      wheel.getAnimations().forEach(anim => anim.cancel())
+      spinAnimationRef.current = null
+      animationRef.current = null
 
       const startRotation = rotationRef.current
       const totalRotation = targetRotation
@@ -243,7 +246,7 @@ export default function SpinPage() {
         easing: 'linear',
       })
 
-      animationRef.current = animation.id as unknown as number
+      animationRef.current = animation
 
       animation.onfinish = () => {
         const finalRotation = startRotation + totalRotation
@@ -278,6 +281,69 @@ export default function SpinPage() {
     }
   }, [])
 
+  // Starts an indefinite wheel spin the instant the user presses Spin, so the
+  // visual motion never waits for the server round-trip. Honours reduced motion
+  // by leaving the wheel still (the server still resolves the reward).
+  const startContinuousSpin = useCallback(() => {
+    const wheel = wheelRef.current
+    if (!wheel || prefersReducedMotion.current) return
+
+    wheel.getAnimations().forEach(anim => anim.cancel())
+    const base = rotationRef.current
+    const animation = wheel.animate(
+      [
+        { transform: `rotate(${base}deg)` },
+        { transform: `rotate(${base + 360}deg)` },
+      ],
+      { duration: 900, iterations: Infinity, easing: 'linear' }
+    )
+    spinAnimationRef.current = animation
+  }, [])
+
+  // The wheel's current visual angle, accounting for an in-flight indefinite
+  // spin. Falls back to the last known angle when nothing is animating.
+  const currentWheelRotation = useCallback((): number => {
+    const animation = spinAnimationRef.current
+    if (!animation) return rotationRef.current
+
+    const timing = animation.effect?.getTiming()
+    const rawDuration = timing?.duration
+    const duration = typeof rawDuration === 'number' && rawDuration > 0 ? rawDuration : 900
+    const currentTime = typeof animation.currentTime === 'number' ? animation.currentTime : 0
+    const progress = (currentTime % duration) / duration
+    return rotationRef.current + progress * 360
+  }, [])
+
+  // Stops the indefinite spin, freezing the wheel at its current angle, and
+  // returns that angle so the landing animation can start seamlessly.
+  const stopContinuousSpin = useCallback((): number => {
+    const current = currentWheelRotation()
+    const animation = spinAnimationRef.current
+    spinAnimationRef.current = null
+    if (animation) animation.cancel()
+    rotationRef.current = current
+    setRotation(current)
+    return current
+  }, [currentWheelRotation])
+
+  // Decelerates the wheel from wherever it currently is onto the exact segment
+  // the Worker awarded. `animateWheel` takes a *relative* delta rotation.
+  const landOnReward = useCallback(async (targetIndex: number, count: number): Promise<void> => {
+    const from = stopContinuousSpin()
+    const segmentAngle = 360 / count
+    // Pointer is at the top (-90deg in CSS); align the segment centre to it.
+    const targetAngle = -(targetIndex * segmentAngle + segmentAngle / 2) - 90
+
+    const desiredMod = ((targetAngle % 360) + 360) % 360
+    const fromMod = ((from % 360) + 360) % 360
+    let delta = desiredMod - fromMod
+    if (delta < 0) delta += 360
+
+    const extraRotations = prefersReducedMotion.current ? 0 : 3 * 360
+    await animateWheel(delta + extraRotations, prefersReducedMotion.current ? 300 : 2800)
+    triggerPointerBounce()
+  }, [stopContinuousSpin, animateWheel, triggerPointerBounce])
+
   const spin = async () => {
     if (spinning || hasSpun || rewards.length === 0) return
 
@@ -291,9 +357,14 @@ export default function SpinPage() {
     setSpinning(true)
     setError('')
 
+    // Keep the wheel in motion while the Worker resolves the authoritative
+    // reward, so the user never sees a frozen wheel or waiting screen.
+    startContinuousSpin()
+
     try {
       const token = await getValidToken()
       if (!token) {
+        stopContinuousSpin()
         setSpinning(false)
         setError(t('failedToLoad') + ' - Please complete your profile first')
         return
@@ -352,7 +423,12 @@ export default function SpinPage() {
         const targetIndex = rewards.findIndex(r => r.id === serverReward.rewardId)
 
         if (targetIndex === -1) {
-          throw new Error('Reward not found in local rewards')
+          // The server awarded a reward the public catalogue does not contain
+          // (e.g. a fallback). Never fake a landing we cannot show.
+          stopContinuousSpin()
+          setSpinning(false)
+          setError(t('spinFailed'))
+          return
         }
 
         const displayReward = {
@@ -361,28 +437,11 @@ export default function SpinPage() {
           requiresDelivery: serverReward.requiresDelivery !== false,
         }
 
-        // Calculate target angle
-        const segmentAngle = 360 / rewards.length
-        // Pointer is at top (0deg / -90deg in CSS), so we need to align segment center to pointer
-        // Segment center is at: targetIndex * segmentAngle + segmentAngle/2
-        // We want this center to land at -90deg (top)
-        const targetAngle = -(targetIndex * segmentAngle + segmentAngle / 2) - 90
-
-        // Add 5 full rotations + target angle
-        const fullRotations = 5 * 360
-        const totalRotation = fullRotations + targetAngle
-
-        // Update rotationRef before animation
-        rotationRef.current = totalRotation
-
-        // Animate the wheel
-        await animateWheel(totalRotation)
-
-        // Trigger pointer bounce
-        triggerPointerBounce()
+        // Decelerate onto the exact segment the Worker confirmed.
+        await landOnReward(targetIndex, rewards.length)
 
         // Small delay for settling feel
-        await new Promise(r => setTimeout(r, 300))
+        await new Promise(r => setTimeout(r, 250))
 
         setSpinning(false)
         setResult({ reward: displayReward, userRewardId: serverReward.userRewardId })
@@ -396,6 +455,7 @@ export default function SpinPage() {
           sessionStorage.setItem('reward_name', serverReward.rewardName)
         }
       } else {
+        stopContinuousSpin()
         setSpinning(false)
         const errorCode = data.error?.code
         if (errorCode === 'NO_REWARDS_AVAILABLE' || errorCode === 'REWARD_UNAVAILABLE') {
@@ -413,6 +473,7 @@ export default function SpinPage() {
         }
       }
     } catch {
+      stopContinuousSpin()
       setSpinning(false)
       setError(t('connectionFailed'))
     }

@@ -1,5 +1,5 @@
 import type { Context } from 'hono';
-import type { AppContext, Settings } from '../types';
+import type { AppContext, Bindings, Settings } from '../types';
 import { DEFAULT_SETTINGS } from '../types';
 import { ErrorCode, failure, logEvent } from './http';
 
@@ -91,15 +91,33 @@ export const RATE_POLICIES = {
 
 type TurnstileResponse = { success: boolean; 'error-codes'?: string[]; action?: string };
 
+/**
+ * Turnstile is opt-in.
+ *
+ * The V1 survey journey (personal info -> survey -> poll -> spin) must stay
+ * challenge-free, so a configured site key and secret are *not* enough to
+ * enforce verification: `TURNSTILE_ENFORCE` must be exactly 'true'. This gives
+ * one switch to re-enable bot protection later without touching code, while
+ * the default keeps normal users uninterrupted.
+ */
+export function turnstileEnabled(env: Bindings): boolean {
+  return (
+    env.TURNSTILE_ENFORCE === 'true' &&
+    Boolean(env.TURNSTILE_SECRET && env.TURNSTILE_SITE_KEY)
+  );
+}
+
 export async function verifyTurnstile(
   c: Context<AppContext>,
   token: string | undefined,
   expectedAction?: string
 ): Promise<Response | null> {
+  if (!turnstileEnabled(c.env)) return null;
+
   const secret = c.env.TURNSTILE_SECRET;
   const siteKey = c.env.TURNSTILE_SITE_KEY;
-  // Not configured (local dev / staged rollout): do not block the flow. Both
-  // values are required, so a missing site key can never lock users out.
+  // Guaranteed by `turnstileEnabled`; keeps the values narrowed for the calls
+  // below and fails safe if the bindings ever change shape.
   if (!secret || !siteKey) return null;
 
   if (!token || typeof token !== 'string') {

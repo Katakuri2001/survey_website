@@ -80,8 +80,9 @@ npx wrangler d1 migrations apply survey-db --local
 | `JWT_SECRET` | JWT signing secret (**required in production**, ≥16 chars) | none — auth is disabled in prod if unset |
 | `ENVIRONMENT` | `production` / `staging` / `development` | `production` |
 | `ALLOWED_ORIGINS` | Extra CORS origins (comma-separated) | same-origin only |
-| `TURNSTILE_SITE_KEY` | Public Turnstile site key (non-secret, safe to commit) | unset (widget skipped) |
-| `TURNSTILE_SECRET` | Enables Turnstile verification when set (needs the site key too) | unset (disabled) |
+| `TURNSTILE_SITE_KEY` | Public Turnstile site key (non-secret, safe to commit) | unset |
+| `TURNSTILE_SECRET` | Turnstile secret used for server-side Siteverify | unset |
+| `TURNSTILE_ENFORCE` | Set to `true` to enforce Turnstile on guest + spin. Off by default so the V1 survey journey stays challenge-free. | unset (disabled) |
 
 See [`.env.example`](./.env.example) and
 [`PRODUCTION_HARDENING.md`](./PRODUCTION_HARDENING.md) for the full reference.
@@ -191,12 +192,21 @@ cd apps/admin-web && npm run build && npx wrangler pages deploy
 ```
 
 Both Pages projects also run the API as a Function (`functions/api/[[route]].ts`),
-so **set the same `JWT_SECRET` on each project**, and set `TURNSTILE_SECRET` on
-both so the second origin cannot be used to bypass bot protection:
+so **set the same `JWT_SECRET` on each project**:
 
 ```bash
 npx wrangler pages secret put JWT_SECRET --project-name alcohol-survey
 npx wrangler pages secret put JWT_SECRET --project-name alcohol-survey-admin
+```
+
+Turnstile is **opt-in and disabled by default** so the survey journey stays
+challenge-free. A secret alone is not enough: verification also requires
+`TURNSTILE_ENFORCE = "true"` in `[vars]`. To enable it, set the secret on the API
+worker **and** both Pages projects (otherwise another origin can bypass bot
+protection), then set `TURNSTILE_ENFORCE`:
+
+```bash
+npx wrangler secret put TURNSTILE_SECRET
 npx wrangler pages secret put TURNSTILE_SECRET --project-name alcohol-survey
 npx wrangler pages secret put TURNSTILE_SECRET --project-name alcohol-survey-admin
 ```
@@ -208,22 +218,19 @@ its 15-minute spin-cleanup cron. Set secrets from the repo root:
 
 ```bash
 npx wrangler secret put JWT_SECRET
-npx wrangler secret put TURNSTILE_SECRET
 npx wrangler deploy
 ```
 
 ### Verify after deploy
 
 ```bash
-# Turnstile is enforced, so the automated hardening test must run against a
-# local/dev API (or with TURNSTILE_SECRET temporarily removed).
+# The hardening test needs Turnstile disabled (the default), so it can run
+# against a local/dev API as well.
 API_BASE=http://localhost:8788/api npm run test:hardening
 
-# Production sanity checks that do not need a Turnstile token:
-curl https://myanmarbeer.boom.com.mm/api/public/turnstile
-curl -X POST https://myanmarbeer.boom.com.mm/api/users/guest \
-  -H 'Content-Type: application/json' \
-  -d '{"fullName":"x","phone":"0900000000","dob":"1990-01-01"}'   # expect TURNSTILE_FAILED
+# Production sanity checks:
+curl https://myanmarbeer.boom.com.mm/api/public/turnstile   # enabled:false unless TURNSTILE_ENFORCE=true
+curl https://myanmarbeer.boom.com.mm/api/health
 ```
 
 ## Testing

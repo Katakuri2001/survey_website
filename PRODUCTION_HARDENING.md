@@ -16,13 +16,12 @@ for the underlying analysis and [`MONITORING.md`](./MONITORING.md) /
 2. **Set `JWT_SECRET` as a secret** on both Pages projects (and the API worker).
    Without it, authentication is disabled in production by design.
 3. Deploy the API worker and both Pages apps. Run the hardening smoke test
-   against a **local/dev** API — `API_BASE=http://localhost:8788/api npm run test:hardening`
-   (with Turnstile enabled, production tokens are single-use, so the automated
-   test cannot run against the deployed API).
-4. **Turnstile is enabled**: `TURNSTILE_SITE_KEY` is set in each `wrangler.toml`
-   and `TURNSTILE_SECRET` must be set as a secret on both Pages projects and the
-   worker. The bundled invisible widget supplies the token. Delete the secret to
-   disable enforcement again. Optional bindings are listed below.
+   against the API — `API_BASE=http://localhost:8788/api npm run test:hardening`.
+4. **Turnstile is opt-in and off by default** so the V1 survey journey stays
+   challenge-free. To enable bot protection later, set `TURNSTILE_SECRET` on the
+   worker and both Pages projects and add `TURNSTILE_ENFORCE = "true"` to each
+   `[vars]`. Removing `TURNSTILE_ENFORCE` (or the secret) disables enforcement
+   again with no code change. Optional bindings are listed below.
 
 > ⚠️ This release changes the security posture. Previously the API fell back to
 > a hard-coded development JWT secret in production. That fallback is now
@@ -141,8 +140,9 @@ bookmark is the primary rollback for D1.
 | `ENVIRONMENT` | var | no | `production` (default) / `staging` / `development`. |
 | `ALLOWED_ORIGINS` | var | no | Comma-separated extra browser origins for CORS. |
 | `PUBLIC_SITE_ORIGIN` | var | no | Informational only. |
-| `TURNSTILE_SECRET` | secret | no | When set, guest + spin require a valid Turnstile token. |
+| `TURNSTILE_SECRET` | secret | no | Turnstile secret for server-side Siteverify. Used only when `TURNSTILE_ENFORCE=true`. |
 | `TURNSTILE_SITE_KEY` | var | no | Public site key for the frontend widget. |
+| `TURNSTILE_ENFORCE` | var | no | `true` enforces Turnstile on guest + spin. Off by default (V1 = challenge-free). |
 | `MEDIA_BUCKET` | R2 binding | no | Stores uploaded images; falls back to inline data-URLs when absent. |
 | `ANALYTICS_QUEUE` | Queue producer | no | Reserved for deferred analytics. |
 | `RATE_LIMITER` | Rate Limiting binding | no | Cloudflare rate limit in addition to the in-isolate limiter. |
@@ -152,11 +152,13 @@ Set secrets per project (run from the repo root):
 ```bash
 # API worker + cron (root wrangler.toml)
 npx wrangler secret put JWT_SECRET
-npx wrangler secret put TURNSTILE_SECRET
 
 # Pages projects (each serves its own /api/* Function)
 npx wrangler pages secret put JWT_SECRET --project-name alcohol-survey
 npx wrangler pages secret put JWT_SECRET --project-name alcohol-survey-admin
+
+# Optional: Turnstile (also requires TURNSTILE_ENFORCE = "true" in each [vars])
+npx wrangler secret put TURNSTILE_SECRET
 npx wrangler pages secret put TURNSTILE_SECRET --project-name alcohol-survey
 npx wrangler pages secret put TURNSTILE_SECRET --project-name alcohol-survey-admin
 ```
@@ -179,33 +181,36 @@ Admin APIs and login remain reachable while maintenance mode is on, so the team
 can recover. Flags take effect within 30 s (isolate cache) or immediately via
 `PATCH /admin/settings`.
 
-## Turnstile
+## Turnstile (opt-in)
 
-Turnstile protects `POST /users/guest` and `POST /rewards/spin`. Enforcement is
-**on only when both `TURNSTILE_SECRET` and `TURNSTILE_SITE_KEY` are set** — a
-missing site key can never lock users out.
+Turnstile can protect `POST /users/guest` and `POST /rewards/spin`, but it is
+**opt-in and disabled by default** so the V1 survey journey has no visible
+challenge. Enforcement runs only when **all** of these hold:
+
+- `TURNSTILE_ENFORCE = "true"` in `[vars]` (worker and both Pages projects),
+- `TURNSTILE_SECRET` is set as a secret, and
+- `TURNSTILE_SITE_KEY` is configured.
+
+A missing secret or site key can never lock users out: the flow simply omits the
+token and the server does not check it.
 
 - The widget is an **invisible** Turnstile widget (site key
   `0x4AAAAAAE-v_qmikTPp1LVj`, allow-listed for `myanmarbeer.boom.com.mm`,
   `myanmarbeer.com.mm`, both `*.pages.dev` projects and `localhost`).
-- `apps/survey-web/app/lib/turnstile.ts` lazily loads the Turnstile script,
-  renders an invisible widget, calls `execute()`, and returns the token, which
-  the signup and spin requests send as `turnstileToken`. If `/public/turnstile`
-  reports it off (or the widget cannot load) the token is omitted and the server
-  does not enforce it.
+- `apps/survey-web/app/lib/turnstile.ts` asks `/public/turnstile`; only when that
+  reports `enabled:true` does it lazily load the script, render an invisible
+  widget, call `execute()`, and return the token, which the signup and spin
+  requests send as `turnstileToken`.
 - **CSP matters**: `apps/survey-web/public/_headers` allows
   `https://challenges.cloudflare.com` in `script-src` and `frame-src`. Without
-  both, the widget is blocked and every signup/spin is rejected.
-- **Disable (rollback)**:
-  `npx wrangler pages secret delete TURNSTILE_SECRET --project-name alcohol-survey`
-  (and `alcohol-survey-admin`). The next `/public/turnstile` call reports
-  `enabled:false` and the widget stops loading.
+  both, the widget is blocked.
+- **Disable (rollback)**: remove `TURNSTILE_ENFORCE` from `[vars]` (or delete
+  `TURNSTILE_SECRET`). `/public/turnstile` then reports `enabled:false` and the
+  widget stops loading.
 - **Testing note**: the real widget refuses automated browsers (`300010 bot
   behaviour detected`), so end-to-end widget tests must use the Turnstile test
   keys locally (`TURNSTILE_SITE_KEY=1x00000000000000000000AA`,
-  `TURNSTILE_SECRET=1x0000000000000000000000000000000AA`). Production was
-  validated with the config/enforcement endpoints plus a real `siteverify`-backed
-  rejection of token-less requests.
+  `TURNSTILE_SECRET=1x0000000000000000000000000000000AA`).
 
 ## Deployment topologies
 

@@ -3,11 +3,12 @@ import { API_BASE } from './config'
 /**
  * Cloudflare Turnstile helper.
  *
- * Verification is optional: the server only enforces it when both the site key
- * and the secret are configured. This module asks the API for the public site
- * key, then renders an invisible widget on demand and returns its token. When
- * Turnstile is disabled (or fails to load) the promise resolves to `undefined`
- * and callers simply omit the token.
+ * Verification is opt-in: the server reports `enabled: true` only when both the
+ * site key and secret are configured *and* `TURNSTILE_ENFORCE === 'true'`. In
+ * the default (V1) configuration the survey journey stays challenge-free, so
+ * this module resolves to `undefined` immediately and callers simply omit the
+ * token. When Turnstile is enabled it renders an invisible widget on demand and
+ * returns its token.
  */
 
 type TurnstileConfig = { enabled: boolean; siteKey: string | null }

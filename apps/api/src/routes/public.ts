@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { AppContext } from '../types';
 import { ErrorCode, failure, logEvent, success } from '../lib/http';
-import { cachedPublicGet, getSettings } from '../lib/security';
+import { cachedPublicGet, getSettings, turnstileEnabled } from '../lib/security';
 import { loadSurveyConfig } from '../lib/survey';
 
 export const publicRoutes = new Hono<AppContext>();
@@ -43,14 +43,15 @@ publicRoutes.get('/', (c) =>
 );
 
 // ============================================================
-// Turnstile config. Only the public site key is exposed; verification is
-// active when both the site key and the secret are configured.
+// Turnstile config. Only the public site key is exposed. `enabled` reflects the
+// opt-in `TURNSTILE_ENFORCE` switch, so the survey web app only loads the widget
+// when verification is actually active (V1 keeps the journey challenge-free).
 // ============================================================
 
 publicRoutes.get('/public/turnstile', (c) =>
   success(c, {
-    enabled: Boolean(c.env.TURNSTILE_SECRET && c.env.TURNSTILE_SITE_KEY),
-    siteKey: c.env.TURNSTILE_SITE_KEY || null,
+    enabled: turnstileEnabled(c.env),
+    siteKey: turnstileEnabled(c.env) ? c.env.TURNSTILE_SITE_KEY || null : null,
   })
 );
 
