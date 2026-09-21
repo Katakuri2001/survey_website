@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, ReactNode } from 'react'
+import { createContext, useCallback, useContext, useMemo, useState, ReactNode } from 'react'
 import { translations, Language, TranslationKey } from '../lib/translations'
 
 interface LanguageContextType {
@@ -14,12 +14,17 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [language, setLanguage] = useState<Language>('my')
 
-  const t = (key: TranslationKey): string => {
-    return translations[language][key] || translations.en[key]
-  }
+  // Stable across renders so consumers (and effects that depend on `t`) do not
+  // re-run just because the provider tree re-rendered.
+  const t = useCallback(
+    (key: TranslationKey): string => translations[language][key] || translations.en[key],
+    [language]
+  )
+
+  const value = useMemo(() => ({ language, setLanguage, t }), [language, t])
 
   return (
-    <LanguageContext.Provider value={{ language, setLanguage, t }}>
+    <LanguageContext.Provider value={value}>
       {children}
     </LanguageContext.Provider>
   )

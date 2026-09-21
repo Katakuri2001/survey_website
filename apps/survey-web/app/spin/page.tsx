@@ -65,6 +65,11 @@ export default function SpinPage() {
   const surveyCompleted = typeof window !== 'undefined' && sessionStorage.getItem('survey_response_id')
 
   const rewardsLoadedRef = useRef(false)
+  // Mirror of `rewards` that `checkExistingSpin` can read without taking a
+  // dependency on it. Depending on `rewards` here used to recreate the callback
+  // on every fetch, which re-ran the mount effect and produced an infinite
+  // request loop (each `setRewards` created a new array identity).
+  const rewardsRef = useRef<Reward[]>([])
 
   // Generate consistent colors for rewards based on index
   const getRewardColor = useCallback((index: number) => SEGMENT_COLORS[index % SEGMENT_COLORS.length], [])
@@ -86,21 +91,25 @@ export default function SpinPage() {
           requiresDelivery: r.requires_delivery !== 0,
         }))
         setRewards(mappedRewards)
+        rewardsRef.current = mappedRewards
         rewardsLoadedRef.current = true
       } else {
         setRewards([])
+        rewardsRef.current = []
         rewardsLoadedRef.current = true
       }
     } catch {
       setError(t('connectionFailed'))
       setRewards([])
+      rewardsRef.current = []
       rewardsLoadedRef.current = true
     } finally {
       setLoading(false)
     }
   }, [language, t, getRewardColor])
 
-  // Check existing spin
+  // Check existing spin. Reads the catalogue through `rewardsRef` so this
+  // callback stays stable (deps `[]`) and cannot re-trigger the mount effect.
   const checkExistingSpin = useCallback(async () => {
     try {
       const token = await getValidToken()
@@ -113,14 +122,15 @@ export default function SpinPage() {
       if (data.success && data.data.length > 0) {
         const latestReward = data.data[0]
         if (latestReward.reward_id) {
+          const catalogue = rewardsRef.current
           // If rewards are already loaded, do the full check immediately
-          if (rewardsLoadedRef.current && rewards.length > 0) {
-            const rewardIndex = rewards.findIndex(r => r.id === latestReward.reward_id)
+          if (rewardsLoadedRef.current && catalogue.length > 0) {
+            const rewardIndex = catalogue.findIndex(r => r.id === latestReward.reward_id)
             if (rewardIndex !== -1) {
-              const reward = rewards[rewardIndex]
+              const reward = catalogue[rewardIndex]
               setResult({ reward, userRewardId: latestReward.id })
               setHasSpun(true)
-              const segmentAngle = 360 / rewards.length
+              const segmentAngle = 360 / catalogue.length
               const targetAngle = -(rewardIndex * segmentAngle + segmentAngle / 2) - 90
               const fullRotations = 5 * 360
               const finalRotation = fullRotations + targetAngle
@@ -138,7 +148,7 @@ export default function SpinPage() {
     } catch {
       // Ignore - user hasn't spun yet
     }
-  }, [rewards])
+  }, [])
 
   // Set up reduced motion listener on mount
   useEffect(() => {
@@ -420,25 +430,52 @@ export default function SpinPage() {
 
       if (data.success) {
         const serverReward = data.data
-        const targetIndex = rewards.findIndex(r => r.id === serverReward.rewardId)
+        let targetIndex = rewardsRef.current.findIndex(r => r.id === serverReward.rewardId)
 
         if (targetIndex === -1) {
-          // The server awarded a reward the public catalogue does not contain
-          // (e.g. a fallback). Never fake a landing we cannot show.
+          // The public catalogue can be stale (30s edge cache) or a reward may
+          // have just gone live. Refresh once and retry before giving up.
+          await fetchRewards()
+          // Let the refreshed catalogue render so the segment count used for
+          // the landing animation matches what is drawn.
+          await new Promise(r => setTimeout(r, 0))
+          targetIndex = rewardsRef.current.findIndex(r => r.id === serverReward.rewardId)
+        }
+
+        const catalogue = rewardsRef.current
+
+        if (targetIndex === -1 || catalogue.length === 0) {
+          // The server awarded a reward we cannot draw on the wheel. Never fake
+          // a landing - surface the win directly so the user still gets it.
           stopContinuousSpin()
           setSpinning(false)
-          setError(t('spinFailed'))
+          const fallbackReward: Reward = {
+            id: serverReward.rewardId,
+            name: serverReward.rewardName || t('congratulations'),
+            weight: 0,
+            color: getRewardColor(0),
+            remainingQuantity: 0,
+            status: 'AVAILABLE',
+            requiresDelivery: serverReward.requiresDelivery !== false,
+          }
+          setResult({ reward: fallbackReward, userRewardId: serverReward.userRewardId })
+          setHasSpun(true)
+          showToast(`${t('congratulations')} ${t('youWon')}: ${fallbackReward.name}!`, 'success', 5000)
+          if (typeof window !== 'undefined') {
+            sessionStorage.setItem('user_reward_id', serverReward.userRewardId)
+            sessionStorage.setItem('reward_name', serverReward.rewardName)
+          }
           return
         }
 
         const displayReward = {
-          ...rewards[targetIndex],
+          ...catalogue[targetIndex],
           // Trust the server's flag over the cached catalogue.
           requiresDelivery: serverReward.requiresDelivery !== false,
         }
 
         // Decelerate onto the exact segment the Worker confirmed.
-        await landOnReward(targetIndex, rewards.length)
+        await landOnReward(targetIndex, catalogue.length)
 
         // Small delay for settling feel
         await new Promise(r => setTimeout(r, 250))
@@ -711,7 +748,10 @@ export default function SpinPage() {
                   <Image
                     src={result.reward.imageUrl}
                     alt={result.reward.name}
+                    width={224}
+                    height={224}
                     className="w-full h-full object-cover rounded-3xl"
+                    onError={(e) => { e.currentTarget.style.display = 'none' }}
                   />
                 ) : (
                   <span className="text-5xl sm:text-6xl font-bold" style={{ color: result.reward.color }}>
