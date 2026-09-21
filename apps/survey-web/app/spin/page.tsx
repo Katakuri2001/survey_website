@@ -526,7 +526,7 @@ export default function SpinPage() {
         <div className="relative mb-6 animate-pop">
           <div className="absolute -inset-3 rounded-full border border-gold/30 animate-spin-slow" />
           <div className="w-16 h-16 rounded-full gold-border bg-brand-emerald overflow-hidden p-0.5">
-            <Image src="/myanmarbeer.png" alt="MB" width={64} height={64} className="w-full h-full object-cover rounded-full" />
+            <Image src="/myanmarbeerstout.png" alt="MB" width={64} height={64} className="w-full h-full object-cover rounded-full" />
           </div>
         </div>
         <div className="h-2 w-40 rounded-full shimmer-bg" />
@@ -688,7 +688,7 @@ export default function SpinPage() {
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
                 <div className="w-[74px] h-[74px] rounded-full p-[3px] bg-gradient-to-br from-warm via-gold to-[#8a6d1c] shadow-gold-lg animate-pulse-gold">
                   <div className="w-full h-full rounded-full bg-brand-emerald overflow-hidden flex items-center justify-center">
-                    <Image src="/myanmarbeer.png" alt="MB" width={74} height={74} className="w-full h-full object-cover rounded-full" />
+                    <Image src="/myanmarbeerstout.png" alt="MB" width={74} height={74} className="w-full h-full object-cover rounded-full" />
                   </div>
                 </div>
               </div>
