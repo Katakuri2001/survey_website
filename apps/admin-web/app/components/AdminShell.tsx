@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
@@ -84,7 +85,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
             className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full ring-2 ring-gold/70 transition-opacity hover:opacity-80"
             aria-label="Account settings"
           >
-            <img src="/logo.png" alt="Admin" className="h-full w-full object-cover bg-white/10" />
+            <Image src="/logo.png" alt="Admin" className="h-full w-full object-cover bg-white/10" />
           </Link>
         </div>
       </header>
@@ -100,7 +101,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
         <div className="flex items-center gap-3 border-b border-white/10 px-5 pb-5 pt-6">
           <div className="relative shrink-0">
             <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-white/10 ring-2 ring-gold ring-offset-2 ring-offset-navy">
-              <img src="/logo.png" alt="Myanmar Beer" className="h-full w-full object-cover" />
+              <Image src="/logo.png" alt="Myanmar Beer" className="h-full w-full object-cover" />
             </div>
             <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-navy bg-gold" />
           </div>

@@ -2,6 +2,14 @@ name = "alcohol-survey-admin"
 pages_build_output_dir = "out"
 compatibility_date = "2026-05-03"
 
+# Non-secret runtime config for the Pages Function that serves /api/*.
+# Set the same JWT_SECRET as the survey project as a Pages secret:
+#   npx wrangler pages secret put JWT_SECRET --project-name alcohol-survey-admin
+[vars]
+ENVIRONMENT = "production"
+ALLOWED_ORIGINS = ""
+PUBLIC_SITE_ORIGIN = ""
+
 [[d1_databases]]
   binding = "survey_db"
   database_name = "survey-db"

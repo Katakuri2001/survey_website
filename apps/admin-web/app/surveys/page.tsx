@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import Image from 'next/image'
 
 import { API_BASE } from '../lib/api'
 
@@ -435,7 +436,7 @@ function QuestionModal({
                <div className="space-y-3">
                  {form.imageUrl && (
                    <div className="relative w-full max-w-xs">
-                     <img
+                     <Image
                        src={form.imageUrl}
                        alt="Product preview"
                        className="w-full h-48 object-cover rounded-lg border border-slate-200"
@@ -1138,7 +1139,7 @@ export default function SurveysPage() {
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex justify-center">
-                            <Toggle checked={v.is_active} onChange={() => {}} disabled />
+                            <Toggle checked={v.is_active} onChange={() => {}} />
                           </div>
                         </td>
                         <td className="px-4 py-3 text-xs text-slate-500">

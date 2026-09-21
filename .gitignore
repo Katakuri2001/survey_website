@@ -2,6 +2,7 @@ node_modules/
 .next/
 .wrangler/
 .env
+.dev.vars
 *.log
 dist/
 out/

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import { useLanguage } from '../context/LanguageContext'
 import Header from '../components/Header'
 import { API_BASE, getValidToken } from '../lib/api'
@@ -15,6 +16,7 @@ interface Reward {
   imageUrl?: string
   remainingQuantity: number
   status: string
+  requiresDelivery: boolean
 }
 
 interface RewardApiItem {
@@ -26,6 +28,7 @@ interface RewardApiItem {
   status: string
   image_url?: string
   low_stock_threshold: number
+  requires_delivery?: number
 }
 
 const SEGMENT_COLORS = [
@@ -35,9 +38,9 @@ const SEGMENT_COLORS = [
   '#163B2C', // Brand Emerald
   '#00994B', // Green
   '#1F4F35', // Emerald Light
-]
+] as const
 
-const CONFETTI_COLORS = ['#F5C542', '#D4AF37', '#F0E826', '#00994B', '#F59E0B', '#22C55E']
+const CONFETTI_COLORS = ['#F5C542', '#D4AF37', '#F0E826', '#00994B', '#F59E0B', '#22C55E'] as const
 
 export default function SpinPage() {
   const router = useRouter()
@@ -50,19 +53,19 @@ export default function SpinPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [hasSpun, setHasSpun] = useState(false)
-  const [wheelRotation, ____setWheelRotation] = useState(0)
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    }
-    return false
-  })
+  const prefersReducedMotion = useRef(false)
   const animationRef = useRef<number | null>(null)
   const wheelRef = useRef<HTMLDivElement>(null)
   const mediaQueryRef = useRef<MediaQueryList | null>(null)
+  const rotationRef = useRef(0)
+
+  // Check if user completed survey
+  const surveyCompleted = typeof window !== 'undefined' && sessionStorage.getItem('survey_response_id')
+
+  const rewardsLoadedRef = useRef(false)
 
   // Generate consistent colors for rewards based on index
-  const getRewardColor = (index: number) => SEGMENT_COLORS[index % SEGMENT_COLORS.length]
+  const getRewardColor = useCallback((index: number) => SEGMENT_COLORS[index % SEGMENT_COLORS.length], [])
 
   // Fetch available rewards
   const fetchRewards = useCallback(async () => {
@@ -70,26 +73,30 @@ export default function SpinPage() {
       const res = await fetch(`${API_BASE}/rewards?lang=${language}`)
       const data = await res.json()
       if (data.success && data.data.length > 0) {
-        const mappedRewards: Reward[] = data.data.map((r: RewardApiItem, i: number) => ({
+        const mappedRewards: Reward[] = data.data.map((r: RewardApiItem, idx: number) => ({
           id: r.id,
           name: r.name,
           weight: r.weight || 10,
-          color: getRewardColor(i),
+          color: getRewardColor(idx),
           imageUrl: r.image_url,
           remainingQuantity: r.remaining_quantity,
           status: r.status,
+          requiresDelivery: r.requires_delivery !== 0,
         }))
         setRewards(mappedRewards)
+        rewardsLoadedRef.current = true
       } else {
         setRewards([])
+        rewardsLoadedRef.current = true
       }
     } catch {
       setError(t('connectionFailed'))
       setRewards([])
+      rewardsLoadedRef.current = true
     } finally {
       setLoading(false)
     }
-  }, [language, t])
+  }, [language, t, getRewardColor])
 
   // Check existing spin
   const checkExistingSpin = useCallback(async () => {
@@ -102,23 +109,28 @@ export default function SpinPage() {
       })
       const data = await res.json()
       if (data.success && data.data.length > 0) {
-        // User has won rewards - check if it's for this campaign
         const latestReward = data.data[0]
         if (latestReward.reward_id) {
-          // Find the reward in our local rewards
-          const reward = rewards.find(r => r.id === latestReward.reward_id)
-          if (reward) {
-            setResult({ reward, userRewardId: latestReward.id })
-            setHasSpun(true)
-            // Set rotation to show the correct segment
-            const targetIndex = rewards.findIndex(r => r.id === latestReward.reward_id)
-            if (targetIndex !== -1) {
+          // If rewards are already loaded, do the full check immediately
+          if (rewardsLoadedRef.current && rewards.length > 0) {
+            const rewardIndex = rewards.findIndex(r => r.id === latestReward.reward_id)
+            if (rewardIndex !== -1) {
+              const reward = rewards[rewardIndex]
+              setResult({ reward, userRewardId: latestReward.id })
+              setHasSpun(true)
               const segmentAngle = 360 / rewards.length
-              const targetAngle = -(targetIndex * segmentAngle + segmentAngle / 2) - 90
+              const targetAngle = -(rewardIndex * segmentAngle + segmentAngle / 2) - 90
               const fullRotations = 5 * 360
-              setRotation(fullRotations + targetAngle)
+              const finalRotation = fullRotations + targetAngle
+              setRotation(finalRotation)
+              rotationRef.current = finalRotation
+              return
             }
           }
+          // Rewards not loaded yet, store for later
+          setHasSpun(true)
+          sessionStorage.setItem('pending_reward_id', latestReward.reward_id)
+          sessionStorage.setItem('pending_user_reward_id', latestReward.id)
         }
       }
     } catch {
@@ -131,7 +143,7 @@ export default function SpinPage() {
     if (typeof window !== 'undefined') {
       const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
       mediaQueryRef.current = mediaQuery
-      const handler = (e: MediaQueryListEvent) => setPrefersReducedMotion(e.matches)
+      const handler = (e: MediaQueryListEvent) => { prefersReducedMotion.current = e.matches }
       mediaQuery.addEventListener('change', handler)
       return () => mediaQuery.removeEventListener('change', handler)
     }
@@ -141,12 +153,48 @@ export default function SpinPage() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchRewards()
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     checkExistingSpin()
   }, [fetchRewards, checkExistingSpin])
 
-  // Generate idempotency key for this spin session
-  const [idempotencyKey] = useState(() => crypto.randomUUID())
+  // After rewards load, check for pending reward from previous spin
+  const applyPendingReward = useCallback(() => {
+    if (rewards.length === 0 || typeof window === 'undefined') return
+    const pendingRewardId = sessionStorage.getItem('pending_reward_id')
+    if (!pendingRewardId) return
+    const rewardIndex = rewards.findIndex(r => r.id === pendingRewardId)
+    if (rewardIndex === -1) return
+    const reward = rewards[rewardIndex]
+    const segmentAngle = 360 / rewards.length
+    const targetAngle = -(rewardIndex * segmentAngle + segmentAngle / 2) - 90
+    const fullRotations = 5 * 360
+    const finalRotation = fullRotations + targetAngle
+    setResult({ reward, userRewardId: sessionStorage.getItem('pending_user_reward_id') || '' })
+    setHasSpun(true)
+    setRotation(finalRotation)
+    rotationRef.current = finalRotation
+    sessionStorage.removeItem('pending_reward_id')
+    sessionStorage.removeItem('pending_user_reward_id')
+  }, [rewards])
+
+  useEffect(() => {
+    // Defer setState calls to avoid cascading renders in effect
+    queueMicrotask(() => applyPendingReward())
+  }, [applyPendingReward])
+
+  // Generate a stable idempotency key for this spin session. Persisting it in
+  // sessionStorage means a retry after a network blip or reload reuses the same
+  // key, so the server can return the original result instead of a duplicate.
+  const [idempotencyKey] = useState(() => {
+    if (typeof window === 'undefined') return crypto.randomUUID()
+    const existing = sessionStorage.getItem('spin_idempotency_key')
+    if (existing) return existing
+    const key =
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    sessionStorage.setItem('spin_idempotency_key', key)
+    return key
+  })
 
   // Premium spin animation using Web Animations API
   const animateWheel = useCallback((
@@ -165,19 +213,19 @@ export default function SpinPage() {
         wheel.getAnimations().forEach(anim => anim.cancel())
       }
 
-      const startRotation = rotation
+      const startRotation = rotationRef.current
       const totalRotation = targetRotation
 
       // Reduced motion: simple quick rotation
-      if (prefersReducedMotion) {
+      if (prefersReducedMotion.current) {
         wheel.style.transform = `rotate(${startRotation + totalRotation}deg)`
         setRotation(startRotation + totalRotation)
+        rotationRef.current = startRotation + totalRotation
         setTimeout(resolve, 300)
         return
       }
 
       // Custom easing: fast start, gradual slowdown with overshoot correction
-      // This creates a physically realistic deceleration
       const keyframes = [
         { transform: `rotate(${startRotation}deg)`, offset: 0, easing: 'cubic-bezier(0.25, 0.46, 0.45, 0.94)' },
         { transform: `rotate(${startRotation + totalRotation * 0.15}deg)`, offset: 0.1, easing: 'cubic-bezier(0.25, 0.46, 0.45, 0.94)' },
@@ -197,7 +245,9 @@ export default function SpinPage() {
       animationRef.current = animation.id as unknown as number
 
       animation.onfinish = () => {
-        setRotation(startRotation + totalRotation)
+        const finalRotation = startRotation + totalRotation
+        setRotation(finalRotation)
+        rotationRef.current = finalRotation
         animationRef.current = null
         resolve()
       }
@@ -207,11 +257,11 @@ export default function SpinPage() {
         resolve()
       }
     })
-  }, [rotation, prefersReducedMotion])
+  }, [])
 
   // Gentle pointer bounce animation
   const triggerPointerBounce = useCallback(() => {
-    if (prefersReducedMotion) return
+    if (prefersReducedMotion.current) return
     const pointer = document.querySelector('.spin-pointer')
     if (pointer) {
       pointer.animate(
@@ -225,10 +275,17 @@ export default function SpinPage() {
         { duration: 600, easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)' }
       )
     }
-  }, [prefersReducedMotion])
+  }, [])
 
   const spin = async () => {
     if (spinning || hasSpun || rewards.length === 0) return
+
+    // Verify survey was completed
+    if (!surveyCompleted) {
+      setError('Please complete the survey first')
+      router.push('/survey')
+      return
+    }
 
     setSpinning(true)
     setError('')
@@ -237,7 +294,7 @@ export default function SpinPage() {
       const token = await getValidToken()
       if (!token) {
         setSpinning(false)
-        setError(t('failedToLoad'))
+        setError(t('failedToLoad') + ' - Please complete your profile first')
         return
       }
 
@@ -271,15 +328,20 @@ export default function SpinPage() {
             idempotencyKey,
           }),
         })
-        return res.json()
+        // Always parse the envelope: 4xx responses carry the actionable code
+        // (SPIN_IN_PROGRESS / ALREADY_SPUN / REWARD_UNAVAILABLE / ...).
+        const body = await res.json().catch(() => ({ success: false }))
+        return { status: res.status, body }
       }
 
-      let data = await doSpin(token)
+      let { status, body: data } = await doSpin(token)
 
-      // Token refresh on expiry
-      if (!data.success && (data.error?.message === 'Invalid token' || data.error?.message === 'Unauthorized')) {
+      // Token refresh on expiry - only retry ONCE
+      if (!data.success && (status === 401 || data.error?.code === 'UNAUTHORIZED')) {
         const refreshed = await getValidToken(true)
-        if (refreshed) data = await doSpin(refreshed)
+        if (refreshed) {
+          ;({ status, body: data } = await doSpin(refreshed))
+        }
       }
 
       if (data.success) {
@@ -290,7 +352,11 @@ export default function SpinPage() {
           throw new Error('Reward not found in local rewards')
         }
 
-        const displayReward = rewards[targetIndex]
+        const displayReward = {
+          ...rewards[targetIndex],
+          // Trust the server's flag over the cached catalogue.
+          requiresDelivery: serverReward.requiresDelivery !== false,
+        }
 
         // Calculate target angle
         const segmentAngle = 360 / rewards.length
@@ -302,6 +368,9 @@ export default function SpinPage() {
         // Add 5 full rotations + target angle
         const fullRotations = 5 * 360
         const totalRotation = fullRotations + targetAngle
+
+        // Update rotationRef before animation
+        rotationRef.current = totalRotation
 
         // Animate the wheel
         await animateWheel(totalRotation)
@@ -326,8 +395,16 @@ export default function SpinPage() {
       } else {
         setSpinning(false)
         const errorCode = data.error?.code
-        if (errorCode === 'NO_REWARDS_AVAILABLE') {
+        if (errorCode === 'NO_REWARDS_AVAILABLE' || errorCode === 'REWARD_UNAVAILABLE') {
           setError(t('noRewardsDesc'))
+        } else if (errorCode === 'SPIN_IN_PROGRESS') {
+          // The server is still finalising an earlier request; ask the user to
+          // retry rather than creating a second spin.
+          setError(t('spinProcessing'))
+        } else if (errorCode === 'ALREADY_SPUN') {
+          setHasSpun(true)
+          setError(t('alreadySpun'))
+          await checkExistingSpin()
         } else {
           setError(data.error?.message || t('spinFailed'))
         }
@@ -348,7 +425,7 @@ export default function SpinPage() {
         <div className="relative mb-6 animate-pop">
           <div className="absolute -inset-3 rounded-full border border-gold/30 animate-spin-slow" />
           <div className="w-16 h-16 rounded-full gold-border bg-brand-emerald overflow-hidden p-0.5">
-            <img src="/myanmarbeer.png" alt="MB" width={64} height={64} className="w-full h-full object-cover rounded-full" />
+            <Image src="/myanmarbeer.png" alt="MB" width={64} height={64} className="w-full h-full object-cover rounded-full" />
           </div>
         </div>
         <div className="h-2 w-40 rounded-full shimmer-bg" />
@@ -413,7 +490,7 @@ export default function SpinPage() {
 
         {/* Reward legend */}
         <div className="flex flex-wrap items-center justify-center gap-2 mb-8">
-          {rewards.map((reward, _index) => (
+          {rewards.map((reward) => (
             <span
               key={reward.id}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-white/10 bg-white/[0.04] text-xs text-fg-secondary transition-all"
@@ -447,11 +524,11 @@ export default function SpinPage() {
               <div
                 ref={wheelRef}
                 className="absolute inset-0"
-                style={{ transform: `rotate(${wheelRotation}deg)` }}
+                style={{ transform: `rotate(${rotation}deg)` }}
               >
-                {rewards.map((reward, _index) => {
+                {rewards.map((reward, i) => {
                   const segmentAngle = 360 / rewards.length
-                  const startAngle = _index * segmentAngle
+                  const startAngle = i * segmentAngle
                   const midAngle = startAngle + segmentAngle / 2
 
                   return (
@@ -476,7 +553,7 @@ export default function SpinPage() {
                       <div
                         className="relative z-10 flex items-center justify-center pointer-events-none"
                         style={{
-                          transform: `rotate(${-wheelRotation - 90 + midAngle}deg) translateY(-112px)`,
+                          transform: `rotate(${-rotation - 90 + midAngle}deg) translateY(-112px)`,
                         }}
                       >
                         <span
@@ -510,7 +587,7 @@ export default function SpinPage() {
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
                 <div className="w-[74px] h-[74px] rounded-full p-[3px] bg-gradient-to-br from-warm via-gold to-[#8a6d1c] shadow-gold-lg animate-pulse-gold">
                   <div className="w-full h-full rounded-full bg-brand-emerald overflow-hidden flex items-center justify-center">
-                    <img src="/myanmarbeer.png" alt="MB" width={74} height={74} className="w-full h-full object-cover rounded-full" />
+                    <Image src="/myanmarbeer.png" alt="MB" width={74} height={74} className="w-full h-full object-cover rounded-full" />
                   </div>
                 </div>
               </div>
@@ -567,7 +644,7 @@ export default function SpinPage() {
               <div className="absolute inset-0 rounded-3xl bg-gold/20 blur-lg" />
               <div className="relative w-full h-full rounded-3xl border border-gold/40 bg-gradient-to-br from-gold/25 to-transparent flex items-center justify-center">
                 {result.reward.imageUrl ? (
-                  <img
+                  <Image
                     src={result.reward.imageUrl}
                     alt={result.reward.name}
                     className="w-full h-full object-cover rounded-3xl"
@@ -581,11 +658,29 @@ export default function SpinPage() {
             </div>
 
             <p className="font-display text-xl sm:text-2xl font-bold text-white mb-1">{result.reward.name}</p>
-            <p className="text-xs text-fg-muted mb-7">{t('rewardAdded')}</p>
+            <p className="text-xs text-fg-muted mb-6">
+              {result.reward.requiresDelivery ? t('rewardAdded') : t('noDeliveryNeeded')}
+            </p>
+
+            {result.reward.requiresDelivery && result.userRewardId && (
+              <button
+                onClick={() => router.push(`/delivery?reward=${encodeURIComponent(result.userRewardId)}`)}
+                className="w-full mb-3 py-4 bg-gold-gradient text-brand-emerald rounded-2xl font-bold text-lg shadow-gold hover:shadow-gold-lg hover:scale-[1.01] transition-all inline-flex items-center justify-center gap-2"
+              >
+                {t('claimReward')}
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                </svg>
+              </button>
+            )}
 
             <button
               onClick={handleDone}
-              className="w-full py-4 bg-gold-gradient text-brand-emerald rounded-2xl font-bold text-lg shadow-gold hover:shadow-gold-lg hover:scale-[1.01] transition-all inline-flex items-center justify-center gap-2"
+              className={`w-full py-4 rounded-2xl font-bold text-lg transition-all inline-flex items-center justify-center gap-2 ${
+                result.reward.requiresDelivery && result.userRewardId
+                  ? 'border border-white/15 bg-white/[0.04] text-fg-bright hover:bg-white/[0.08]'
+                  : 'bg-gold-gradient text-brand-emerald shadow-gold hover:shadow-gold-lg hover:scale-[1.01]'
+              }`}
             >
               {t('done')}
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

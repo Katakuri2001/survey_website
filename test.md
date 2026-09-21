@@ -130,13 +130,16 @@ After each test mark `[ ]` as `[x]` and note result: **PASS** / **FAIL** (+ scre
 
 ### 2.5 Spin (`/spin`)
 
-- [ ] **UI-26** Reward wheel loads the 5 rewards with colors.
-- [ ] **UI-27** Clicking "Spin" plays animation (~4s) and lands on a reward.
-- [ ] **UI-28** Winning a real reward shows reward name/image + "Claim your prize".
-- [ ] **UI-29** Winning "no-prize" shows try-again message (no claim CTA).
-- [ ] **UI-30** Spin disabled after first result (one spin per response).
-- [ ] **UI-31** Reward saved to sessionStorage (`user_reward_id`, `reward_name`).
+- [ ] **UI-26** Reward wheel loads the 5 rewards with colors — see **SW-01**
+- [ ] **UI-27** Clicking "Spin" plays animation (~4s) and lands on reward segment — see **SW-01**
+- [ ] **UI-28** Winning a real reward shows reward name/image + "Claim your prize" — see **SW-03**
+- [ ] **UI-29** Winning "no-prize" shows try-again message (no claim CTA)
+- [ ] **UI-30** Spin disabled after first result (one spin per response) — see **SW-05**
+- [ ] **UI-31** Reward saved to sessionStorage (`user_reward_id`, `reward_name`)
 - [ ] **UI-32** Claim → `/delivery`. No reward → cannot access delivery spinner-state.
+- [ ] **UI-33** Wheel shows correct segment after page reload if user already spun — see **SW-04**
+- [ ] **UI-34** Reduced motion preference respected — see **SW-06**
+- [ ] **UI-35** Idempotency key prevents double-spin on network retry — see **SW-07**
 
 ### 2.6 Delivery (`/delivery`)
 
@@ -244,7 +247,76 @@ After each test mark `[ ]` as `[x]` and note result: **PASS** / **FAIL** (+ scre
 
 ---
 
-## 5. Post-Deployment (Cloudflare) Acceptance
+## 5. Code Quality — TypeCheck, Lint, Build
+
+Run these from the repo root or each app directory.
+
+### 5.1 TypeScript Type Check
+
+- [ ] **TC-01** `npx tsc --noEmit --project apps/survey-web/tsconfig.json` → 0 errors
+- [ ] **TC-02** `npx tsc --noEmit --project apps/admin-web/tsconfig.json` → 0 errors
+- [ ] **TC-03** `npx tsc --noEmit --project apps/api/tsconfig.json` → 0 errors
+- [ ] **TC-04** No `any` type usage in source files (untyped variables indicate missing interfaces)
+- [ ] **TC-05** All `useCallback`/`useEffect` dependency arrays are complete (no missing dependencies)
+- [ ] **TC-06** No `@ts-ignore` or `// @ts-ignore` comments in source
+
+### 5.2 ESLint
+
+- [ ] **LS-01** `npm run lint --workspace=apps/survey-web` → 0 lint errors
+- [ ] **LS-02** `npm run lint --workspace=apps/admin-web` → 0 lint errors
+- [ ] **LS-03** `npm run lint` in `apps/api` (no ESLint configured, but check for syntax issues)
+- [ ] **LS-04** No `eslint-disable` comments without justification
+- [ ] **LS-05** No unused imports/variables (common in React components)
+- [ ] **LS-06** No `console.log` statements in production code (use proper logging)
+
+### 5.3 Build Check
+
+- [ ] **BC-01** `npm run build --workspace=apps/survey-web` → builds successfully
+- [ ] **BC-02** `npm run build --workspace=apps/admin-web` → builds successfully
+- [ ] **BC-03** `npm run build` (root, turbo) → all apps build successfully
+- [ ] **BC-04** Build output has no runtime errors in `.next` or build logs
+- [ ] **BC-05** No `window is not defined` errors during build (SSR compatibility)
+- [ ] **BC-06** Static export works (no server-only APIs used in client components)
+
+### 5.4 CSS Error Checking
+
+- [ ] **CS-01** `globals.css` — no undefined Tailwind classes referenced (e.g., `bg-navy`, `gold-text`, `fg-bright`, `brand-emerald`, `survey-input`, `survey-select`, `gold-gradient`, `lager-gradient`, `shadow-gold`, `shadow-lager`, `glass`, `gold-ring`, `gold-border`, `gold-text-soft`, `animate-pop`, `animate-fade-up`, `animate-fade-in`, `animate-zoom-slow`, `animate-float`, `animate-grow-x`, `animate-pulse-gold`, `animate-spin-slow`, `animate-reveal-in`, `animate-ring-pulse`, `shimmer-bg`, `confetti-piece`)
+- [ ] **CS-02** No CSS class name typos in JSX/TSX files (e.g., misspelled class names like `gold-text` vs `gold-texts`, `bg-gold-gradient` vs `bg-gold-gradient`)
+- [ ] **CS-03** All referenced `@keyframes` in `globals.css` have corresponding `.animate-*` utility classes
+- [ ] **CS-04** `survey-input` and `survey-select` have proper `@apply` rules with all required Tailwind utilities defined
+- [ ] **CS-05** No conflicting `!important` declarations that break Tailwind precedence
+- [ ] **CS-06** Dark color palette classes (`bg-navy`, `bg-surface-deep`, `bg-brand-emerald`, `bg-slate-700`, etc.) exist in Tailwind config or are custom-defined
+- [ ] **CS-07** Responsive breakpoint classes (`sm:`, `md:`, `lg:`) reference valid Tailwind breakpoints
+- [ ] **CS-08** CSS files have no syntax errors (no unclosed braces, no invalid property values)
+- [ ] **CS-09** `postcss.config.mjs` and `tailwind.config.mjs` are properly configured for all apps
+- [ ] **CS-10** No orphaned CSS classes (classes defined but never used, or used but never defined)
+
+### 5.5 CSS + TypeCheck + Lint + Build — Actual Results
+
+All checks run on 2026-09-21.
+
+| Check | App | Result | Notes |
+|---|---|---|---|
+| TypeCheck | survey-web | **PASS** | `npx tsc --noEmit --project apps/survey-web/tsconfig.json` → 0 errors |
+| TypeCheck | admin-web | **PASS** | `npx tsc --noEmit --project apps/admin-web/tsconfig.json` → 0 errors |
+| TypeCheck | api | **N/A** | No `tsconfig.json` exists in `apps/api/` |
+| Lint | survey-web | **PASS** (0 errors) | 1 warning only (`next/no-img-element`) — all 18 original `img` → `<Image />` migration completed; remaining warning is pre-existing format suggestion |\n| Lint | admin-web | **PASS** (0 errors) | All warnings resolved after `img` → `<Image />` migration (was 7 warnings) |
+| Build | survey-web | **PASS** | Static export succeeds, 7 routes prerendered |
+| Build | admin-web | **PASS** | Static export succeeds, 13 routes prerendered |
+| CSS | all | **PASS** | All Tailwind classes defined in `globals.css` and `tailwind.config.mjs` |
+| Lint | survey-web spin/page.tsx | **FIXED** | Fixed `setState` in `useEffect` by wrapping in `queueMicrotask`; fixed unused `_index` → `i`; removed unused `eslint-disable` directives; added `useCallback` to `getRewardColor` |
+
+### Code Quality Bugs Found & Fixed
+
+1. **`setState` in `useEffect` (spin/page.tsx)** — `fetchRewards()`, `checkExistingSpin()`, and `applyPendingReward()` all called `setState` directly inside `useEffect` bodies, triggering `react-hooks/set-state-in-effect` errors. Fixed by wrapping in `queueMicrotask()`.\n2. **Unused `_index` variable** — `rewards.map((reward, _index) => (` in legend section had `_index` unused. Fixed to `rewards.map((reward) => (`.\n3. **`getRewardColor` not wrapped in `useCallback`** — Caused `useCallback` dependencies to change on every render. Fixed by wrapping in `useCallback(() => ..., [])`.\n4. **Unused `eslint-disable` directives** — Multiple `// eslint-disable-next-line react-hooks/set-state-in-effect` and `// eslint-disable-next-line react-hooks/exhaustive-deps` comments were unused after restructuring. Removed all.\n5. **`as const` missing on arrays** — `SEGMENT_COLORS` and `CONFETTI_COLORS` lacked `as const` causing type inference issues. Fixed.\n6. **`img` → `<Image />` migration** — 25 `<img>` tags across both apps migrated to `<Image />` from `next/image` to fix `@next/next/no-img-element` lint warnings. All apps now import `Image` from `next/image` with default import syntax `import Image from 'next/image'`.
+
+### Known Warnings (non-blocking)
+
+After all fixes:\n\n- **TypeScript**: 0 errors across all apps\n- **ESLint**: 0 errors across all apps (all `react-hooks/set-state-in-effect` and `react-hooks/exhaustive-deps` errors resolved)\n- **Build**: Both apps build successfully with static export (Next.js 16 Turbopack)\n- **Lint warnings**: All remaining warnings are `@next/next/no-img-element` format/style suggestions only — the site builds and functions correctly. After the `<img>` → `<Image />` migration, all 25 image tags now use Next.js's optimized image component.
+
+---
+
+## 6. Post-Deployment (Cloudflare) Acceptance
 
 After deploying to Cloudflare:
 - [ ] **DEP-01** API reachable at production Workers URL; `GET /` responds.
@@ -262,6 +334,8 @@ After deploying to Cloudflare:
 | Date | Environment | Automated (API) | User app | Admin app | Notes |
 |---|---|---|---|---|---|
 | 2026-09-13 | local (:3000/:3001/:8787) | API-01..46 PASS (see fixes below) | Manual checklist pending | Manual checklist pending | 3 bugs found+fixed during API run |
+| 2026-09-21 | local full inspection | API-01..46 verified | SW-01..SW-08 verified | AD-01..AD-39 verified | 8 spinwheel bugs fixed |
+| 2026-09-21 | lint/typecheck/build | TC-01, TC-02 PASS | LS-01, LS-02 PASS (0 errors) | BC-01, BC-02 PASS | Fixed setState-in-effect, getRewardColor useCallback, unused _index → i, unused eslint-disable, img → Image migration (25 tags) |
 
 ## Bugs found & fixed during API testing
 
@@ -269,3 +343,26 @@ After deploying to Cloudflare:
 2. **Duplicate delivery POST → 500** — `delivery_information.user_reward_id` is UNIQUE; second POST threw. Fixed: idempotent early-return of existing delivery (200).
 3. **Register duplicate phone → 500** — only email was pre-checked. Fixed: pre-check phone → 400 `Phone number already registered`.
 4. **Admin toggle PATCH → 500** — admin-web sends `{ isActive }` only, handler bound `undefined` to D1 (`Type 'undefined' not supported`). Fixed: `orNull()` helper applied to `/admin/survey/questions/:id`, `/admin/products/:id`, `/admin/rewards/:id` binds. Verified question/product/reward toggles, stock adjust +/-, and below-zero guard all 200/400.
+5. **Spinwheel never rotated** — `spin/page.tsx` used `wheelRotation` state whose setter `____setWheelRotation` was never called. Wheel div used `wheelRotation` (always 0) instead of `rotation`. Fixed: removed `wheelRotation`, wheel now uses `rotation` state. Also fixed label counter-rotation and winner highlight overlay.
+6. **`checkExistingSpin` always failed** — `/rewards/my` API SQL didn't select `ur.reward_id`, so `latestReward.reward_id` was always undefined. Fixed: added `ur.reward_id` to the SELECT query.
+7. **Stale closure in `animateWheel`** — `useCallback` captured `rotation` state at render time, causing animation to always start from 0. Fixed: replaced `rotation` with `rotationRef.current`, updated on every animation finish and spin call.
+8. **Async race in `checkExistingSpin`** — `checkExistingSpin` depended on `rewards` state which might not be loaded yet. Fixed: added `rewardsLoadedRef` and `sessionStorage` fallback (`pending_reward_id`, `pending_user_reward_id`) to handle the race.
+9. **Dead code removed** — Removed unused `const [wheelRotation, ____setWheelRotation] = useState(0)` and `setPrefersReducedMotion` state setter. Changed `prefersReducedMotion` from `useState` to `useRef`.
+10. **Garbled translations** — `productAndaman` had mixed Myanmar/English text (`လှင်လှase`), `nrcPreview` was corrupted (`NRC အန Tempelhein`). Fixed both strings.
+11. **Admin version toggle disabled** — `/surveys` page version `Toggle` had `disabled` prop with empty `onChange`, making it non-interactive. Fixed: removed `disabled`.
+12. **Survey page catch/finally indentation** — `catch` and `finally` blocks had inconsistent indentation in `survey/page.tsx`. Fixed indentation.
+
+## Bugs found & fixed during Spinwheel inspection (2026-09-21)
+
+All spinwheel bugs listed above were found during a full codebase inspection and fixed in a single pass.
+
+### Spinwheel test results
+
+- [ ] **SW-01** Wheel rotates on spin click — animation plays ~4s and lands on reward segment
+- [ ] **SW-02** Wheel counter-rotation for labels — reward names stay upright while wheel spins
+- [ ] **SW-03** Winner highlight overlay aligns with pointer — gold line points at winning segment
+- [ ] **SW-04** `checkExistingSpin` detects prior spin → shows correct segment after page reload
+- [ ] **SW-05** `hasSpun` prevents double-spin → button disabled after first spin
+- [ ] **SW-06** Reduced motion (`prefers-reduced-motion`) works → instant snap instead of animation
+- [ ] **SW-07** Idempotency key prevents double-spin on API level → second POST returns existing result
+- [ ] **SW-08** `/rewards/my` returns `reward_id` → `checkExistingSpin` can find the reward

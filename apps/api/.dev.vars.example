@@ -1,0 +1,12 @@
+# Copy to `apps/api/.dev.vars` for `wrangler dev` (gitignored).
+# Do NOT use these values in production.
+
+JWT_SECRET=dev-only-secret-please-change-me
+ENVIRONMENT=development
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001
+PUBLIC_SITE_ORIGIN=http://localhost:3000
+DB_DEBUG=true
+
+# Optional Turnstile (leave unset to disable verification locally)
+# TURNSTILE_SECRET=
+# TURNSTILE_SITE_KEY=

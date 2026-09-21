@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useLanguage } from '../context/LanguageContext'
 import Header from '../components/Header'
-import { API_BASE } from '../lib/api'
+import { API_BASE, getValidToken, surveyHeaders } from '../lib/api'
 import { useHydrated } from '../lib/useHydrated'
 
 interface Option {
@@ -221,6 +222,15 @@ export default function SurveyPage() {
     if (typeof window !== 'undefined') sessionStorage.setItem('survey_submitting', '1');
     setSubmitting(true);
     try {
+      // The API derives the user from the JWT; refresh an expired token before
+      // submitting so a session that lapsed mid-survey does not lose answers.
+      const token = await getValidToken()
+      if (!token) {
+        setError(t('sessionExpired'))
+        router.replace('/info')
+        return
+      }
+
       let campaignId: string | null = null
       try {
         const campRes = await fetch(`${API_BASE}/campaigns?lang=${language}`)
@@ -230,20 +240,22 @@ export default function SurveyPage() {
         }
       } catch { /* campaign optional */ }
 
-      let userId: string | null = null
-      try {
-        const token = typeof window !== 'undefined' ? localStorage.getItem('survey_token') : null
-        if (token) {
-          const payload = JSON.parse(atob(token.split('.')[1]))
-          if (payload.sub) userId = payload.sub
-        }
-      } catch { /* not logged in */ }
+      // Stable idempotency key for this attempt: retries after a network blip
+      // return the original response instead of creating a duplicate.
+      let submissionRequestId = sessionStorage.getItem('survey_submission_request_id')
+      if (!submissionRequestId) {
+        submissionRequestId =
+          typeof crypto !== 'undefined' && 'randomUUID' in crypto
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+        sessionStorage.setItem('survey_submission_request_id', submissionRequestId)
+      }
 
       const answerArray: Answer[] = Object.values(answers)
       const res = await fetch(`${API_BASE}/survey/submit`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ campaignId, userId, language, answers: answerArray })
+        headers: surveyHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ campaignId, language, submissionRequestId, answers: answerArray })
       })
       const data = await res.json()
 
@@ -251,14 +263,19 @@ export default function SurveyPage() {
         if (typeof window !== 'undefined') {
           sessionStorage.setItem('survey_response_id', data.data.responseId)
           if (campaignId) sessionStorage.setItem('survey_campaign_id', campaignId)
+          sessionStorage.removeItem('survey_submission_request_id')
         }
         router.push('/spin')
+      } else if (data.error?.code === 'UNAUTHORIZED') {
+        if (typeof window !== 'undefined') localStorage.removeItem('survey_token')
+        setError(t('sessionExpired'))
+        router.replace('/info')
       } else {
         setError(data.error?.message || t('failedToSubmit'))
       }
     } catch {
       setError(t('connectionFailed'))
-} finally {
+    } finally {
       sessionStorage.removeItem('survey_submitting');
       setSubmitting(false);
     }
@@ -276,7 +293,7 @@ export default function SurveyPage() {
         <div className="relative mb-6 animate-pop">
           <div className="absolute -inset-3 rounded-full border border-gold/30 animate-spin-slow" />
           <div className="w-16 h-16 rounded-full gold-border bg-brand-emerald overflow-hidden p-0.5">
-            <img src="/myanmarbeer.png" alt="MB" width={64} height={64} className="w-full h-full object-cover rounded-full" />
+            <Image src="/myanmarbeer.png" alt="MB" width={64} height={64} className="w-full h-full object-cover rounded-full" />
           </div>
         </div>
         <div className="h-2 w-40 rounded-full shimmer-bg" />
@@ -466,7 +483,7 @@ export default function SurveyPage() {
                 const name = current.product_type
                 return (
                   <div className="mt-4 overflow-hidden rounded-2xl border border-gold/20 bg-surface/80 animate-fade-up">
-                    <img
+                    <Image
                       src={image}
                       alt={name}
                       width={384}

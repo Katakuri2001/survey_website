@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import Image from 'next/image'
 
 import { API_BASE } from '../lib/api'
 
@@ -343,7 +344,7 @@ function ProductModal({
             <div className="space-y-3">
               {displayImage && (
                 <div className="relative w-full max-w-xs">
-                  <img
+                  <Image
                     src={displayImage}
                     alt="Product preview"
                     className="w-full h-48 object-cover rounded-lg border border-slate-200"
@@ -556,8 +557,7 @@ export default function ProductsPage() {
                       <div className="flex items-center gap-3">
                         {product.image_url ? (
                           <>
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
+                            <Image
                               src={product.image_url}
                               alt={product.name}
                               className="h-10 w-10 rounded-lg bg-slate-100 object-cover ring-1 ring-slate-200"

@@ -1,6 +1,7 @@
 'use client'
 
 import { useLanguage } from './context/LanguageContext'
+import Image from 'next/image'
 import Link from 'next/link'
 import LanguageSwitcher from './components/LanguageSwitcher'
 
@@ -33,7 +34,7 @@ export default function Home() {
         <div className="relative z-10 mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 pt-4 sm:pt-6 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3 shrink-0">
             <span className="w-10 h-10 rounded-full gold-ring bg-brand-emerald overflow-hidden p-0.5 shrink-0">
-              <img src="/myanmarbeer.png" alt="MB" width={40} height={40} className="w-full h-full object-cover rounded-full" />
+              <Image src="/myanmarbeer.png" alt="MB" width={40} height={40} className="w-full h-full object-cover rounded-full" />
             </span>
             <span className="hidden sm:block min-w-0">
               <span className={`block font-display font-bold gold-text truncate ${language === 'my' ? 'font-myanmar leading-snug text-base sm:text-lg' : 'text-sm sm:text-base leading-tight'}`}>{t('brandName')}</span>
@@ -143,7 +144,7 @@ export default function Home() {
         <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-8 sm:py-10 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
           <div className="flex items-center gap-2 sm:gap-3">
             <span className="w-8 h-8 sm:w-9 sm:h-9 rounded-full gold-border bg-brand-emerald overflow-hidden p-0.5 shrink-0">
-              <img src="/myanmarbeer.png" alt="MB" width={36} height={36} className="w-full h-full object-cover rounded-full" />
+              <Image src="/myanmarbeer.png" alt="MB" width={36} height={36} className="w-full h-full object-cover rounded-full" />
             </span>
             <span className={`font-display font-bold gold-text ${language === 'my' ? 'font-myanmar leading-snug text-base sm:text-lg' : 'text-sm sm:text-base'}`}>{t('brandName')}</span>
           </div>

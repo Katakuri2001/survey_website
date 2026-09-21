@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 
 import { API_BASE } from '../lib/api'
@@ -57,7 +58,7 @@ export default function AdminLoginPage() {
 
         <div className="relative z-10 flex items-center gap-3 px-12 pt-10">
           <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-white/10 ring-2 ring-gold ring-offset-2 ring-offset-forest">
-            <img src="/logo.png" alt="Myanmar Beer" className="h-full w-full object-cover" />
+            <Image src="/logo.png" alt="Myanmar Beer" className="h-full w-full object-cover" />
           </div>
           <div>
             <p className="font-display text-lg font-bold leading-tight text-white">Myanmar Beer</p>
@@ -86,7 +87,7 @@ export default function AdminLoginPage() {
         <div className="w-full max-w-md">
           <div className="mb-8 text-center lg:hidden">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-card ring-2 ring-gold">
-              <img src="/logo.png" alt="MB" className="h-full w-full object-cover" />
+              <Image src="/logo.png" alt="MB" className="h-full w-full object-cover" />
             </div>
             <h1 className="font-display text-2xl font-bold text-ink">Myanmar Beer Admin</h1>
             <p className="mt-1 text-sm text-slate-500">Sign in to manage your survey platform</p>

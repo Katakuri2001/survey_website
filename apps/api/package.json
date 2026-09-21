@@ -7,7 +7,9 @@
     "deploy": "wrangler deploy",
     "d1:execute": "wrangler d1 execute survey-db --local --command=",
     "d1:migrate": "wrangler d1 migrate create",
-    "d1:push": "wrangler d1 execute survey-db --file="
+    "d1:push": "wrangler d1 execute survey-db --file=",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "@cloudflare/workers-types": "^4.20260702.1",

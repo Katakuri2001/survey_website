@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react"
+import Image from "next/image";
 import { API_BASE, adminHeaders } from "../lib/api";
 
 type Reward = {
@@ -409,7 +410,7 @@ export default function RewardsPage() {
                               {r.image_url && (
                                 <>
                                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img src={r.image_url} alt={r.name} className="h-10 w-10 rounded-lg object-cover ring-1 ring-slate-200" />
+                                  <Image src={r.image_url} alt={r.name} className="h-10 w-10 rounded-lg object-cover ring-1 ring-slate-200" />
                                 </>
                               )}
 
@@ -667,7 +668,7 @@ export default function RewardsPage() {
                   <div className="space-y-3">
                     {form.imageUrl && (
                       <div className="relative w-full max-w-xs">
-                        <img
+                        <Image
                           src={form.imageUrl}
                           alt="Reward preview"
                           className="w-full h-48 object-cover rounded-lg border border-slate-200"

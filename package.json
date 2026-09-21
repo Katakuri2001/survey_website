@@ -9,7 +9,10 @@
     "dev": "turbo run dev",
     "build": "turbo run build",
     "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
     "test": "turbo run test",
+    "test:hardening": "node tests/hardening.test.mjs",
+    "test:load": "k6 run loadtest/k6-spin.js",
     "wrangler": "wrangler"
   },
   "devDependencies": {

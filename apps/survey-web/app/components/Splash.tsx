@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Image from 'next/image'
 import { useLanguage } from '../context/LanguageContext'
 import { useHydrated } from '../lib/useHydrated'
 
@@ -76,7 +77,7 @@ export default function Splash() {
           <div className="absolute -inset-3 rounded-full border border-gold/30 animate-spin-slow" />
           <div className="absolute -inset-6 rounded-full border border-gold/10" />
           <div className="w-28 h-28 md:w-32 md:h-32 rounded-full gold-ring bg-brand-emerald flex items-center justify-center overflow-hidden p-1">
-            <img src="/myanmarbeer.png" alt="MB" width={112} height={112} className="w-full h-full object-cover rounded-full" />
+            <Image src="/myanmarbeer.png" alt="MB" width={112} height={112} className="w-full h-full object-cover rounded-full" />
           </div>
         </div>
 

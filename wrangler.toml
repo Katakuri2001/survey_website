@@ -2,23 +2,72 @@ name = "alcohol-survey-platform"
 main = "apps/api/src/index.ts"
 compatibility_date = "2026-09-01"
 
+# Optional cron: cancels spins left in-flight by a crash so users can retry.
+# Harmless to leave enabled; remove if you prefer to manage it elsewhere.
+[triggers]
+crons = ["*/15 * * * *"]
+
+# ---------------------------------------------------------------------------
+# Variables (non-secret). NEVER put JWT_SECRET or TURNSTILE_SECRET here.
+# Set secrets with: wrangler secret put JWT_SECRET --env production
+# ---------------------------------------------------------------------------
+[vars]
+ENVIRONMENT = "production"
+# Comma-separated extra browser origins allowed to call the API.
+# Same-origin (the normal Pages deployment) is always allowed.
+ALLOWED_ORIGINS = ""
+PUBLIC_SITE_ORIGIN = ""
+DB_DEBUG = "false"
+
 [[d1_databases]]
   binding = "survey_db"
   database_name = "survey-db"
   database_id = "449a4386-9e0f-4e65-b7cf-e37cc0de491c"
+
+# ---------------------------------------------------------------------------
+# Optional add-ons. Uncomment only when the resource exists; the Worker
+# degrades gracefully when they are absent.
+# ---------------------------------------------------------------------------
+# [[r2_buckets]]
+#   binding = "ASSETS"
+#   bucket_name = "survey-assets"
+#
+# [[queues.producers]]
+#   binding = "ANALYTICS_QUEUE"
+#   queue = "survey-analytics"
+#
+# [[unsafe.bindings]]
+#   name = "RATE_LIMITER"
+#   type = "ratelimit"
+#   namespace_id = "1001"
+#   simple = { limit = 100, period = 60 }
+
+# ---------------------------------------------------------------------------
+# Production
+# ---------------------------------------------------------------------------
+[env.production]
+[env.production.vars]
+ENVIRONMENT = "production"
+ALLOWED_ORIGINS = ""
+PUBLIC_SITE_ORIGIN = ""
+DB_DEBUG = "false"
 
 [[env.production.d1_databases]]
   binding = "survey_db"
   database_name = "survey-db"
   database_id = "449a4386-9e0f-4e65-b7cf-e37cc0de491c"
 
-[env.production.vars]
-DB_DEBUG = "false"
+# ---------------------------------------------------------------------------
+# Development / staging
+# ---------------------------------------------------------------------------
+[env.development]
+[env.development.vars]
+ENVIRONMENT = "development"
+ALLOWED_ORIGINS = "http://localhost:3000,http://localhost:3001"
+PUBLIC_SITE_ORIGIN = "http://localhost:3000"
+DB_DEBUG = "true"
 
 [[env.development.d1_databases]]
   binding = "survey_db"
   database_name = "survey-db"
   database_id = "449a4386-9e0f-4e65-b7cf-e37cc0de491c"
-
-[env.development.vars]
-DB_DEBUG = "true"
