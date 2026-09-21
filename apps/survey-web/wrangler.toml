@@ -9,8 +9,13 @@ compatibility_date = "2026-05-03"
 ENVIRONMENT = "production"
 ALLOWED_ORIGINS = ""
 PUBLIC_SITE_ORIGIN = ""
+TURNSTILE_SITE_KEY = "0x4AAAAAAE-v_qmikTPp1LVj"
 
 [[d1_databases]]
   binding = "survey_db"
   database_name = "survey-db"
   database_id = "449a4386-9e0f-4e65-b7cf-e37cc0de491c"
+
+[[r2_buckets]]
+  binding = "MEDIA_BUCKET"
+  bucket_name = "survey-assets"

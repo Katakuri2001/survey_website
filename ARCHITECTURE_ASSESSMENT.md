@@ -7,14 +7,14 @@
 | Layer | Technology | Location |
 |---|---|---|
 | User app | Next.js 16 static export (`output: 'export'`), React 18, Tailwind | `apps/survey-web` |
-| Admin app | Next.js 16 static export, basePath `/admin` | `apps/admin-web` |
+| Admin app | Next.js 16 static export, standalone origin (no `basePath`) | `apps/admin-web` |
 | API | Hono on Cloudflare Workers, also mounted as Pages Functions at `/api/*` | `apps/api/src/index.ts` (single 1,983-line file) |
 | DB | Cloudflare D1 (`survey_db`) | `migrations/0001`–`0013` |
-| Storage | **None.** Admin image uploads are base64 data-URLs stored in D1 columns | `POST /admin/upload` |
+| Storage | R2 bucket `survey-assets` via the optional `MEDIA_BUCKET` binding; falls back to base64 data-URLs in D1 | `POST /admin/upload`, `GET /media/:key` |
 | Auth | Custom HS256 JWT (WebCrypto HMAC), SHA-256 password hashing | `apps/api/src/index.ts` |
 | Deployment | Cloudflare Pages (both apps) + optional Worker; legacy `vercel.json` remains | root `wrangler.toml` |
 
-The public flow is: `/` → `/info` (guest user) → `/survey` → `/spin` → (delivery form was specified but **not implemented**; `POST /rewards/delivery` exists server-side only).
+The public flow is: `/` → `/info` (guest user) → `/survey` → `/spin` → `/delivery` (implemented in this pass; `POST /rewards/delivery` is ownership-checked and idempotent).
 
 ## 2. Findings (ranked)
 
@@ -63,7 +63,7 @@ Internet → Cloudflare DNS/WAF
         → Cloudflare Pages (static Next.js export + Pages Function at /api/*)
         → Cloudflare Worker (Hono)
         → D1 (single writer, kept short)
-        → R2 (images, optional binding `ASSETS`)
+        → R2 (images, optional binding `MEDIA_BUCKET`)
 Optional: Turnstile (server-verified), Rate Limiting binding, Queue, scheduled aggregation
 ```
 

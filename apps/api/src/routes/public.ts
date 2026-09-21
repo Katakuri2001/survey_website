@@ -43,6 +43,46 @@ publicRoutes.get('/', (c) =>
 );
 
 // ============================================================
+// Turnstile config. Only the public site key is exposed; verification is
+// active when both the site key and the secret are configured.
+// ============================================================
+
+publicRoutes.get('/public/turnstile', (c) =>
+  success(c, {
+    enabled: Boolean(c.env.TURNSTILE_SECRET && c.env.TURNSTILE_SITE_KEY),
+    siteKey: c.env.TURNSTILE_SITE_KEY || null,
+  })
+);
+
+// ============================================================
+// Media (R2). Returns 404 when no bucket is bound, so uploads keep
+// working as D1 data-URLs when the optional MEDIA_BUCKET binding is absent.
+// ============================================================
+
+publicRoutes.get('/media/:key', async (c) => {
+  const bucket = c.env.MEDIA_BUCKET;
+  if (!bucket) {
+    return failure(c, ErrorCode.NOT_FOUND, 'Media storage is not configured', 404);
+  }
+
+  try {
+    const object = await bucket.get(c.req.param('key'));
+    if (!object) {
+      return failure(c, ErrorCode.NOT_FOUND, 'Media not found', 404);
+    }
+    const headers = new Headers();
+    object.writeHttpMetadata(headers);
+    headers.set('ETag', object.httpEtag);
+    headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+    headers.set('X-Content-Type-Options', 'nosniff');
+    return new Response(object.body, { headers });
+  } catch (error) {
+    logEvent('error', 'media_read_failed', { error: String(error) });
+    return failure(c, ErrorCode.INTERNAL, 'Media unavailable', 500);
+  }
+});
+
+// ============================================================
 // Health check (used by uptime monitors and the load test)
 // ============================================================
 

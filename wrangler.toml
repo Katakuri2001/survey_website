@@ -18,6 +18,8 @@ ENVIRONMENT = "production"
 ALLOWED_ORIGINS = ""
 PUBLIC_SITE_ORIGIN = ""
 DB_DEBUG = "false"
+# Public Turnstile site key (safe to commit). The matching secret is a secret.
+TURNSTILE_SITE_KEY = "0x4AAAAAAE-v_qmikTPp1LVj"
 
 [[d1_databases]]
   binding = "survey_db"
@@ -28,9 +30,9 @@ DB_DEBUG = "false"
 # Optional add-ons. Uncomment only when the resource exists; the Worker
 # degrades gracefully when they are absent.
 # ---------------------------------------------------------------------------
-# [[r2_buckets]]
-#   binding = "ASSETS"
-#   bucket_name = "survey-assets"
+[[r2_buckets]]
+  binding = "MEDIA_BUCKET"
+  bucket_name = "survey-assets"
 #
 # [[queues.producers]]
 #   binding = "ANALYTICS_QUEUE"
@@ -51,11 +53,16 @@ ENVIRONMENT = "production"
 ALLOWED_ORIGINS = ""
 PUBLIC_SITE_ORIGIN = ""
 DB_DEBUG = "false"
+TURNSTILE_SITE_KEY = "0x4AAAAAAE-v_qmikTPp1LVj"
 
 [[env.production.d1_databases]]
   binding = "survey_db"
   database_name = "survey-db"
   database_id = "449a4386-9e0f-4e65-b7cf-e37cc0de491c"
+
+[[env.production.r2_buckets]]
+  binding = "MEDIA_BUCKET"
+  bucket_name = "survey-assets"
 
 # ---------------------------------------------------------------------------
 # Development / staging
@@ -66,8 +73,14 @@ ENVIRONMENT = "development"
 ALLOWED_ORIGINS = "http://localhost:3000,http://localhost:3001"
 PUBLIC_SITE_ORIGIN = "http://localhost:3000"
 DB_DEBUG = "true"
+# Turnstile test site key (always passes) for local development.
+TURNSTILE_SITE_KEY = "1x00000000000000000000AA"
 
 [[env.development.d1_databases]]
   binding = "survey_db"
   database_name = "survey-db"
   database_id = "449a4386-9e0f-4e65-b7cf-e37cc0de491c"
+
+[[env.development.r2_buckets]]
+  binding = "MEDIA_BUCKET"
+  bucket_name = "survey-assets"

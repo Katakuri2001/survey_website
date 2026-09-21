@@ -97,8 +97,10 @@ export async function verifyTurnstile(
   expectedAction?: string
 ): Promise<Response | null> {
   const secret = c.env.TURNSTILE_SECRET;
-  // Not configured (local dev / staged rollout): do not block the flow.
-  if (!secret) return null;
+  const siteKey = c.env.TURNSTILE_SITE_KEY;
+  // Not configured (local dev / staged rollout): do not block the flow. Both
+  // values are required, so a missing site key can never lock users out.
+  if (!secret || !siteKey) return null;
 
   if (!token || typeof token !== 'string') {
     return failure(c, ErrorCode.TURNSTILE_FAILED, 'Verification challenge is required.');

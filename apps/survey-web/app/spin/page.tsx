@@ -6,6 +6,7 @@ import Image from 'next/image'
 import { useLanguage } from '../context/LanguageContext'
 import Header from '../components/Header'
 import { API_BASE, getValidToken } from '../lib/api'
+import { getTurnstileToken } from '../lib/turnstile'
 import { useToast } from '../components/Toast'
 
 interface Reward {
@@ -316,6 +317,7 @@ export default function SpinPage() {
       const campaignId = await resolveContext('survey_campaign_id', '/campaigns')
 
       const doSpin = async (authToken: string) => {
+        const turnstileToken = await getTurnstileToken()
         const res = await fetch(`${API_BASE}/rewards/spin`, {
           method: 'POST',
           headers: {
@@ -326,6 +328,7 @@ export default function SpinPage() {
             campaignId: campaignId || 'default',
             productId: productId || 'beer',
             idempotencyKey,
+            turnstileToken,
           }),
         })
         // Always parse the envelope: 4xx responses carry the actionable code

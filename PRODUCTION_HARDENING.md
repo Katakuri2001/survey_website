@@ -15,10 +15,14 @@ for the underlying analysis and [`MONITORING.md`](./MONITORING.md) /
    the same migration. On production, take a D1 time-travel bookmark first.
 2. **Set `JWT_SECRET` as a secret** on both Pages projects (and the API worker).
    Without it, authentication is disabled in production by design.
-3. Deploy the API worker and both Pages apps, then run the smoke test:
-   `API_BASE=https://<site>/api npm run test:hardening`.
-4. Optionally enable **Turnstile** (requires the frontend widget) and the
-   optional bindings listed below.
+3. Deploy the API worker and both Pages apps. Run the hardening smoke test
+   against a **local/dev** API — `API_BASE=http://localhost:8788/api npm run test:hardening`
+   (with Turnstile enabled, production tokens are single-use, so the automated
+   test cannot run against the deployed API).
+4. **Turnstile is enabled**: `TURNSTILE_SITE_KEY` is set in each `wrangler.toml`
+   and `TURNSTILE_SECRET` must be set as a secret on both Pages projects and the
+   worker. The bundled invisible widget supplies the token. Delete the secret to
+   disable enforcement again. Optional bindings are listed below.
 
 > ⚠️ This release changes the security posture. Previously the API fell back to
 > a hard-coded development JWT secret in production. That fallback is now
@@ -123,6 +127,10 @@ bookmark is the primary rollback for D1.
   crash so users can retry. `PROCESSING` is deliberately *not* touched because
   it is a real delivery status set by admins. Remove the `[triggers]` block in
   `wrangler.toml` if you prefer to manage crons elsewhere.
+- **Static-export images**: both Next.js apps set `images: { unoptimized: true }`
+  because a static export cannot run the on-demand `/_next/image` optimizer
+  (previously every image requested a non-existent `/_next/image` URL and 404'd
+  in production).
 
 ## Configuration reference
 
@@ -135,19 +143,22 @@ bookmark is the primary rollback for D1.
 | `PUBLIC_SITE_ORIGIN` | var | no | Informational only. |
 | `TURNSTILE_SECRET` | secret | no | When set, guest + spin require a valid Turnstile token. |
 | `TURNSTILE_SITE_KEY` | var | no | Public site key for the frontend widget. |
-| `ASSETS` | R2 binding | no | Reserved for media; uploads currently stay inline. |
+| `MEDIA_BUCKET` | R2 binding | no | Stores uploaded images; falls back to inline data-URLs when absent. |
 | `ANALYTICS_QUEUE` | Queue producer | no | Reserved for deferred analytics. |
 | `RATE_LIMITER` | Rate Limiting binding | no | Cloudflare rate limit in addition to the in-isolate limiter. |
 
-Set secrets per project:
+Set secrets per project (run from the repo root):
 
 ```bash
-# API worker
-cd apps/api && npx wrangler secret put JWT_SECRET --env production
+# API worker + cron (root wrangler.toml)
+npx wrangler secret put JWT_SECRET
+npx wrangler secret put TURNSTILE_SECRET
 
 # Pages projects (each serves its own /api/* Function)
 npx wrangler pages secret put JWT_SECRET --project-name alcohol-survey
 npx wrangler pages secret put JWT_SECRET --project-name alcohol-survey-admin
+npx wrangler pages secret put TURNSTILE_SECRET --project-name alcohol-survey
+npx wrangler pages secret put TURNSTILE_SECRET --project-name alcohol-survey-admin
 ```
 
 ## Feature flags & emergency controls
@@ -170,21 +181,57 @@ can recover. Flags take effect within 30 s (isolate cache) or immediately via
 
 ## Turnstile
 
-Turnstile is **off until `TURNSTILE_SECRET` is set**. Server-side verification is
-already wired into `POST /users/guest` and `POST /rewards/spin`, but the
-frontend widget is not included in this pass. Enabling the secret without the
-widget will reject those requests, so deploy the widget first (render the
-Turnstile script with `TURNSTILE_SITE_KEY`, obtain a token, and send it as
-`turnstileToken` in the request body).
+Turnstile protects `POST /users/guest` and `POST /rewards/spin`. Enforcement is
+**on only when both `TURNSTILE_SECRET` and `TURNSTILE_SITE_KEY` are set** — a
+missing site key can never lock users out.
 
-## Known remaining work (tracked, not blocking the event)
+- The widget is an **invisible** Turnstile widget (site key
+  `0x4AAAAAAE-v_qmikTPp1LVj`, allow-listed for `myanmarbeer.boom.com.mm`,
+  `myanmarbeer.com.mm`, both `*.pages.dev` projects and `localhost`).
+- `apps/survey-web/app/lib/turnstile.ts` lazily loads the Turnstile script,
+  renders an invisible widget, calls `execute()`, and returns the token, which
+  the signup and spin requests send as `turnstileToken`. If `/public/turnstile`
+  reports it off (or the widget cannot load) the token is omitted and the server
+  does not enforce it.
+- **CSP matters**: `apps/survey-web/public/_headers` allows
+  `https://challenges.cloudflare.com` in `script-src` and `frame-src`. Without
+  both, the widget is blocked and every signup/spin is rejected.
+- **Disable (rollback)**:
+  `npx wrangler pages secret delete TURNSTILE_SECRET --project-name alcohol-survey`
+  (and `alcohol-survey-admin`). The next `/public/turnstile` call reports
+  `enabled:false` and the widget stops loading.
+- **Testing note**: the real widget refuses automated browsers (`300010 bot
+  behaviour detected`), so end-to-end widget tests must use the Turnstile test
+  keys locally (`TURNSTILE_SITE_KEY=1x00000000000000000000AA`,
+  `TURNSTILE_SECRET=1x0000000000000000000000000000000AA`). Production was
+  validated with the config/enforcement endpoints plus a real `siteverify`-backed
+  rejection of token-less requests.
 
-- **Media storage**: `/admin/upload` still stores base64 images in D1. For a
-  large catalogue this is inefficient; move to the optional `ASSETS` R2 bucket
-  (`/media/:key` route is not implemented yet).
-- **Turnstile frontend widget** (above).
-- **Frontend admin audit page**: the API endpoint exists; `apps/admin-web/app/audit`
-  is an empty directory.
+## Deployment topologies
+
+- **survey-web** → Pages project `alcohol-survey`
+  (`alcohol-survey.pages.dev`, custom domain `myanmarbeer.boom.com.mm`).
+- **admin-web** → Pages project `alcohol-survey-admin`
+  (`alcohol-survey-admin.pages.dev`). The admin app is **standalone at its own
+  origin** (no `basePath`/`assetPrefix`); all navigation is root-relative.
+- **API worker** `alcohol-survey-platform` owns the 15-minute spin-cleanup cron.
+- Both Pages projects bundle the same API Function, so the same secrets must be
+  set on both. The legacy Pages projects `myanmarbeer-survey`,
+  `myanmarbeer-admin` and `alcohol-admin` have been **deleted**.
+
+## Media (R2)
+
+`/admin/upload` stores files in the `survey-assets` R2 bucket via the
+`MEDIA_BUCKET` binding and returns a relative `/api/media/<key>` URL, which
+resolves same-origin on both the survey and admin sites. `GET /media/:key`
+serves the object. When the binding is absent the upload falls back to a D1
+data-URL, so the feature degrades gracefully. `MEDIA_BUCKET` replaces the earlier
+placeholder name `ASSETS`, which Cloudflare Pages reserves for static assets.
+
+## Admin audit page
+
+`apps/admin-web/app/audit/page.tsx` renders `GET /admin/audit-logs` with
+pagination and an action filter.
 
 ## Rollback
 

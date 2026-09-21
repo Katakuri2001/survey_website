@@ -1,4 +1,7 @@
-export const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'https://myanmarbeer.boom.com.mm/api'
+import { API_BASE } from './config'
+import { getTurnstileToken } from './turnstile'
+
+export { API_BASE }
 
 interface Profile {
   fullName: string
@@ -48,6 +51,7 @@ export async function getValidToken(forceRefresh = false): Promise<string | null
   if (!profile?.phone || !profile.dob) return null
 
   try {
+    const turnstileToken = await getTurnstileToken()
     const res = await fetch(`${API_BASE}/users/guest`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -58,6 +62,7 @@ export async function getValidToken(forceRefresh = false): Promise<string | null
         nrcState: profile.nrcState,
         nrcType: profile.nrcType,
         nrcNumber: profile.nrcNumber,
+        turnstileToken,
       }),
     })
     const data = await res.json()

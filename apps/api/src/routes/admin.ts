@@ -1071,6 +1071,18 @@ adminRoutes.patch('/settings', async (c) => {
 // File upload
 // ============================================================
 
+const MIME_EXTENSIONS: Record<string, string> = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+  'image/gif': '.gif',
+};
+
+function fileExtension(mimeType: string): string {
+  return MIME_EXTENSIONS[mimeType] || '';
+}
+
+
 adminRoutes.post('/upload', async (c) => {
   const limited = await enforceRateLimit(c, 'upload', c.get('userId'), { limit: 20, windowSeconds: 60 });
   if (limited) return limited;
@@ -1094,20 +1106,37 @@ adminRoutes.post('/upload', async (c) => {
   }
 
   const arrayBuffer = await file.arrayBuffer();
-  const buffer = new Uint8Array(arrayBuffer);
-  let binary = '';
-  for (let i = 0; i < buffer.length; i += 1) binary += String.fromCharCode(buffer[i]);
-  const dataUrl = `data:${file.type};base64,${btoa(binary)}`;
+
+  // Prefer the optional R2 bucket; fall back to a D1 data-URL so uploads keep
+  // working in dev or when the MEDIA_BUCKET binding is not configured. The media URL
+  // is relative so it resolves against whichever origin (survey or admin)
+  // serves the API; both mount the media route at /api/media/:key.
+  let url: string;
+  if (c.env.MEDIA_BUCKET) {
+    const key = `${type}_${generateId()}${fileExtension(file.type)}`;
+    await c.env.MEDIA_BUCKET.put(key, arrayBuffer, {
+      httpMetadata: {
+        contentType: file.type,
+        cacheControl: 'public, max-age=31536000, immutable',
+      },
+    });
+    url = `/api/media/${key}`;
+  } else {
+    const buffer = new Uint8Array(arrayBuffer);
+    let binary = '';
+    for (let i = 0; i < buffer.length; i += 1) binary += String.fromCharCode(buffer[i]);
+    url = `data:${file.type};base64,${btoa(binary)}`;
+  }
 
   if (entityId) {
     const db = c.env.survey_db;
     let result;
     if (type === 'reward') {
-      result = await db.prepare("UPDATE rewards SET image_url = ?, updated_at = datetime('now') WHERE id = ?").bind(dataUrl, entityId).run();
+      result = await db.prepare("UPDATE rewards SET image_url = ?, updated_at = datetime('now') WHERE id = ?").bind(url, entityId).run();
     } else if (type === 'survey_question') {
-      result = await db.prepare("UPDATE survey_questions SET image_url = ?, updated_at = datetime('now') WHERE id = ?").bind(dataUrl, entityId).run();
+      result = await db.prepare("UPDATE survey_questions SET image_url = ?, updated_at = datetime('now') WHERE id = ?").bind(url, entityId).run();
     } else {
-      result = await db.prepare("UPDATE products SET image_url = ?, updated_at = datetime('now') WHERE id = ?").bind(dataUrl, entityId).run();
+      result = await db.prepare("UPDATE products SET image_url = ?, updated_at = datetime('now') WHERE id = ?").bind(url, entityId).run();
     }
     if (!result.meta.changes) {
       return failure(c, ErrorCode.NOT_FOUND, 'Entity not found');
@@ -1118,7 +1147,7 @@ adminRoutes.post('/upload', async (c) => {
 
   // `url` is duplicated at the top level for admin clients that read
   // `data.url` instead of `data.data.url`.
-  return c.json({ success: true, data: { url: dataUrl, message: 'File uploaded successfully' }, url: dataUrl });
+  return c.json({ success: true, data: { url, message: 'File uploaded successfully' }, url });
 });
 
 // ============================================================

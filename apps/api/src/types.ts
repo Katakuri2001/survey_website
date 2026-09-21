@@ -23,8 +23,8 @@ export type Bindings = {
   TURNSTILE_SECRET?: string;
   TURNSTILE_SITE_KEY?: string;
 
-  /** Optional R2 bucket for uploaded media (`ASSETS`). */
-  ASSETS?: R2Bucket;
+  /** Optional R2 bucket for uploaded media (`MEDIA_BUCKET`). */
+  MEDIA_BUCKET?: R2Bucket;
 
   /** Optional Queues producer for non-critical work. */
   ANALYTICS_QUEUE?: Queue;

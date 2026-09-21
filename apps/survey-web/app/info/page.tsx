@@ -6,6 +6,7 @@ import { useLanguage } from '../context/LanguageContext'
 import Header from '../components/Header'
 import NrcInput from '../components/NrcInput'
 import { API_BASE } from '../lib/api'
+import { getTurnstileToken } from '../lib/turnstile'
 import { useHydrated } from '../lib/useHydrated'
 import type { NrcData } from '../lib/nrc'
 
@@ -81,6 +82,7 @@ export default function InfoPage() {
     const dob = `${formData.dobYear}-${formData.dobMonth.padStart(2, '0')}-${formData.dobDay.padStart(2, '0')}`
 
     try {
+      const turnstileToken = await getTurnstileToken()
       const res = await fetch(`${API_BASE}/users/guest`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -91,6 +93,7 @@ export default function InfoPage() {
           stateCode: formData.nrc.stateCode,
           nrcType: formData.nrc.type,
           nrcNumber: formData.nrc.serial,
+          turnstileToken,
         })
       })
       const data = await res.json()

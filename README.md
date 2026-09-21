@@ -5,15 +5,17 @@ A full-stack web application built for Myanmar Beer's customer survey and reward
 ## Architecture
 
 ```
-myanmarbeer.com.mm/
-├── /                  → survey-web (Next.js, user-facing app)
+myanmarbeer.boom.com.mm/            → survey-web (Next.js, user-facing app)
+├── /                  → landing page
 ├── /survey            → survey pages
 ├── /spin              → lucky spin wheel
 ├── /info              → personal info form
 ├── /delivery          → reward delivery details
 ├── /login             → login page (auto-redirects to /info)
-├── /admin/*           → admin-web (Next.js, admin dashboard)
-├── /api/*             → Cloudflare Workers API (Hono + D1)
+└── /api/*             → API (Hono + D1, served by a Pages Function)
+
+alcohol-survey-admin.pages.dev/     → admin-web (standalone dashboard)
+└── /api/*             → same API, same-origin for the admin app
 ```
 
 ### Apps
@@ -61,11 +63,9 @@ cd apps/admin-web && npm run dev  # Admin web on :3001
 ### Database Setup
 
 ```bash
-# Apply all migrations in order (each file is idempotent/additive)
-cd apps/api
-for f in ../../migrations/*.sql; do
-  wrangler d1 execute survey-db --file="$f"
-done
+# Apply all pending migrations (tracked in d1_migrations). Add --local for local dev.
+npx wrangler d1 migrations apply survey-db --remote
+npx wrangler d1 migrations apply survey-db --local
 ```
 
 > `migrations/0014_production_hardening.sql` adds the `settings` table (feature
@@ -80,7 +80,8 @@ done
 | `JWT_SECRET` | JWT signing secret (**required in production**, ≥16 chars) | none — auth is disabled in prod if unset |
 | `ENVIRONMENT` | `production` / `staging` / `development` | `production` |
 | `ALLOWED_ORIGINS` | Extra CORS origins (comma-separated) | same-origin only |
-| `TURNSTILE_SECRET` | Enables Turnstile verification when set | unset (disabled) |
+| `TURNSTILE_SITE_KEY` | Public Turnstile site key (non-secret, safe to commit) | unset (widget skipped) |
+| `TURNSTILE_SECRET` | Enables Turnstile verification when set (needs the site key too) | unset (disabled) |
 
 See [`.env.example`](./.env.example) and
 [`PRODUCTION_HARDENING.md`](./PRODUCTION_HARDENING.md) for the full reference.
@@ -182,35 +183,47 @@ Complete Survey → /survey/submit → /spin → GET /rewards → POST /rewards/
 ### Cloudflare Pages (Web Apps)
 
 ```bash
-# survey-web
-cd apps/survey-web && npm run build
-# Deploy to Cloudflare Pages project: alcohol-survey
+# survey-web (project: alcohol-survey, custom domain myanmarbeer.boom.com.mm)
+cd apps/survey-web && npm run build && npx wrangler pages deploy
 
-# admin-web
-cd apps/admin-web && npm run build
-# Deploy to Cloudflare Pages project: alcohol-survey-admin
+# admin-web (project: alcohol-survey-admin, standalone at its own .pages.dev domain)
+cd apps/admin-web && npm run build && npx wrangler pages deploy
 ```
 
 Both Pages projects also run the API as a Function (`functions/api/[[route]].ts`),
-so **set the same `JWT_SECRET` on each project** (and on the API worker):
+so **set the same `JWT_SECRET` on each project**, and set `TURNSTILE_SECRET` on
+both so the second origin cannot be used to bypass bot protection:
 
 ```bash
 npx wrangler pages secret put JWT_SECRET --project-name alcohol-survey
 npx wrangler pages secret put JWT_SECRET --project-name alcohol-survey-admin
+npx wrangler pages secret put TURNSTILE_SECRET --project-name alcohol-survey
+npx wrangler pages secret put TURNSTILE_SECRET --project-name alcohol-survey-admin
 ```
 
-### Cloudflare Workers (API)
+### Cloudflare Workers (API + cron)
+
+The root `wrangler.toml` deploys the API worker (`alcohol-survey-platform`) and
+its 15-minute spin-cleanup cron. Set secrets from the repo root:
 
 ```bash
-cd apps/api
-npx wrangler secret put JWT_SECRET --env production
-wrangler deploy --env production
+npx wrangler secret put JWT_SECRET
+npx wrangler secret put TURNSTILE_SECRET
+npx wrangler deploy
 ```
 
 ### Verify after deploy
 
 ```bash
-API_BASE=https://<your-site>/api npm run test:hardening
+# Turnstile is enforced, so the automated hardening test must run against a
+# local/dev API (or with TURNSTILE_SECRET temporarily removed).
+API_BASE=http://localhost:8788/api npm run test:hardening
+
+# Production sanity checks that do not need a Turnstile token:
+curl https://myanmarbeer.boom.com.mm/api/public/turnstile
+curl -X POST https://myanmarbeer.boom.com.mm/api/users/guest \
+  -H 'Content-Type: application/json' \
+  -d '{"fullName":"x","phone":"0900000000","dob":"1990-01-01"}'   # expect TURNSTILE_FAILED
 ```
 
 ## Testing

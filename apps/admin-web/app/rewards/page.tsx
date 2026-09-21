@@ -409,7 +409,6 @@ export default function RewardsPage() {
                             <div className="flex items-center gap-3">
                               {r.image_url && (
                                 <>
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
                                   <Image src={r.image_url} alt={r.name} className="h-10 w-10 rounded-lg object-cover ring-1 ring-slate-200" />
                                 </>
                               )}
