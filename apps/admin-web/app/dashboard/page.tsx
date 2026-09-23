@@ -58,7 +58,7 @@ function StatCard({ label, value, icon, iconClass, trend }: { label: string; val
 
 const BAR_GRADIENTS = [
   'from-gold-400 to-gold-600',
-  'from-emerald-400 to-emerald-600',
+  'from-stout-400 to-stout-600',
 ]
 
 function BarChart({ data, title }: { data: { name: string; value: number; color?: string }[]; title: string }) {
@@ -104,7 +104,7 @@ function SimpleBarChart({ data, title }: { data: { name: string; value: number }
         <h3 className="font-display text-sm font-semibold text-ink">{title}</h3>
         <div className="flex items-center gap-3 text-[11px] font-medium text-slate-500">
           <span className="flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full bg-emerald-500" /> Responses
+            <span className="h-2 w-2 rounded-full bg-stout-500" /> Responses
           </span>
         </div>
       </div>
@@ -112,8 +112,8 @@ function SimpleBarChart({ data, title }: { data: { name: string; value: number }
         {data.map((item, i) => (
           <div key={i} className="flex flex-1 flex-col items-center gap-1">
             <span className="font-display text-xs font-semibold text-slate-600">{item.value.toLocaleString()}</span>
-            <div className="flex w-full items-end justify-center rounded-t-lg bg-emerald-50" style={{ height: `${(item.value / maxValue) * 100}%`, minHeight: '6px' }}>
-              <div className="h-full w-full rounded-t-lg bg-gradient-to-t from-emerald-600 to-emerald-400 transition-all duration-700" />
+            <div className="flex w-full items-end justify-center rounded-t-lg bg-stout-50" style={{ height: `${(item.value / maxValue) * 100}%`, minHeight: '6px' }}>
+              <div className="h-full w-full rounded-t-lg bg-gradient-to-t from-stout-600 to-stout-400 transition-all duration-700" />
             </div>
             <span className="text-center text-[11px] leading-tight text-slate-500">{item.name}</span>
           </div>
@@ -305,7 +305,7 @@ export default function DashboardPage() {
           label="Completed Surveys"
           value={dashboard?.completedSurveys?.toLocaleString() || '0'}
           icon="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
-          iconClass="text-emerald-600"
+          iconClass="text-stout-500"
           trend="Valid submissions"
         />
         <StatCard
@@ -333,7 +333,7 @@ export default function DashboardPage() {
           label="Deliveries Delivered"
           value={dashboard?.deliveredRewards?.toLocaleString() || '0'}
           icon="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-          iconClass="text-emerald-600"
+          iconClass="text-stout-500"
           trend="Successfully shipped"
         />
         <StatCard
@@ -347,7 +347,7 @@ export default function DashboardPage() {
           label="Survey Responses"
           value={totalResponses.toLocaleString()}
           icon="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"
-          iconClass="text-emerald-600"
+          iconClass="text-stout-500"
           trend="Across all products"
         />
       </div>

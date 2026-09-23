@@ -51,14 +51,14 @@ export default function AdminLoginPage() {
           className="pointer-events-none absolute inset-0 opacity-[0.07]"
           style={{
             backgroundImage:
-              'radial-gradient(circle at 1px 1px, #D4AF37 1px, transparent 0)',
+              'radial-gradient(circle at 1px 1px, #E2C97F 1px, transparent 0)',
             backgroundSize: '28px 28px',
           }}
         />
 
         <div className="relative z-10 flex items-center gap-3 px-12 pt-10">
           <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-white/10 ring-2 ring-gold ring-offset-2 ring-offset-forest">
-            <Image src="/logo.png" alt="Myanmar Beer" className="h-full w-full object-cover" />
+            <Image src="/myanmarbeerstout.png" alt="Myanmar Beer" width={48} height={48} className="h-full w-full object-cover" />
           </div>
           <div>
             <p className="font-display text-lg font-bold leading-tight text-white">Myanmar Beer</p>
@@ -71,7 +71,7 @@ export default function AdminLoginPage() {
             Premium survey intelligence for{' '}
             <span className="text-warm">Myanmar&apos;s most beloved brands</span>.
           </h2>
-          <p className="mt-4 max-w-md text-sm leading-relaxed text-emerald-100/80">
+          <p className="mt-4 max-w-md text-sm leading-relaxed text-white/75">
             Monitor participation, rewards, deliveries and product sentiment from a single
             elegant command center — built for the Myanmar Beer family.
           </p>
@@ -87,7 +87,7 @@ export default function AdminLoginPage() {
         <div className="w-full max-w-md">
           <div className="mb-8 text-center lg:hidden">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-card ring-2 ring-gold">
-              <Image src="/logo.png" alt="MB" className="h-full w-full object-cover" />
+              <Image src="/myanmarbeerstout.png" alt="MB" width={64} height={64} className="h-full w-full object-cover" />
             </div>
             <h1 className="font-display text-2xl font-bold text-ink">Myanmar Beer Admin</h1>
             <p className="mt-1 text-sm text-slate-500">Sign in to manage your survey platform</p>

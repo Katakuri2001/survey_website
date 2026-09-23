@@ -84,6 +84,7 @@ export default function AuditPage() {
   }, [offset, action])
 
   useEffect(() => {
+    // Justification: reloads logs whenever offset/action changes; loading/results are intentionally reset with the effect.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchLogs()
   }, [fetchLogs])

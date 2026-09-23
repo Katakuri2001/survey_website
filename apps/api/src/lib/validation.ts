@@ -117,6 +117,9 @@ export const rewardUpdateSchema = z.object({
   weight: z.coerce.number().int().min(0).max(1_000_000).optional(),
   lowStockThreshold: z.coerce.number().int().min(0).max(1_000_000).optional(),
   isActive: z.coerce.number().int().min(0).max(1).optional(),
+  // Accepted for UI compatibility; the handler derives stock-dependent values
+  // (EXHAUSTED/LOW_STOCK) from remaining_quantity — PAUSED is the only
+  // value honored verbatim.
   status: z.enum(['AVAILABLE', 'LOW_STOCK', 'EXHAUSTED', 'PAUSED']).optional(),
   campaignId: optionalText(100),
   winningRatio: z.coerce.number().min(0).max(100).nullable().optional(),

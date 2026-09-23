@@ -199,6 +199,7 @@ export default function RewardsPage() {
   }, [tab, historyOffset, fetchRewards, fetchInventory, fetchHistory]);
 
   useEffect(() => {
+    // Justification: tab-scoped loader — loading/results are intentionally reset whenever loadData's key (tab) changes.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadData();
   }, [loadData]);
@@ -409,7 +410,7 @@ export default function RewardsPage() {
                             <div className="flex items-center gap-3">
                               {r.image_url && (
                                 <>
-                                  <Image src={r.image_url} alt={r.name} className="h-10 w-10 rounded-lg object-cover ring-1 ring-slate-200" />
+                                  <Image src={r.image_url} alt={r.name} width={40} height={40} className="h-10 w-10 rounded-lg object-cover ring-1 ring-slate-200" />
                                 </>
                               )}
 

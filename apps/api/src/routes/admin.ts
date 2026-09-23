@@ -524,6 +524,27 @@ adminRoutes.patch('/rewards/:id', async (c) => {
   const id = c.req.param('id');
   const db = c.env.survey_db;
 
+  // Derive stock-dependent status from remaining_quantity instead of trusting
+  // a free-form value: EXHAUSTED/LOW_STOCK may never disagree with actual
+  // stock. PAUSED is the one manual override and stays sticky unless the
+  // client explicitly resumes (any other status value).
+  let statusToSave: string | null = null;
+  if (body.status !== undefined || body.lowStockThreshold !== undefined) {
+    const current = await db
+      .prepare('SELECT remaining_quantity, low_stock_threshold, status FROM rewards WHERE id = ?')
+      .bind(id)
+      .first<{ remaining_quantity: number; low_stock_threshold: number; status: string }>();
+    if (!current) return failure(c, ErrorCode.NOT_FOUND, 'Reward not found');
+    const threshold = body.lowStockThreshold ?? current.low_stock_threshold;
+    const derived =
+      current.remaining_quantity <= 0
+        ? 'EXHAUSTED'
+        : current.remaining_quantity <= threshold
+          ? 'LOW_STOCK'
+          : 'AVAILABLE';
+    statusToSave = (body.status ?? current.status) === 'PAUSED' ? 'PAUSED' : derived;
+  }
+
   await db
     .prepare(
       `UPDATE rewards SET
@@ -547,7 +568,7 @@ adminRoutes.patch('/rewards/:id', async (c) => {
       body.weight ?? null,
       body.lowStockThreshold ?? null,
       body.isActive ?? null,
-      body.status ?? null,
+      statusToSave,
       body.campaignId ?? null,
       body.winningRatio ?? null,
       body.requiresDelivery ?? null,
@@ -612,13 +633,23 @@ adminRoutes.patch('/rewards/:id/stock', async (c) => {
     .first<{ remaining_quantity: number }>();
   if (!reward) return failure(c, ErrorCode.NOT_FOUND, 'Reward not found');
 
-  // Conditional update prevents a concurrent spin from driving stock negative.
+  // Conditional update prevents a concurrent spin from driving stock negative,
+  // and re-derives status from the new quantity so EXHAUSTED/LOW_STOCK always
+  // match stock (PAUSED stays sticky — resume via PATCH /rewards/:id).
   const result = await db
     .prepare(
-      `UPDATE rewards SET remaining_quantity = remaining_quantity + ?, updated_at = datetime('now')
+      `UPDATE rewards SET
+         remaining_quantity = remaining_quantity + ?,
+         status = CASE
+           WHEN status = 'PAUSED' THEN 'PAUSED'
+           WHEN remaining_quantity + ? <= 0 THEN 'EXHAUSTED'
+           WHEN remaining_quantity + ? <= low_stock_threshold THEN 'LOW_STOCK'
+           ELSE 'AVAILABLE'
+         END,
+         updated_at = datetime('now')
        WHERE id = ? AND remaining_quantity + ? >= 0`
     )
-    .bind(adjustment, id, adjustment)
+    .bind(adjustment, adjustment, adjustment, id, adjustment)
     .run();
   if (result.meta.changes !== 1) {
     return failure(c, ErrorCode.INVALID_REQUEST, 'Cannot reduce below zero');

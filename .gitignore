@@ -2,6 +2,8 @@ node_modules/
 .next/
 .wrangler/
 .env
+.env.local
+.env.*.local
 .dev.vars
 *.log
 dist/
@@ -9,3 +11,8 @@ out/
 *.tsbuildinfo
 .vercel
 .turbo/
+
+# Agent & local docs (not for repo)
+AGENT.md
+test.md
+docs/

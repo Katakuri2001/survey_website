@@ -106,7 +106,7 @@ function HorizontalBarChart<T extends HorizontalBarItem>({ data, labelKey, value
           <span className="h-2 w-2 rounded-full bg-gold-400" /> Popular
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-emerald-500" /> Growing
+          <span className="h-2 w-2 rounded-full bg-stout-500" /> Growing
         </span>
       </div>
       <div className="h-64">
@@ -114,12 +114,12 @@ function HorizontalBarChart<T extends HorizontalBarItem>({ data, labelKey, value
           <ReBarChart data={rows} layout="vertical" margin={{ top: 0, right: 24, left: 8, bottom: 0 }}>
             <defs>
               <linearGradient id="goldBar" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stopColor="#D4AF37" />
-                <stop offset="100%" stopColor="#BD9B2D" />
+                <stop offset="0%" stopColor="#E2C97F" />
+                <stop offset="100%" stopColor="#C9AC5A" />
               </linearGradient>
               <linearGradient id="emeraldBar" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stopColor="#00994B" />
-                <stop offset="100%" stopColor="#007A3C" />
+                <stop offset="0%" stopColor="#E01B2C" />
+                <stop offset="100%" stopColor="#B8121F" />
               </linearGradient>
             </defs>
             <XAxis type="number" hide />
@@ -132,7 +132,7 @@ function HorizontalBarChart<T extends HorizontalBarItem>({ data, labelKey, value
               tickLine={false}
             />
             <Tooltip
-              cursor={{ fill: 'rgba(212, 175, 55, 0.08)' }}
+              cursor={{ fill: 'rgba(226, 201, 127, 0.08)' }}
               contentStyle={TOOLTIP_STYLE}
               formatter={(value) => [String(value), 'Responses']}
             />
@@ -241,7 +241,7 @@ function AgeGroupChart({ data, productName }: { data: AgeGroupItem[]; productNam
             <span className="w-20 shrink-0 text-right text-sm text-slate-600">{item.age_group}</span>
             <div className="relative h-7 flex-1 overflow-hidden rounded-lg bg-slate-100 ring-1 ring-inset ring-slate-200">
               <div
-                className={`h-full rounded-lg transition-all duration-500 ${i % 2 === 0 ? 'bg-gradient-to-r from-gold-400 to-gold-500' : 'bg-gradient-to-r from-emerald-500 to-emerald-600'}`}
+                className={`h-full rounded-lg transition-all duration-500 ${i % 2 === 0 ? 'bg-gradient-to-r from-gold-400 to-gold-500' : 'bg-gradient-to-r from-stout-500 to-stout-600'}`}
                 style={{ width: `${((item.avg_rating || 0) / maxValue) * 100}%` }}
               />
               <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-ink">
@@ -274,7 +274,7 @@ function ParticipationTrend({ data }: { data: { date: string; count: number }[] 
         </div>
         <div className="ml-auto flex items-center gap-1.5 text-[11px] font-medium text-slate-500">
           <span className="h-2 w-2 rounded-full bg-gold-400" /> Gold
-          <span className="ml-2 h-2 w-2 rounded-full bg-emerald-500" /> Emerald
+          <span className="ml-2 h-2 w-2 rounded-full bg-stout-500" /> Red
         </div>
       </div>
       <div className="h-44">
@@ -291,14 +291,14 @@ function ParticipationTrend({ data }: { data: { date: string; count: number }[] 
             />
             <YAxis tick={EMPTY_TICK} tickLine={false} axisLine={false} width={40} allowDecimals={false} />
             <Tooltip
-              cursor={{ fill: 'rgba(212, 175, 55, 0.08)' }}
+              cursor={{ fill: 'rgba(226, 201, 127, 0.08)' }}
               contentStyle={TOOLTIP_STYLE}
               formatter={(value) => [`${value} responses`, 'Responses']}
               labelFormatter={(label) => `Date: ${label}`}
             />
             <Bar dataKey="count" radius={[4, 4, 0, 0]} maxBarSize={26}>
               {data.map((item, i) => (
-                <Cell key={i} fill={i % 2 === 0 ? '#D4AF37' : '#00994B'} />
+                <Cell key={i} fill={i % 2 === 0 ? '#E2C97F' : '#E01B2C'} />
               ))}
             </Bar>
           </ReBarChart>
@@ -323,6 +323,7 @@ export default function AnalyticsPage() {
 
   useEffect(() => {
     fetchAllData()
+    // Justification: fetchAllData is re-created each render — listing it as a dep would re-run the effect endlessly; run once on mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -330,11 +331,13 @@ export default function AnalyticsPage() {
     if (selectedProductId) {
       fetchAgeGroups(selectedProductId)
     }
+    // Justification: fetchAgeGroups intentionally excluded from deps — refetch is keyed to selectedProductId only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedProductId])
 
   useEffect(() => {
     fetchTrend(trendPeriod)
+    // Justification: fetchTrend intentionally excluded from deps — refetch is keyed to trendPeriod only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trendPeriod])
 

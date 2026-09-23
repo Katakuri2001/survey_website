@@ -12,7 +12,7 @@
     text-rendering: optimizeLegibility;
   }
   ::selection {
-    background: rgba(212, 175, 55, 0.35);
+    background: rgba(226, 201, 127, 0.35);
     color: #ffffff;
   }
   ::-webkit-scrollbar {
@@ -20,13 +20,13 @@
     height: 10px;
   }
   ::-webkit-scrollbar-thumb {
-    background: #2C4435;
+    background: #5A3833;
     border-radius: 9999px;
     border: 2px solid transparent;
     background-clip: content-box;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #34503F;
+    background: #6E4640;
     background-clip: content-box;
     border: 2px solid transparent;
   }
@@ -40,29 +40,29 @@
 
 @layer components {
   .gold-text {
-    background: linear-gradient(115deg, #f5c542 0%, #d4af37 45%, #b8912b 100%);
+    background: linear-gradient(115deg, #F5E7B8 0%, #E2C97F 45%, #C9A75F 100%);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
   }
   .gold-text-soft {
-    background: linear-gradient(115deg, #f5c542 0%, #d4af37 70%);
+    background: linear-gradient(115deg, #F5E7B8 0%, #E2C97F 70%);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
   }
   .glass {
-    background: rgba(8, 20, 13, 0.55);
+    background: rgba(32, 16, 15, 0.55);
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
   }
   .gold-ring {
     box-shadow:
-      0 0 0 1px rgba(212, 175, 55, 0.45),
-      0 0 0 4px rgba(212, 175, 55, 0.15);
+      0 0 0 1px rgba(226, 201, 127, 0.45),
+      0 0 0 4px rgba(226, 201, 127, 0.15);
   }
   .gold-border {
-    box-shadow: 0 0 0 1px rgba(212, 175, 55, 0.5);
+    box-shadow: 0 0 0 1px rgba(226, 201, 127, 0.5);
   }
 }
 
@@ -74,6 +74,10 @@
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translate3d(0, 16px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
 }
 @keyframes zoomSlow {
   from { transform: scale(1); }
@@ -92,8 +96,8 @@
   100% { background-position: 400px 0; }
 }
 @keyframes pulseGold {
-  0%, 100% { opacity: 1; filter: drop-shadow(0 0 6px rgba(212,175,55,0.5)); }
-  50% { opacity: 0.75; filter: drop-shadow(0 0 2px rgba(212,175,55,0.2)); }
+  0%, 100% { opacity: 1; filter: drop-shadow(0 0 6px rgba(226,201,127,0.5)); }
+  50% { opacity: 0.75; filter: drop-shadow(0 0 2px rgba(226,201,127,0.2)); }
 }
 @keyframes pop {
   0% { transform: scale(0.5); }
@@ -114,9 +118,9 @@
   100% { opacity: 1; transform: scale(1) translateY(0); }
 }
 @keyframes ringPulse {
-  0% { box-shadow: 0 0 0 0 rgba(0, 153, 75, 0.5); }
-  70% { box-shadow: 0 0 0 22px rgba(0, 153, 75, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(0, 153, 75, 0); }
+  0% { box-shadow: 0 0 0 0 rgba(224, 27, 44, 0.5); }
+  70% { box-shadow: 0 0 0 22px rgba(224, 27, 44, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(224, 27, 44, 0); }
 }
 
 /* ------------------------------ utilities ------------------------------ */
@@ -125,6 +129,9 @@
 }
 .animate-fade-in {
   animation: fadeIn 0.9s ease both;
+}
+.animate-slide-up {
+  animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 .animate-zoom-slow {
   animation: zoomSlow 14s ease-out both;
@@ -152,7 +159,7 @@
   animation: ringPulse 1.6s ease-out infinite;
 }
 .shimmer-bg {
-  background: linear-gradient(90deg, #1A2E20 25%, #22382A 50%, #1A2E20 75%);
+  background: linear-gradient(90deg, #3B211F 25%, #4A2B28 50%, #3B211F 75%);
   background-size: 800px 100%;
   animation: shimmer 1.6s linear infinite;
 }
@@ -169,6 +176,6 @@
   @apply w-full px-4 py-3.5 bg-surface-deep border border-border rounded-2xl text-fg-bright focus:border-gold focus:ring-2 focus:ring-gold/30 focus:outline-none transition-all appearance-none cursor-pointer;
 }
 select.survey-select option {
-  background-color: #152B1D;
+  background-color: #2A1615;
   color: #f8fafc;
 }

@@ -2,6 +2,18 @@
 
 A full-stack web application built for Myanmar Beer's customer survey and rewards program. Users complete a product survey, then spin a virtual wheel to win prizes. Admins manage surveys, products, rewards, and deliveries through a dedicated dashboard.
 
+## Documentation
+
+| Doc | What it's for |
+|---|---|
+| **[`AGENT.md`](./AGENT.md)** | Rules for working in this repo (commands, invariants, conventions) |
+| **[`test.md`](./test.md) §0** | **The gate: TypeScript + lint + build + CSS checks to run before every commit / push / deploy** |
+| [`docs/README.md`](./docs/README.md) | Index of all detailed docs |
+| `docs/*-functions.md` | Per-function reference for each app (what every function does and why) |
+| [`docs/database.md`](./docs/database.md) | Schema, all 13 migrations, invariants |
+| [`docs/myanmar-nrc.md`](./docs/myanmar-nrc.md) | Myanmar NRC format research + data-quality findings |
+| [`docs/browser-research.md`](./docs/browser-research.md) | Browser choice for Myanmar translation/testing |
+
 ## Architecture
 
 ```
@@ -235,9 +247,11 @@ curl https://myanmarbeer.boom.com.mm/api/health
 
 ## Testing
 
-- [`test.md`](./test.md) — full manual QA checklist (API, user app, admin app).
-- `npm run typecheck` — TypeScript for all three apps.
+- [`test.md`](./test.md) §0 — **the pre-commit/pre-deploy gate** (typecheck, lint,
+  build, CSS checks, smoke flow); sections 1–6 are the full manual QA checklist.
+- `npm run typecheck` — TypeScript for all three apps (incl. `apps/api`).
 - `npm run lint` — ESLint (web apps) + typecheck (API).
+- `npm run build` — static export for both web apps.
 - `npm run test:hardening` — concurrency/idempotency smoke test against a running API.
 - `npm run test:load` — k6 load test (staging only).
 

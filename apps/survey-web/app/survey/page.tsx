@@ -147,6 +147,7 @@ export default function SurveyPage() {
       document.removeEventListener('visibilitychange', onVisible)
       window.removeEventListener('focus', onVisible)
     }
+    // Justification: loadQuestions/submitting/t deliberately omitted — the 12 s live-poll is keyed to language + auth only; adding 'submitting' would restart the interval on every answer.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [language, guarded])
 

@@ -33,15 +33,15 @@ interface RewardApiItem {
 }
 
 const SEGMENT_COLORS = [
-  '#082D1B', // Primary Emerald
-  '#1E293B', // Surface
-  '#0F172A', // Background
-  '#163B2C', // Brand Emerald
-  '#00994B', // Green
-  '#1F4F35', // Emerald Light
+  '#20100F', // Stout Brown Deep
+  '#E01B2C', // Stout Red
+  '#3B1F1D', // Stout Brown
+  '#B8121F', // Stout Red Dark
+  '#55312D', // Stout Brown Light
+  '#2A1615', // Surface
 ] as const
 
-const CONFETTI_COLORS = ['#F5C542', '#D4AF37', '#F0E826', '#00994B', '#F59E0B', '#22C55E'] as const
+const CONFETTI_COLORS = ['#F7E7BC', '#E2C97F', '#F5E7B8', '#E01B2C', '#F59E0B', '#F04450'] as const
 
 export default function SpinPage() {
   const router = useRouter()
@@ -164,6 +164,7 @@ export default function SpinPage() {
 
   // Fetch rewards and check existing spin on mount
   useEffect(() => {
+    // Justification: one-shot loaders on mount; their loading/results state is intentionally reset with the effect.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchRewards()
     checkExistingSpin()
@@ -619,7 +620,7 @@ export default function SpinPage() {
           </div>
 
           {/* Wheel Rim & Face */}
-          <div className="absolute inset-0 rounded-full bg-gradient-to-br from-warm via-gold to-[#8a6d1c] p-[5px] shadow-gold-lg">
+          <div className="absolute inset-0 rounded-full bg-gradient-to-br from-warm via-gold to-[#997C3E] p-[5px] shadow-gold-lg">
             <div className="w-full h-full rounded-full bg-navy-deep relative overflow-hidden">
               {/* Rotating wheel face */}
               <div
@@ -686,7 +687,7 @@ export default function SpinPage() {
 
               {/* Center hub */}
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-                <div className="w-[74px] h-[74px] rounded-full p-[3px] bg-gradient-to-br from-warm via-gold to-[#8a6d1c] shadow-gold-lg animate-pulse-gold">
+                <div className="w-[74px] h-[74px] rounded-full p-[3px] bg-gradient-to-br from-warm via-gold to-[#997C3E] shadow-gold-lg animate-pulse-gold">
                   <div className="w-full h-full rounded-full bg-brand-emerald overflow-hidden flex items-center justify-center">
                     <Image src="/myanmarbeerstout.png" alt="MB" width={74} height={74} className="w-full h-full object-cover rounded-full" />
                   </div>

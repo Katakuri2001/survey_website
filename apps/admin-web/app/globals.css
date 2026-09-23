@@ -11,24 +11,24 @@
     @apply bg-gold-400/30;
   }
 
-  /* Custom thin scrollbar with branded green track */
+  /* Custom thin scrollbar with branded brown track */
   * {
     scrollbar-width: thin;
-    scrollbar-color: #00994b rgba(22, 59, 44, 0.08);
+    scrollbar-color: #8E4A43 rgba(59, 31, 29, 0.08);
   }
   ::-webkit-scrollbar {
     width: 8px;
     height: 8px;
   }
   ::-webkit-scrollbar-track {
-    background: rgba(22, 59, 44, 0.08);
+    background: rgba(59, 31, 29, 0.08);
   }
   ::-webkit-scrollbar-thumb {
-    background: #00994b;
+    background: #8E4A43;
     border-radius: 9999px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #163b2c;
+    background: #572E2A;
   }
 }
 
@@ -61,9 +61,9 @@
   .animate-shimmer {
     background: linear-gradient(
       90deg,
-      rgba(212, 175, 55, 0) 0%,
-      rgba(212, 175, 55, 0.18) 50%,
-      rgba(212, 175, 55, 0) 100%
+      rgba(226, 201, 127, 0) 0%,
+      rgba(226, 201, 127, 0.18) 50%,
+      rgba(226, 201, 127, 0) 100%
     );
     background-size: 1000px 100%;
     animation: shimmer 2.2s infinite linear;

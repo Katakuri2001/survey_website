@@ -788,6 +788,7 @@ export default function SurveysPage() {
   }, [])
 
   useEffect(() => {
+    // Justification: initial load of questions + versions; loading/results are intentionally reset on mount.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchQuestions()
     fetchVersions()

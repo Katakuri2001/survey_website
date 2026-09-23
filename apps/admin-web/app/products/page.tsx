@@ -435,6 +435,7 @@ export default function ProductsPage() {
   }, [])
 
   useEffect(() => {
+    // Justification: initial table load; loading/results are intentionally reset on mount.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchProducts()
   }, [fetchProducts])

@@ -61,6 +61,7 @@ export default function DeliveryPage() {
       router.replace('/spin')
       return
     }
+    // Justification: syncs the ?reward= route param into state once on mount — the effect is the only lifecycle point that observes param changes.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setRewardId(id)
 
