@@ -64,7 +64,7 @@ Internet → Cloudflare DNS/WAF
         → Cloudflare Worker (Hono)
         → D1 (single writer, kept short)
         → R2 (images, optional binding `MEDIA_BUCKET`)
-Optional: Turnstile (server-verified), Rate Limiting binding, Queue, scheduled aggregation
+Optional: Rate Limiting binding, Queue, scheduled aggregation
 ```
 
 **Static vs dynamic split.** Products, questions, rewards metadata and flags are served from one cache-friendly `GET /public/config`; only login, submit, spin, delivery and admin hit D1 per interaction.
@@ -120,7 +120,7 @@ Implemented with the Cloudflare Rate Limiting binding when configured (`RATE_LIM
 - Split the Worker into `lib/` + `routes/` modules; validation via `zod`; safe error envelopes with stable codes.
 - Add `GET /public/config`, `GET /health`, request IDs, structured logs, security headers, strict CORS.
 - Fix survey submit (auth + idempotency), spin (serialised resolution + compensation), delivery (ownership + idempotency).
-- Add optional Turnstile (server Siteverify), optional R2 uploads, feature flags + maintenance mode, settings cache.
+- Add optional R2 uploads, feature flags + maintenance mode, settings cache.
 - Add migration `0014` (indexes, settings, delivery idempotency, response request id, analytics aggregates). It also rebuilds `reward_spins` to allow the in-flight `PENDING` status and switches the campaign uniqueness index to `COALESCE(campaign_id,'default')`.
 - Add edge caching to public config and admin analytics; fix the N+1 survey query; parametrise admin exports.
 - Add the missing `/delivery` page and a centralised retrying/no-retry API client.

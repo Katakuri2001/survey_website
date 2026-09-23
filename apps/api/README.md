@@ -1,6 +1,6 @@
 # API
 
-The backend of the survey platform: a [Hono](https://hono.dev) app running on **Cloudflare Workers**, backed by **Cloudflare D1** (SQLite), with optional R2 (`MEDIA_BUCKET`), Cloudflare Rate Limiting, and Turnstile add-ons that all degrade gracefully when unbound. The same Worker is exposed two ways:
+The backend of the survey platform: a [Hono](https://hono.dev) app running on **Cloudflare Workers**, backed by **Cloudflare D1** (SQLite), with optional R2 (`MEDIA_BUCKET`) and Cloudflare Rate Limiting add-ons that all degrade gracefully when unbound. The same Worker is exposed two ways:
 
 - Standalone Worker via the root `wrangler.toml` (`main = "apps/api/src/index.ts"`, cron `*/15 * * * *` for stale-spin cleanup).
 - Same-origin on Pages under `/api/*` through the Functions wrappers [`../survey-web/functions/api/[[route]].ts`](../survey-web/functions/api/[[route]].ts) and `../admin-web/functions/api/[[route]].ts`, which strip the `/api` prefix and call `apiApp.fetch`. Same-origin avoids the `*.workers.dev` domain, which many mobile/carrier networks cannot reach.
@@ -18,7 +18,7 @@ npm run lint       # alias of typecheck
 
 D1 helpers: `npm run d1:migrate` (create a migration), `npm run d1:push -- --file=…`, `npm run d1:execute -- --command='…'` (local `survey-db`).
 
-Run commands from `apps/api/` (or use root `npm run dev` / `npm run typecheck`, which fan out through turbo). Configuration lives in the repo-root `wrangler.toml`; secrets are never committed there — set `JWT_SECRET` and `TURNSTILE_SECRET` with `wrangler secret put <NAME>`, and for Pages: `npx wrangler pages secret put JWT_SECRET --project-name alcohol-survey`.
+Run commands from `apps/api/` (or use root `npm run dev` / `npm run typecheck`, which fan out through turbo). Configuration lives in the repo-root `wrangler.toml`; secrets are never committed there — set `JWT_SECRET` with `wrangler secret put JWT_SECRET`, and for Pages: `npx wrangler pages secret put JWT_SECRET --project-name alcohol-survey`.
 
 Health check: `curl http://localhost:8787/health` should return `"status": "ok"` once D1 is reachable.
 
@@ -34,7 +34,7 @@ Every response uses a stable shape; the frontend maps `error.code` to copy and n
 { "success": false, "message": "…", "error": { "code": "VALIDATION_FAILED", "message": "…" } }
 ```
 
-Error codes map to statuses in `src/lib/http.ts` (`STATUS_BY_CODE`): `INVALID_REQUEST` 400, `VALIDATION_FAILED` 422, `UNAUTHORIZED` 401, `FORBIDDEN` 403, `NOT_FOUND` 404, `RATE_LIMITED` 429, conflict-style codes (`ALREADY_SUBMITTED`, `ALREADY_SPUN`, `SPIN_IN_PROGRESS`, `REWARD_UNAVAILABLE`, `FEATURE_DISABLED`) 409, `PAYLOAD_TOO_LARGE` 413, `TURNSTILE_FAILED` 403, `MAINTENANCE`/`TEMPORARY_UNAVAILABLE` 503, `INTERNAL` 500. Custom codes also appear: `EMAIL_EXISTS`, `PHONE_EXISTS`, `NO_REWARDS_AVAILABLE` (all 409).
+Error codes map to statuses in `src/lib/http.ts` (`STATUS_BY_CODE`): `INVALID_REQUEST` 400, `VALIDATION_FAILED` 422, `UNAUTHORIZED` 401, `FORBIDDEN` 403, `NOT_FOUND` 404, `RATE_LIMITED` 429, conflict-style codes (`ALREADY_SUBMITTED`, `ALREADY_SPUN`, `SPIN_IN_PROGRESS`, `REWARD_UNAVAILABLE`, `FEATURE_DISABLED`) 409, `PAYLOAD_TOO_LARGE` 413, `MAINTENANCE`/`TEMPORARY_UNAVAILABLE` 503, `INTERNAL` 500. Custom codes also appear: `EMAIL_EXISTS`, `PHONE_EXISTS`, `NO_REWARDS_AVAILABLE` (all 409).
 
 ## Middleware chain (order matters)
 
@@ -47,7 +47,7 @@ Registered in `src/index.ts`, all `app.use('*')`:
 
 Then routes mount: `public/auth/survey/rewards` at `/`, `adminRoutes` at `/admin` (so its `use('*')` guards cannot leak onto public routes). Finally `notFound` → `NOT_FOUND`, `onError` → logged `unhandled_error` + `INTERNAL` (raw error never returned).
 
-Per-route middleware: `authMiddleware` on profile/submit/spin/delivery/my; admin group additionally runs `authMiddleware, adminMiddleware` then a 240 req/min per-user rate limit; write routes apply `enforceRateLimit` (in-memory window always, optional `RATE_LIMITER` binding) and opt-in Turnstile (`TURNSTILE_ENFORCE=true`, fail-closed 503 when the verifier is unreachable).
+Per-route middleware: `authMiddleware` on profile/submit/spin/delivery/my; admin group additionally runs `authMiddleware, adminMiddleware` then a 240 req/min per-user rate limit; write routes apply `enforceRateLimit` (in-memory window always, optional `RATE_LIMITER` binding).
 
 ## Auth model
 
@@ -60,8 +60,8 @@ Per-route middleware: `authMiddleware` on profile/submit/spin/delivery/my; admin
 
 | Group | Mount | Auth | Highlights |
 |---|---|---|---|
-| Public reads | `/` | none | `GET /`, `/health`, `/public/config` (edge-cached), `/public/turnstile`, `/products`, `/campaigns`, `/rewards`, `/survey/questions[/:productId]`, `/media/:key` |
-| Auth & profile | `/` | rate limit / Bearer | `POST /auth/register`, `/auth/login`, `/auth/admin/login`, `/users/guest` (Turnstile), `GET|PATCH /user/profile` |
+| Public reads | `/` | none | `GET /`, `/health`, `/public/config` (edge-cached), `/products`, `/campaigns`, `/rewards`, `/survey/questions[/:productId]`, `/media/:key` |
+| Auth & profile | `/` | rate limit / Bearer | `POST /auth/register`, `/auth/login`, `/auth/admin/login`, `/users/guest`, `GET|PATCH /user/profile` |
 | Survey | `/` | Bearer | `POST /survey/submit` — idempotent (`submissionRequestId`), required-question validation, atomic batch |
 | Rewards | `/` | Bearer | `POST /rewards/spin` (weighted pool, conditional atomic stock decrement, compensation on failure), `POST /rewards/delivery`, `GET /rewards/my` |
 | Admin | `/admin` | `authMiddleware, adminMiddleware` + 240/min | dashboard, analytics (5), survey questions/versions, products, rewards + inventory + stock, exports, deliveries, users, responses, audit-logs, settings, upload, account |
@@ -82,9 +82,6 @@ Per-route middleware: `authMiddleware` on profile/submit/spin/delivery/my; admin
 | `ENVIRONMENT` | var | no (`production`) | `production` \| `staging` \| `development`; gates dev fallbacks |
 | `ALLOWED_ORIGINS` | var | no | comma-separated extra CORS origins |
 | `PUBLIC_SITE_ORIGIN` | var | no | informational site origin for links |
-| `TURNSTILE_SECRET` | secret | no | Siteverify secret; only used when enforced |
-| `TURNSTILE_SITE_KEY` | var | no | public widget key (safe to commit) |
-| `TURNSTILE_ENFORCE` | var | no | must be exactly `true` to enforce verification |
 | `MEDIA_BUCKET` | R2 (`survey-assets`) | no | uploaded media; absent ⇒ D1 data-URL fallback, `GET /media/:key` → 404 |
 | `RATE_LIMITER` | Rate Limiting binding | no | shared counter on top of the per-isolate window |
 | `ANALYTICS_QUEUE` | Queue producer | no | reserved, unused today |

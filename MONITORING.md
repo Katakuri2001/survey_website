@@ -38,8 +38,6 @@ Other events worth alerting on:
 |---|---|---|
 | `unhandled_error` | error | Unexpected exception (includes `requestId`). |
 | `jwt_secret_missing` | error | `JWT_SECRET` not configured in production. |
-| `turnstile_error` | error | Siteverify call failed (fail-closed). |
-| `turnstile_failed` | warn | Client failed the challenge. |
 | `settings_read_failed` | warn | Falling back to default flags. |
 | `spin_compensation_failed` | error | **Inventory leak** — investigate immediately. |
 | `spin_finalize_failed` / `spin_insert_failed` | error | Spin write failure. |

@@ -41,7 +41,7 @@ Full per-function reference: [`../../docs/admin-web-functions.md`](../../docs/ad
 |---|---|---|
 | `NEXT_PUBLIC_API_BASE` | API base URL used for every fetch (inlined at build time) | `https://myanmarbeer.boom.com.mm/api` |
 
-Local values (see `../../.env.example`): `http://localhost:8787` for the wrangler API worker, or the relative `/api` to go through the same-origin Pages Function. There are no other app-level env vars — secrets (`JWT_SECRET`, Turnstile) belong to the Pages/Workers runtime, not this bundle.
+Local values (see `../../.env.example`): `http://localhost:8787` for the wrangler API worker, or the relative `/api` to go through the same-origin Pages Function. There are no other app-level env vars — secrets (`JWT_SECRET`) belong to the Pages/Workers runtime, not this bundle.
 
 ## Auth model
 
@@ -72,7 +72,7 @@ Local values (see `../../.env.example`): `http://localhost:8787` for the wrangle
 cd apps/admin-web && npm run build && npx wrangler pages deploy
 ```
 
-The Pages project serves `out/` plus the `/api/*` function, so the same `JWT_SECRET` (and optional Turnstile vars) must be set on the project:
+The Pages project serves `out/` plus the `/api/*` function, so the same `JWT_SECRET` must be set on the project:
 
 ```bash
 npx wrangler pages secret put JWT_SECRET --project-name alcohol-survey-admin

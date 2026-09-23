@@ -92,9 +92,6 @@ npx wrangler d1 migrations apply survey-db --local
 | `JWT_SECRET` | JWT signing secret (**required in production**, ≥16 chars) | none — auth is disabled in prod if unset |
 | `ENVIRONMENT` | `production` / `staging` / `development` | `production` |
 | `ALLOWED_ORIGINS` | Extra CORS origins (comma-separated) | same-origin only |
-| `TURNSTILE_SITE_KEY` | Public Turnstile site key (non-secret, safe to commit) | unset |
-| `TURNSTILE_SECRET` | Turnstile secret used for server-side Siteverify | unset |
-| `TURNSTILE_ENFORCE` | Set to `true` to enforce Turnstile on guest + spin. Off by default so the V1 survey journey stays challenge-free. | unset (disabled) |
 
 See [`.env.example`](./.env.example) and
 [`PRODUCTION_HARDENING.md`](./PRODUCTION_HARDENING.md) for the full reference.
@@ -211,18 +208,6 @@ npx wrangler pages secret put JWT_SECRET --project-name alcohol-survey
 npx wrangler pages secret put JWT_SECRET --project-name alcohol-survey-admin
 ```
 
-Turnstile is **opt-in and disabled by default** so the survey journey stays
-challenge-free. A secret alone is not enough: verification also requires
-`TURNSTILE_ENFORCE = "true"` in `[vars]`. To enable it, set the secret on the API
-worker **and** both Pages projects (otherwise another origin can bypass bot
-protection), then set `TURNSTILE_ENFORCE`:
-
-```bash
-npx wrangler secret put TURNSTILE_SECRET
-npx wrangler pages secret put TURNSTILE_SECRET --project-name alcohol-survey
-npx wrangler pages secret put TURNSTILE_SECRET --project-name alcohol-survey-admin
-```
-
 ### Cloudflare Workers (API + cron)
 
 The root `wrangler.toml` deploys the API worker (`alcohol-survey-platform`) and
@@ -236,12 +221,10 @@ npx wrangler deploy
 ### Verify after deploy
 
 ```bash
-# The hardening test needs Turnstile disabled (the default), so it can run
-# against a local/dev API as well.
+# The hardening test runs against a local/dev API:
 API_BASE=http://localhost:8788/api npm run test:hardening
 
 # Production sanity checks:
-curl https://myanmarbeer.boom.com.mm/api/public/turnstile   # enabled:false unless TURNSTILE_ENFORCE=true
 curl https://myanmarbeer.boom.com.mm/api/health
 ```
 

@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import type { AppContext } from '../types';
 import { ErrorCode, failure, isUniqueViolation, logEvent, success } from '../lib/http';
 import { authMiddleware } from '../lib/auth';
-import { enforceRateLimit, maintenanceResponse, RATE_POLICIES, verifyTurnstile } from '../lib/security';
+import { enforceRateLimit, maintenanceResponse, RATE_POLICIES } from '../lib/security';
 import { buildWeightedPool, pickWeightedIndex, type WeightedPoolEntry } from '../lib/survey';
 import { generateId, isoTimestamp } from '../lib/ids';
 import { deliverySchema, readJson, spinSchema } from '../lib/validation';
@@ -100,9 +100,6 @@ rewardRoutes.post('/rewards/spin', authMiddleware, async (c) => {
   const parsed = await readJson(c, spinSchema);
   if (!parsed.ok) return parsed.response;
   const body = parsed.data;
-
-  const turnstile = await verifyTurnstile(c, body.turnstileToken, 'spin');
-  if (turnstile) return turnstile;
 
   const campaignKey = body.campaignId?.trim() || 'default';
   // 'default' has no `campaigns` row, so it is persisted as NULL to satisfy the

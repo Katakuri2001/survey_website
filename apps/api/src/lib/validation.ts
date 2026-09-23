@@ -34,7 +34,6 @@ export const guestSchema = z.object({
   stateCode: optionalText(8),
   nrcType: optionalText(8),
   nrcNumber: optionalText(32),
-  turnstileToken: z.string().max(4096).optional(),
 });
 
 export const profileUpdateSchema = z.object({
@@ -77,7 +76,6 @@ export const spinSchema = z.object({
   campaignId: optionalText(100),
   productId: optionalText(100),
   idempotencyKey: z.string().trim().min(8).max(128),
-  turnstileToken: z.string().max(4096).optional(),
 });
 
 export const deliverySchema = z.object({

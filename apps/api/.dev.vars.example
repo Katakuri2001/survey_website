@@ -6,7 +6,3 @@ ENVIRONMENT=development
 ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001
 PUBLIC_SITE_ORIGIN=http://localhost:3000
 DB_DEBUG=true
-
-# Optional Turnstile (leave unset to disable verification locally)
-# TURNSTILE_SECRET=
-# TURNSTILE_SITE_KEY=

@@ -10,7 +10,7 @@ import {
   unusablePasswordMarker,
   verifyPassword,
 } from '../lib/auth';
-import { enforceRateLimit, RATE_POLICIES, verifyTurnstile } from '../lib/security';
+import { enforceRateLimit, RATE_POLICIES } from '../lib/security';
 import { getAgeGroup } from '../lib/survey';
 import { generateId } from '../lib/ids';
 import { readJson, guestSchema, loginSchema, registerSchema, profileUpdateSchema } from '../lib/validation';
@@ -169,10 +169,6 @@ authRoutes.post('/auth/admin/login', (c) => handleLogin(c, true));
 authRoutes.post('/users/guest', async (c) => {
   const limited = await enforceRateLimit(c, 'guest', c.get('clientIp') || 'unknown', RATE_POLICIES.guest);
   if (limited) return limited;
-
-  const raw = await c.req.json().catch(() => null);
-  const turnstile = await verifyTurnstile(c, (raw as { turnstileToken?: string } | null)?.turnstileToken, 'guest');
-  if (turnstile) return turnstile;
 
   const parsed = await readJson(c, guestSchema);
   if (!parsed.ok) return parsed.response;

@@ -19,14 +19,6 @@ export type Bindings = {
   /** Public site origin used for links; informational only. */
   PUBLIC_SITE_ORIGIN?: string;
 
-  /**
-   * Cloudflare Turnstile. Opt-in: verification runs only when
-   * `TURNSTILE_ENFORCE === 'true'` AND both the secret and site key are set.
-   */
-  TURNSTILE_SECRET?: string;
-  TURNSTILE_SITE_KEY?: string;
-  TURNSTILE_ENFORCE?: string;
-
   /** Optional R2 bucket for uploaded media (`MEDIA_BUCKET`). */
   MEDIA_BUCKET?: R2Bucket;
 

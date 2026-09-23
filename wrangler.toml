@@ -8,7 +8,7 @@ compatibility_date = "2026-09-01"
 crons = ["*/15 * * * *"]
 
 # ---------------------------------------------------------------------------
-# Variables (non-secret). NEVER put JWT_SECRET or TURNSTILE_SECRET here.
+# Variables (non-secret). NEVER put JWT_SECRET here.
 # Set secrets with: wrangler secret put JWT_SECRET --env production
 # ---------------------------------------------------------------------------
 [vars]
@@ -18,8 +18,6 @@ ENVIRONMENT = "production"
 ALLOWED_ORIGINS = ""
 PUBLIC_SITE_ORIGIN = ""
 DB_DEBUG = "false"
-# Public Turnstile site key (safe to commit). The matching secret is a secret.
-TURNSTILE_SITE_KEY = "0x4AAAAAAE-v_qmikTPp1LVj"
 
 [[d1_databases]]
   binding = "survey_db"
@@ -53,7 +51,6 @@ ENVIRONMENT = "production"
 ALLOWED_ORIGINS = ""
 PUBLIC_SITE_ORIGIN = ""
 DB_DEBUG = "false"
-TURNSTILE_SITE_KEY = "0x4AAAAAAE-v_qmikTPp1LVj"
 
 [[env.production.d1_databases]]
   binding = "survey_db"
@@ -73,8 +70,6 @@ ENVIRONMENT = "development"
 ALLOWED_ORIGINS = "http://localhost:3000,http://localhost:3001"
 PUBLIC_SITE_ORIGIN = "http://localhost:3000"
 DB_DEBUG = "true"
-# Turnstile test site key (always passes) for local development.
-TURNSTILE_SITE_KEY = "1x00000000000000000000AA"
 
 [[env.development.d1_databases]]
   binding = "survey_db"
