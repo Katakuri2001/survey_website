@@ -28,6 +28,7 @@ type SpinRow = {
   user_reward_id: string | null;
   reward_name: string | null;
   requires_delivery: number | null;
+  reward_snapshot: string | null;
 };
 
 async function findSpinByKey(
@@ -44,6 +45,7 @@ async function findSpinByKey(
        LEFT JOIN user_rewards ur ON ur.reward_spin_id = rs.id
        LEFT JOIN rewards r ON r.id = rs.reward_id
        WHERE rs.user_id = ? AND COALESCE(rs.campaign_id, 'default') = ? AND rs.idempotency_key = ?
+         AND rs.status != 'CANCELLED'
        LIMIT 1`
     )
     .bind(userId, campaign, idempotencyKey)
@@ -57,7 +59,7 @@ async function findActiveSpin(
 ): Promise<SpinRow | null> {
   return db
     .prepare(
-      `SELECT rs.id, rs.reward_id, rs.status,
+      `SELECT rs.id, rs.reward_id, rs.status, rs.reward_snapshot,
               ur.id AS user_reward_id, r.name AS reward_name, r.requires_delivery
        FROM reward_spins rs
        LEFT JOIN user_rewards ur ON ur.reward_spin_id = rs.id
@@ -70,12 +72,23 @@ async function findActiveSpin(
 }
 
 function spinResponse(row: SpinRow, idempotent = true) {
+  let snapshot: Record<string, unknown> = {};
+  try {
+    snapshot = row.reward_snapshot ? JSON.parse(row.reward_snapshot) : {};
+  } catch {
+    snapshot = {};
+  }
+  const rewardId = row.reward_id || (typeof snapshot.rewardId === 'string' ? snapshot.rewardId : null);
+  const rewardName = row.reward_name || (typeof snapshot.rewardName === 'string' ? snapshot.rewardName : '');
+  const requiresDelivery = row.requires_delivery !== null
+    ? row.requires_delivery !== 0
+    : snapshot.requiresDelivery === true;
   return {
     spinId: row.id,
-    rewardId: row.reward_id,
-    rewardName: row.reward_name || '',
+    rewardId,
+    rewardName,
     userRewardId: row.user_reward_id,
-    requiresDelivery: row.requires_delivery !== 0,
+    requiresDelivery,
     idempotent,
   };
 }
@@ -101,10 +114,36 @@ rewardRoutes.post('/rewards/spin', authMiddleware, async (c) => {
   if (!parsed.ok) return parsed.response;
   const body = parsed.data;
 
-  const campaignKey = body.campaignId?.trim() || 'default';
+  const requestedCampaign = body.campaignId?.trim();
+  const requestedProduct = body.productId?.trim();
+  const eligibilityParams: unknown[] = [userId];
+  let eligibilitySql = `SELECT product_id, campaign_id
+     FROM survey_responses
+     WHERE user_id = ? AND status = 'COMPLETED'`;
+  if (requestedCampaign === 'default') {
+    eligibilitySql += ' AND campaign_id IS NULL';
+  } else if (requestedCampaign) {
+    eligibilitySql += ' AND (campaign_id = ? OR campaign_id IS NULL)';
+    eligibilityParams.push(requestedCampaign);
+  }
+  if (requestedProduct) {
+    eligibilitySql += ' AND product_id = ?';
+    eligibilityParams.push(requestedProduct);
+  }
+  eligibilitySql += ' ORDER BY completed_at DESC LIMIT 1';
+  const completedResponse = await db
+    .prepare(eligibilitySql)
+    .bind(...eligibilityParams)
+    .first<{ product_id: string; campaign_id: string | null }>();
+  if (!completedResponse) {
+    return failure(c, ErrorCode.SURVEY_REQUIRED, 'Complete the survey before spinning.', 409);
+  }
+
+  const campaignKey = requestedCampaign || completedResponse.campaign_id || 'default';
   // 'default' has no `campaigns` row, so it is persisted as NULL to satisfy the
   // foreign key; the uniqueness/idempotency queries fold NULL back to 'default'.
   const storedCampaignId = campaignKey === 'default' ? null : campaignKey;
+  const productId = completedResponse.product_id;
   const now = isoTimestamp();
 
   // 1. Exact retry of this request: return the stored result.
@@ -138,7 +177,7 @@ rewardRoutes.post('/rewards/spin', authMiddleware, async (c) => {
         `INSERT INTO reward_spins (id, user_id, campaign_id, product_id, status, idempotency_key, created_at, updated_at)
          VALUES (?, ?, ?, ?, 'PENDING', ?, ?, ?)`
       )
-      .bind(spinId, userId, storedCampaignId, body.productId || null, body.idempotencyKey, now, now)
+      .bind(spinId, userId, storedCampaignId, productId, body.idempotencyKey, now, now)
       .run();
   } catch (error) {
     if (isUniqueViolation(error)) {
@@ -170,9 +209,9 @@ rewardRoutes.post('/rewards/spin', authMiddleware, async (c) => {
        FROM rewards
        WHERE is_active = 1 AND remaining_quantity > 0
          AND status != 'EXHAUSTED' AND status != 'PAUSED'
-         AND (campaign_id = ? OR campaign_id IS NULL OR ? = 'default')`
+         AND (campaign_id = ? OR campaign_id IS NULL)`
     )
-    .bind(campaignKey, campaignKey)
+    .bind(campaignKey)
     .all<EligibleReward>();
 
   const allRewards = rewardsResult.results || [];
@@ -195,11 +234,14 @@ rewardRoutes.post('/rewards/spin', authMiddleware, async (c) => {
     const reserve = await db
       .prepare(
         `UPDATE rewards
-         SET remaining_quantity = remaining_quantity - 1, updated_at = ?
+         SET remaining_quantity = remaining_quantity - 1,
+             reservation_spin_id = ?,
+             updated_at = ?
          WHERE id = ? AND remaining_quantity > 0
+           AND reservation_spin_id IS NULL
            AND is_active = 1 AND status != 'PAUSED' AND status != 'EXHAUSTED'`
       )
-      .bind(isoTimestamp(), candidate.id)
+      .bind(spinId, isoTimestamp(), candidate.id)
       .run();
 
     if (reserve.meta.changes === 1) {
@@ -231,40 +273,70 @@ rewardRoutes.post('/rewards/spin', authMiddleware, async (c) => {
     winningRatio: selected.winning_ratio,
     requiresDelivery: selected.requires_delivery === 1,
     campaignId: campaignKey,
-    productId: body.productId || null,
+    productId,
     selectedAt: now,
   });
 
-  // 7. Finalise atomically.
+  // 7. Finalise only if the durable reservation is still owned by this spin.
   try {
-    await db.batch([
+    const results = await db.batch([
       db
         .prepare(
           `INSERT INTO user_rewards (id, user_id, reward_spin_id, reward_id, delivery_status, won_at, created_at, updated_at)
-           VALUES (?, ?, ?, ?, 'DELIVERY_PENDING', ?, ?, ?)`
+           SELECT ?, ?, ?, ?, 'DELIVERY_PENDING', ?, ?, ?
+           WHERE EXISTS (
+             SELECT 1
+             FROM reward_spins rs
+             JOIN rewards r ON r.reservation_spin_id = rs.id
+             WHERE rs.id = ? AND rs.status = 'PENDING' AND r.reservation_spin_id = ?
+           )`
         )
-        .bind(userRewardId, userId, spinId, selected.id, now, now, now),
+        .bind(userRewardId, userId, spinId, selected.id, now, now, now, spinId, spinId),
       db
         .prepare(
-          `UPDATE reward_spins SET reward_id = ?, status = 'WON', reward_snapshot = ?, updated_at = ? WHERE id = ?`
+          `UPDATE reward_spins SET reward_id = ?, status = 'WON', reward_snapshot = ?, updated_at = ?
+           WHERE id = ? AND status = 'PENDING'
+             AND EXISTS (SELECT 1 FROM rewards WHERE id = ? AND reservation_spin_id = ?)`
         )
-        .bind(selected.id, snapshot, isoTimestamp(), spinId),
+        .bind(selected.id, snapshot, isoTimestamp(), spinId, selected.id, spinId),
       db
-        .prepare('UPDATE rewards SET status = ?, updated_at = ? WHERE id = ?')
-        .bind(newStatus, isoTimestamp(), selected.id),
+        .prepare(
+          `UPDATE rewards
+           SET status = CASE WHEN status = 'PAUSED' THEN 'PAUSED' ELSE ? END,
+               reservation_spin_id = NULL,
+               updated_at = ?
+           WHERE id = ? AND reservation_spin_id = ?`
+        )
+        .bind(newStatus, isoTimestamp(), selected.id, spinId),
       db
         .prepare(
           `INSERT INTO reward_inventory_transactions (id, reward_id, type, quantity, reference_type, reference_id, created_by, created_at)
-           VALUES (?, ?, 'REWARD_AWARDED', -1, 'reward_spin', ?, ?, ?)`
+           SELECT ?, ?, 'REWARD_AWARDED', -1, 'reward_spin', ?, ?, ?
+           WHERE EXISTS (SELECT 1 FROM user_rewards WHERE id = ?)`
         )
-        .bind(generateId(), selected.id, spinId, userId, now),
+        .bind(generateId(), selected.id, spinId, userId, now, userRewardId),
     ]);
+    if (results[0]?.meta.changes !== 1) {
+      return failure(c, ErrorCode.SPIN_IN_PROGRESS, 'Spin reservation expired; please try again.', 409);
+    }
   } catch (error) {
-    // Compensate the reservation so inventory is never leaked.
+    // Compensation is conditional on this spin still owning the reservation.
     try {
       await db
-        .prepare('UPDATE rewards SET remaining_quantity = remaining_quantity + 1, updated_at = ? WHERE id = ?')
-        .bind(isoTimestamp(), selected.id)
+        .prepare(
+          `UPDATE rewards
+           SET remaining_quantity = remaining_quantity + 1,
+               status = CASE
+                 WHEN status = 'PAUSED' THEN 'PAUSED'
+                 WHEN remaining_quantity + 1 <= 0 THEN 'EXHAUSTED'
+                 WHEN remaining_quantity + 1 <= low_stock_threshold THEN 'LOW_STOCK'
+                 ELSE 'AVAILABLE'
+               END,
+               reservation_spin_id = NULL,
+               updated_at = ?
+           WHERE id = ? AND reservation_spin_id = ?`
+        )
+        .bind(isoTimestamp(), selected.id, spinId)
         .run();
     } catch (compensationError) {
       logEvent('error', 'spin_compensation_failed', { spinId, rewardId: selected.id, error: String(compensationError) });
@@ -312,22 +384,28 @@ rewardRoutes.post('/rewards/delivery', authMiddleware, async (c) => {
 
   const userReward = await db
     .prepare(
-      `SELECT ur.id, r.requires_delivery
+      `SELECT ur.id, ur.delivery_status, r.requires_delivery
        FROM user_rewards ur
        JOIN rewards r ON r.id = ur.reward_id
        WHERE ur.id = ? AND ur.user_id = ?`
     )
     .bind(body.userRewardId, userId)
-    .first<{ id: string; requires_delivery: number }>();
+    .first<{ id: string; delivery_status: string; requires_delivery: number }>();
 
   if (!userReward) return failure(c, ErrorCode.NOT_FOUND, 'Reward not found');
+  if (userReward.requires_delivery !== 1) {
+    return failure(c, ErrorCode.INVALID_REQUEST, 'This reward does not require delivery', 409);
+  }
 
   const existing = await db
     .prepare('SELECT id FROM delivery_information WHERE user_reward_id = ?')
     .bind(body.userRewardId)
     .first<{ id: string }>();
-  if (existing) {
+  if (existing && userReward.delivery_status !== 'CANCELLED') {
     return success(c, { message: 'Delivery information already submitted', deliveryId: existing.id, idempotent: true });
+  }
+  if (userReward.delivery_status !== 'DELIVERY_PENDING') {
+    return failure(c, ErrorCode.INVALID_STATE_TRANSITION, `Delivery cannot be submitted from ${userReward.delivery_status}`, 409);
   }
 
   const deliveryId = generateId();
@@ -383,9 +461,11 @@ rewardRoutes.get('/rewards/my', authMiddleware, async (c) => {
   const rewards = await c.env.survey_db
     .prepare(
       `SELECT ur.id, ur.reward_id, ur.reward_spin_id, ur.delivery_status, ur.won_at, ur.delivered_at,
+              rs.campaign_id, rs.product_id,
               r.name as reward_name, r.description as reward_description, r.image_url, r.requires_delivery
        FROM user_rewards ur
        JOIN rewards r ON ur.reward_id = r.id
+       JOIN reward_spins rs ON rs.id = ur.reward_spin_id
        WHERE ur.user_id = ?
        ORDER BY ur.won_at DESC`
     )

@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { useLanguage } from '../context/LanguageContext'
 import Header from '../components/Header'
-import { API_BASE, getValidToken } from '../lib/api'
+import { API_BASE, clearIdentitySession, getValidToken, markResumeTokenRecovery } from '../lib/api'
 import { useToast } from '../components/Toast'
+import { useHydrated } from '../lib/useHydrated'
 
 interface Reward {
   id: string
@@ -31,6 +32,28 @@ interface RewardApiItem {
   requires_delivery?: number
 }
 
+interface MyRewardApiItem {
+  id?: string | null
+  user_reward_id?: string | null
+  userRewardId?: string | null
+  reward_id?: string | null
+  rewardId?: string | null
+  reward_name?: string | null
+  rewardName?: string | null
+  name?: string | null
+  image_url?: string | null
+  imageUrl?: string | null
+  requires_delivery?: number | boolean | null
+  requiresDelivery?: number | boolean | null
+  delivery_status?: string | null
+  status?: string | null
+}
+
+interface PriorAward {
+  reward: Reward
+  userRewardId: string
+}
+
 const SEGMENT_COLORS = [
   '#20100F', // Stout Brown Deep
   '#E01B2C', // Stout Red
@@ -42,15 +65,80 @@ const SEGMENT_COLORS = [
 
 const CONFETTI_COLORS = ['#F7E7BC', '#E2C97F', '#F5E7B8', '#E01B2C', '#F59E0B', '#F04450'] as const
 
+function sessionGet(key: string): string | null {
+  if (typeof window === 'undefined') return null
+  try {
+    return window.sessionStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+function sessionSet(key: string, value: string): void {
+  try {
+    window.sessionStorage.setItem(key, value)
+  } catch {
+    // Storage is optional; the in-memory state remains usable.
+  }
+}
+
+function mapMyReward(item: MyRewardApiItem, color: string): PriorAward | null {
+  const rewardIdValue = item.reward_id || item.rewardId
+  const userRewardIdValue = item.user_reward_id || item.userRewardId || item.id
+  const rewardId = typeof rewardIdValue === 'string' ? rewardIdValue.trim() : ''
+  const userRewardId = typeof userRewardIdValue === 'string' ? userRewardIdValue.trim() : ''
+  const status = String(item.delivery_status || item.status || '').toUpperCase()
+  if (!rewardId || !userRewardId || status === 'CANCELLED' || status === 'CANCELED') return null
+
+  const deliveryValue = item.requires_delivery ?? item.requiresDelivery
+  const requiresDelivery = deliveryValue !== false && deliveryValue !== 0
+  const imageValue = item.image_url || item.imageUrl
+  const nameValue = item.reward_name || item.rewardName || item.name
+  return {
+    userRewardId,
+    reward: {
+      id: rewardId,
+      name: nameValue || 'Reward',
+      weight: 0,
+      color,
+      imageUrl: typeof imageValue === 'string' ? imageValue : undefined,
+      remainingQuantity: 0,
+      status: 'AWARDED',
+      requiresDelivery,
+    },
+  }
+}
+
+function isValidSpinAward(data: unknown): boolean {
+  if (!data || typeof data !== 'object') return false
+  const value = data as Record<string, unknown>
+  const rewardId = typeof value.rewardId === 'string'
+    ? value.rewardId.trim()
+    : typeof value.reward_id === 'string' ? value.reward_id.trim() : ''
+  const userRewardId = typeof value.userRewardId === 'string'
+    ? value.userRewardId.trim()
+    : typeof value.user_reward_id === 'string' ? value.user_reward_id.trim() : ''
+  const status = String(value.status || value.spinStatus || '').toUpperCase()
+  return Boolean(rewardId && userRewardId && status !== 'CANCELLED' && status !== 'CANCELED')
+}
+
+function createIdempotencyKey(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID()
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
 export default function SpinPage() {
   const router = useRouter()
   const { t, language } = useLanguage()
   const { showToast } = useToast()
+  const hydrated = useHydrated()
   const [spinning, setSpinning] = useState(false)
   const [result, setResult] = useState<{ reward: Reward; userRewardId: string } | null>(null)
   const [rotation, setRotation] = useState(0)
   const [rewards, setRewards] = useState<Reward[]>([])
   const [loading, setLoading] = useState(true)
+  const [authReady, setAuthReady] = useState(false)
+  const [surveyCompleted, setSurveyCompleted] = useState(false)
   const [error, setError] = useState('')
   const [hasSpun, setHasSpun] = useState(false)
   const prefersReducedMotion = useRef(false)
@@ -59,26 +147,19 @@ export default function SpinPage() {
   const wheelRef = useRef<HTMLDivElement>(null)
   const mediaQueryRef = useRef<MediaQueryList | null>(null)
   const rotationRef = useRef(0)
-
-  // Check if user completed survey
-  const surveyCompleted = typeof window !== 'undefined' && sessionStorage.getItem('survey_response_id')
-
   const rewardsLoadedRef = useRef(false)
-  // Mirror of `rewards` that `checkExistingSpin` can read without taking a
-  // dependency on it. Depending on `rewards` here used to recreate the callback
-  // on every fetch, which re-ran the mount effect and produced an infinite
-  // request loop (each `setRewards` created a new array identity).
   const rewardsRef = useRef<Reward[]>([])
+  const priorAwardRef = useRef<PriorAward | null>(null)
 
-  // Generate consistent colors for rewards based on index
   const getRewardColor = useCallback((index: number) => SEGMENT_COLORS[index % SEGMENT_COLORS.length], [])
 
-  // Fetch available rewards
+  // Fetch available rewards. A failed refresh keeps the last good catalogue;
+  // an award restored from /rewards/my can therefore remain visible.
   const fetchRewards = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/rewards?lang=${language}`)
-      const data = await res.json()
-      if (data.success && data.data.length > 0) {
+      const data = await res.json().catch(() => null)
+      if (data?.success && Array.isArray(data.data)) {
         const mappedRewards: Reward[] = data.data.map((r: RewardApiItem, idx: number) => ({
           id: r.id,
           name: r.name,
@@ -92,122 +173,155 @@ export default function SpinPage() {
         setRewards(mappedRewards)
         rewardsRef.current = mappedRewards
         rewardsLoadedRef.current = true
-      } else {
+      } else if (rewardsRef.current.length === 0) {
         setRewards([])
-        rewardsRef.current = []
         rewardsLoadedRef.current = true
       }
     } catch {
       setError(t('connectionFailed'))
-      setRewards([])
-      rewardsRef.current = []
-      rewardsLoadedRef.current = true
+      if (rewardsRef.current.length === 0) {
+        setRewards([])
+        rewardsLoadedRef.current = true
+      }
     } finally {
       setLoading(false)
     }
   }, [language, t, getRewardColor])
 
-  // Check existing spin. Reads the catalogue through `rewardsRef` so this
-  // callback stays stable (deps `[]`) and cannot re-trigger the mount effect.
-  const checkExistingSpin = useCallback(async () => {
-    try {
-      const token = await getValidToken()
-      if (!token) return
+  const applyPriorAward = useCallback((award: PriorAward) => {
+    priorAwardRef.current = award
+    sessionSet('user_reward_id', award.userRewardId)
+    sessionSet('reward_name', award.reward.name)
+    const catalogue = rewardsRef.current
+    const index = catalogue.findIndex(reward => reward.id === award.reward.id)
+    const displayReward = index >= 0
+      ? { ...catalogue[index], name: award.reward.name || catalogue[index].name, imageUrl: award.reward.imageUrl || catalogue[index].imageUrl, requiresDelivery: award.reward.requiresDelivery }
+      : award.reward
+    setResult({ reward: displayReward, userRewardId: award.userRewardId })
+    setHasSpun(true)
+    if (index >= 0 && catalogue.length > 0) {
+      const segmentAngle = 360 / catalogue.length
+      const targetAngle = -(index * segmentAngle + segmentAngle / 2) - 90
+      const finalRotation = 5 * 360 + targetAngle
+      setRotation(finalRotation)
+      rotationRef.current = finalRotation
+    } else {
+      setRotation(0)
+      rotationRef.current = 0
+    }
+  }, [])
 
-      const res = await fetch(`${API_BASE}/rewards/my`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      const data = await res.json()
-      if (data.success && data.data.length > 0) {
-        const latestReward = data.data[0]
-        if (latestReward.reward_id) {
-          const catalogue = rewardsRef.current
-          // If rewards are already loaded, do the full check immediately
-          if (rewardsLoadedRef.current && catalogue.length > 0) {
-            const rewardIndex = catalogue.findIndex(r => r.id === latestReward.reward_id)
-            if (rewardIndex !== -1) {
-              const reward = catalogue[rewardIndex]
-              setResult({ reward, userRewardId: latestReward.id })
-              setHasSpun(true)
-              const segmentAngle = 360 / catalogue.length
-              const targetAngle = -(rewardIndex * segmentAngle + segmentAngle / 2) - 90
-              const fullRotations = 5 * 360
-              const finalRotation = fullRotations + targetAngle
-              setRotation(finalRotation)
-              rotationRef.current = finalRotation
-              return
-            }
-          }
-          // Rewards not loaded yet, store for later
-          setHasSpun(true)
-          sessionStorage.setItem('pending_reward_id', latestReward.reward_id)
-          sessionStorage.setItem('pending_user_reward_id', latestReward.id)
+  // Restore a real prior award, including awards no longer in the public
+  // catalogue. Null/canceled rows are intentionally ignored.
+  const checkExistingSpin = useCallback(async (initialToken?: string): Promise<PriorAward | null> => {
+    try {
+      let token = initialToken || await getValidToken()
+      if (!token) return null
+      const request = async (authToken: string) => {
+        const res = await fetch(`${API_BASE}/rewards/my`, {
+          headers: { Authorization: `Bearer ${authToken}` },
+        })
+        return { status: res.status, body: await res.json().catch(() => null) }
+      }
+      let response = await request(token)
+      if (response.status === 401) {
+        token = await getValidToken(true) || ''
+        if (!token) {
+          clearIdentitySession()
+          router.replace('/info')
+          return null
+        }
+        response = await request(token)
+      }
+      if (response.status === 401) {
+        clearIdentitySession()
+        router.replace('/info')
+        return null
+      }
+      if (!response.body?.success || !Array.isArray(response.body.data)) return null
+      for (const [index, item] of (response.body.data as MyRewardApiItem[]).entries()) {
+        const award = mapMyReward(item, getRewardColor(index))
+        if (award) {
+          applyPriorAward(award)
+          return award
         }
       }
     } catch {
-      // Ignore - user hasn't spun yet
+      // A user with no prior award is the normal case.
     }
-  }, [])
+    return null
+  }, [applyPriorAward, getRewardColor, router])
 
-  // Set up reduced motion listener on mount
+  // Reduced-motion listener.
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
-      mediaQueryRef.current = mediaQuery
-      prefersReducedMotion.current = mediaQuery.matches
-      const handler = (e: MediaQueryListEvent) => { prefersReducedMotion.current = e.matches }
-      mediaQuery.addEventListener('change', handler)
-      return () => mediaQuery.removeEventListener('change', handler)
-    }
-  }, [])
+    if (!hydrated) return
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+    mediaQueryRef.current = mediaQuery
+    prefersReducedMotion.current = mediaQuery.matches
+    const handler = (e: MediaQueryListEvent) => { prefersReducedMotion.current = e.matches }
+    mediaQuery.addEventListener('change', handler)
+    return () => mediaQuery.removeEventListener('change', handler)
+  }, [hydrated])
 
-  // Fetch rewards and check existing spin on mount
+  // Verify auth before loading the reward flow. A missing/invalid token always
+  // goes back through /info instead of leaving a dead spin screen.
   useEffect(() => {
-    // Justification: one-shot loaders on mount; their loading/results state is intentionally reset with the effect.
+    if (!hydrated) return
+    let cancelled = false
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    fetchRewards()
-    checkExistingSpin()
-  }, [fetchRewards, checkExistingSpin])
+    setSurveyCompleted(Boolean(sessionGet('survey_response_id')))
+    getValidToken().then(token => {
+      if (cancelled) return
+      if (!token) {
+        setLoading(false)
+        router.replace('/info')
+        return
+      }
+      setAuthReady(true)
+      void fetchRewards()
+      void checkExistingSpin(token)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [checkExistingSpin, fetchRewards, hydrated, router])
 
-  // After rewards load, check for pending reward from previous spin
-  const applyPendingReward = useCallback(() => {
-    if (rewards.length === 0 || typeof window === 'undefined') return
-    const pendingRewardId = sessionStorage.getItem('pending_reward_id')
-    if (!pendingRewardId) return
-    const rewardIndex = rewards.findIndex(r => r.id === pendingRewardId)
-    if (rewardIndex === -1) return
-    const reward = rewards[rewardIndex]
+  // If the catalogue arrives after /rewards/my, enrich the already-visible
+  // award with its wheel metadata. The result itself never depends on this.
+  useEffect(() => {
+    if (!authReady || rewards.length === 0 || !priorAwardRef.current) return
+    const award = priorAwardRef.current
+    const index = rewards.findIndex(reward => reward.id === award.reward.id)
+    if (index < 0) return
+    const displayReward = {
+      ...rewards[index],
+      name: award.reward.name || rewards[index].name,
+      imageUrl: award.reward.imageUrl || rewards[index].imageUrl,
+      requiresDelivery: award.reward.requiresDelivery,
+    }
+    setResult({ reward: displayReward, userRewardId: award.userRewardId })
     const segmentAngle = 360 / rewards.length
-    const targetAngle = -(rewardIndex * segmentAngle + segmentAngle / 2) - 90
-    const fullRotations = 5 * 360
-    const finalRotation = fullRotations + targetAngle
-    setResult({ reward, userRewardId: sessionStorage.getItem('pending_user_reward_id') || '' })
-    setHasSpun(true)
+    const targetAngle = -(index * segmentAngle + segmentAngle / 2) - 90
+    const finalRotation = 5 * 360 + targetAngle
     setRotation(finalRotation)
     rotationRef.current = finalRotation
-    sessionStorage.removeItem('pending_reward_id')
-    sessionStorage.removeItem('pending_user_reward_id')
-  }, [rewards])
+  }, [authReady, rewards])
 
-  useEffect(() => {
-    // Defer setState calls to avoid cascading renders in effect
-    queueMicrotask(() => applyPendingReward())
-  }, [applyPendingReward])
-
-  // Generate a stable idempotency key for this spin session. Persisting it in
-  // sessionStorage means a retry after a network blip or reload reuses the same
-  // key, so the server can return the original result instead of a duplicate.
-  const [idempotencyKey] = useState(() => {
-    if (typeof window === 'undefined') return crypto.randomUUID()
-    const existing = sessionStorage.getItem('spin_idempotency_key')
+  // Generate a stable idempotency key for this spin session. A canceled replay
+  // invalidates this key so a genuinely new attempt can be made.
+  const [idempotencyKey, setIdempotencyKey] = useState(() => {
+    const existing = sessionGet('spin_idempotency_key')
     if (existing) return existing
-    const key =
-      typeof crypto !== 'undefined' && 'randomUUID' in crypto
-        ? crypto.randomUUID()
-        : `${Date.now()}-${Math.random().toString(36).slice(2)}`
-    sessionStorage.setItem('spin_idempotency_key', key)
+    const key = createIdempotencyKey()
+    sessionSet('spin_idempotency_key', key)
     return key
   })
+
+  const resetIdempotencyKey = () => {
+    const key = createIdempotencyKey()
+    sessionSet('spin_idempotency_key', key)
+    setIdempotencyKey(key)
+  }
 
   // Premium spin animation using Web Animations API
   const animateWheel = useCallback((
@@ -357,7 +471,6 @@ export default function SpinPage() {
   const spin = async () => {
     if (spinning || hasSpun || rewards.length === 0) return
 
-    // Verify survey was completed
     if (!surveyCompleted) {
       setError('Please complete the survey first')
       router.push('/survey')
@@ -366,145 +479,161 @@ export default function SpinPage() {
 
     setSpinning(true)
     setError('')
-
-    // Keep the wheel in motion while the Worker resolves the authoritative
-    // reward, so the user never sees a frozen wheel or waiting screen.
     startContinuousSpin()
 
+    const recoverAuth = () => {
+      stopContinuousSpin()
+      setSpinning(false)
+      clearIdentitySession()
+      router.replace('/info')
+    }
+
     try {
-      const token = await getValidToken()
+      let token = await getValidToken()
       if (!token) {
-        stopContinuousSpin()
-        setSpinning(false)
-        setError(t('failedToLoad') + ' - Please complete your profile first')
+        recoverAuth()
         return
       }
 
-      // Get context IDs
       const resolveContext = async (key: string, endpoint: string) => {
-        const stored = sessionStorage.getItem(key)
+        const stored = sessionGet(key)
         if (stored) return stored
         try {
           const ctxRes = await fetch(`${API_BASE}${endpoint}?lang=${language}`)
           const ctxData = await ctxRes.json()
-          if (ctxData.success && ctxData.data && ctxData.data.length > 0) {
-            return ctxData.data[0].id
-          }
+          if (ctxData.success && ctxData.data && ctxData.data.length > 0) return ctxData.data[0].id
         } catch { /* fall through */ }
         return null
       }
 
       const productId = await resolveContext('survey_product_id', '/products')
       const campaignId = await resolveContext('survey_campaign_id', '/campaigns')
-
+      const requestBody = JSON.stringify({
+        campaignId: campaignId || 'default',
+        productId: productId || 'beer',
+        idempotencyKey,
+      })
       const doSpin = async (authToken: string) => {
         const res = await fetch(`${API_BASE}/rewards/spin`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${authToken}`,
-          },
-          body: JSON.stringify({
-            campaignId: campaignId || 'default',
-            productId: productId || 'beer',
-            idempotencyKey,
-          }),
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
+          body: requestBody,
         })
-        // Always parse the envelope: 4xx responses carry the actionable code
-        // (SPIN_IN_PROGRESS / ALREADY_SPUN / REWARD_UNAVAILABLE / ...).
-        const body = await res.json().catch(() => ({ success: false }))
-        return { status: res.status, body }
-      }
-
-      let { status, body: data } = await doSpin(token)
-
-      // Token refresh on expiry - only retry ONCE
-      if (!data.success && (status === 401 || data.error?.code === 'UNAUTHORIZED')) {
-        const refreshed = await getValidToken(true)
-        if (refreshed) {
-          ;({ status, body: data } = await doSpin(refreshed))
+        return {
+          status: res.status,
+          body: await res.json().catch(() => null) as {
+            success?: boolean
+            data?: Record<string, unknown>
+            error?: { code?: string; message?: string }
+          } | null,
         }
       }
 
-      if (data.success) {
-        const serverReward = data.data
-        let targetIndex = rewardsRef.current.findIndex(r => r.id === serverReward.rewardId)
-
-        if (targetIndex === -1) {
-          // The public catalogue can be stale (30s edge cache) or a reward may
-          // have just gone live. Refresh once and retry before giving up.
-          await fetchRewards()
-          // Let the refreshed catalogue render so the segment count used for
-          // the landing animation matches what is drawn.
-          await new Promise(r => setTimeout(r, 0))
-          targetIndex = rewardsRef.current.findIndex(r => r.id === serverReward.rewardId)
+      let response = await doSpin(token)
+      if (response.status === 401 || response.body?.error?.code === 'UNAUTHORIZED') {
+        token = await getValidToken(true) || ''
+        if (!token) {
+          recoverAuth()
+          return
         }
+        response = await doSpin(token)
+      }
+      if (response.status === 401 || response.body?.error?.code === 'UNAUTHORIZED') {
+        recoverAuth()
+        return
+      }
+      if (response.body?.error?.code === 'RESUME_TOKEN_REQUIRED') {
+        markResumeTokenRecovery()
+        clearIdentitySession()
+        stopContinuousSpin()
+        setSpinning(false)
+        router.replace('/info')
+        return
+      }
 
-        const catalogue = rewardsRef.current
-
-        if (targetIndex === -1 || catalogue.length === 0) {
-          // The server awarded a reward we cannot draw on the wheel. Never fake
-          // a landing - surface the win directly so the user still gets it.
+      if (response.body?.success) {
+        const serverReward = response.body.data as Record<string, unknown>
+        // A canceled replay can be HTTP-success with null reward identifiers.
+        // Never turn that envelope into a congratulatory result.
+        if (!isValidSpinAward(serverReward)) {
+          resetIdempotencyKey()
+          const prior = await checkExistingSpin(token)
           stopContinuousSpin()
           setSpinning(false)
-          const fallbackReward: Reward = {
-            id: serverReward.rewardId,
-            name: serverReward.rewardName || t('congratulations'),
-            weight: 0,
-            color: getRewardColor(0),
-            remainingQuantity: 0,
-            status: 'AVAILABLE',
-            requiresDelivery: serverReward.requiresDelivery !== false,
-          }
-          setResult({ reward: fallbackReward, userRewardId: serverReward.userRewardId })
-          setHasSpun(true)
-          showToast(`${t('congratulations')} ${t('youWon')}: ${fallbackReward.name}!`, 'success', 5000)
-          if (typeof window !== 'undefined') {
-            sessionStorage.setItem('user_reward_id', serverReward.userRewardId)
-            sessionStorage.setItem('reward_name', serverReward.rewardName)
-          }
+          setHasSpun(Boolean(prior))
+          if (!prior) setError(t('spinFailed'))
           return
         }
 
-        const displayReward = {
-          ...catalogue[targetIndex],
-          // Trust the server's flag over the cached catalogue.
-          requiresDelivery: serverReward.requiresDelivery !== false,
+        const rewardId = String(serverReward.rewardId || serverReward.reward_id)
+        const userRewardId = String(serverReward.userRewardId || serverReward.user_reward_id)
+        const rewardName = String(serverReward.rewardName || serverReward.reward_name || 'Reward')
+        const deliveryFlag = serverReward.requiresDelivery ?? serverReward.requires_delivery
+        const requiresDelivery = deliveryFlag !== false && deliveryFlag !== 0
+        let targetIndex = rewardsRef.current.findIndex(reward => reward.id === rewardId)
+
+        if (targetIndex === -1) {
+          await fetchRewards()
+          await new Promise(resolve => setTimeout(resolve, 0))
+          targetIndex = rewardsRef.current.findIndex(reward => reward.id === rewardId)
         }
 
-        // Decelerate onto the exact segment the Worker confirmed.
-        await landOnReward(targetIndex, catalogue.length)
+        const catalogue = rewardsRef.current
+        if (targetIndex === -1 || catalogue.length === 0) {
+          // Prefer the durable /rewards/my record. It can contain an award
+          // whose reward is exhausted/paused and therefore absent from /rewards.
+          const prior = await checkExistingSpin(token)
+          const fallbackReward: Reward = prior?.reward || {
+            id: rewardId,
+            name: rewardName,
+            weight: 0,
+            color: getRewardColor(0),
+            remainingQuantity: 0,
+            status: 'AWARDED',
+            requiresDelivery,
+          }
+          stopContinuousSpin()
+          setSpinning(false)
+          setResult({ reward: fallbackReward, userRewardId })
+          setHasSpun(true)
+          priorAwardRef.current = { reward: fallbackReward, userRewardId }
+          sessionSet('user_reward_id', userRewardId)
+          sessionSet('reward_name', fallbackReward.name)
+          showToast(`${t('congratulations')} ${t('youWon')}: ${fallbackReward.name}!`, 'success', 5000)
+          return
+        }
 
-        // Small delay for settling feel
-        await new Promise(r => setTimeout(r, 250))
+        const displayReward: Reward = {
+          ...catalogue[targetIndex],
+          name: rewardName || catalogue[targetIndex].name,
+          // Trust the server's flag over the cached catalogue.
+          requiresDelivery,
+        }
+        await landOnReward(targetIndex, catalogue.length)
+        await new Promise(resolve => setTimeout(resolve, 250))
 
         setSpinning(false)
-        setResult({ reward: displayReward, userRewardId: serverReward.userRewardId })
+        setResult({ reward: displayReward, userRewardId })
         setHasSpun(true)
-
-        // Show toast notification for reward
+        priorAwardRef.current = { reward: displayReward, userRewardId }
+        sessionSet('user_reward_id', userRewardId)
+        sessionSet('reward_name', displayReward.name)
         showToast(`${t('congratulations')} ${t('youWon')}: ${displayReward.name}!`, 'success', 5000)
-
-        if (typeof window !== 'undefined') {
-          sessionStorage.setItem('user_reward_id', serverReward.userRewardId)
-          sessionStorage.setItem('reward_name', serverReward.rewardName)
-        }
       } else {
         stopContinuousSpin()
         setSpinning(false)
-        const errorCode = data.error?.code
-        if (errorCode === 'NO_REWARDS_AVAILABLE' || errorCode === 'REWARD_UNAVAILABLE') {
+        const errorCode = response.body?.error?.code
+        if (errorCode === 'NO_REWARDS_AVAILABLE' || errorCode === 'REWARD_UNAVAILABLE' || errorCode === 'CANCELLED' || errorCode === 'CANCELED') {
+          resetIdempotencyKey()
           setError(t('noRewardsDesc'))
         } else if (errorCode === 'SPIN_IN_PROGRESS') {
-          // The server is still finalising an earlier request; ask the user to
-          // retry rather than creating a second spin.
           setError(t('spinProcessing'))
         } else if (errorCode === 'ALREADY_SPUN') {
-          setHasSpun(true)
           setError(t('alreadySpun'))
-          await checkExistingSpin()
+          const prior = await checkExistingSpin(token)
+          if (!prior) setHasSpun(false)
         } else {
-          setError(data.error?.message || t('spinFailed'))
+          setError(response.body?.error?.message || t('spinFailed'))
         }
       }
     } catch {
@@ -534,7 +663,7 @@ export default function SpinPage() {
   }
 
   // Empty state - no rewards available
-  if (rewards.length === 0) {
+  if (rewards.length === 0 && !result) {
     return (
       <div className="min-h-screen bg-navy text-fg-bright relative overflow-hidden flex items-center justify-center p-4">
         <div className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 w-[520px] h-[400px] rounded-full bg-gold/[0.08] blur-[120px]" />

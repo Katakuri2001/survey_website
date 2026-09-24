@@ -5,7 +5,14 @@ import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useLanguage } from '../context/LanguageContext'
 import Header from '../components/Header'
-import { API_BASE, getValidToken, surveyHeaders } from '../lib/api'
+import {
+  API_BASE,
+  clearIdentitySession,
+  getValidToken,
+  markResumeTokenRecovery,
+  surveyHeaders,
+} from '../lib/api'
+import { clearSurveyProgress, loadSurveyProgress, saveSurveyProgress } from '../lib/surveyProgress'
 import { useHydrated } from '../lib/useHydrated'
 
 interface Option {
@@ -13,6 +20,13 @@ interface Option {
   option_value: string
   option_text: string
   display_order: number
+}
+
+interface QuestionCondition {
+  question_id: string
+  depends_on_question_id: string
+  condition_type: string
+  condition_value: string
 }
 
 interface Question {
@@ -23,6 +37,7 @@ interface Question {
   display_order: number
   validation_rules: string | null
   options?: Option[]
+  conditions?: QuestionCondition[]
   image_url?: string | null
   product_type?: string | null
 }
@@ -31,6 +46,183 @@ interface Answer {
   questionId: string
   type: string
   value: string | number | string[]
+}
+
+interface ValidationRules {
+  required?: boolean
+  minLength?: number
+  maxLength?: number
+  min?: number
+  max?: number
+  pattern?: string
+}
+
+function parseValidationRules(raw: Question['validation_rules']): ValidationRules {
+  if (!raw) return {}
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+    if (!parsed || typeof parsed !== 'object') return {}
+    const record = parsed as Record<string, unknown>
+    return {
+      required: typeof record.required === 'boolean' ? record.required : undefined,
+      minLength: finiteRuleNumber(record.minLength ?? record.min_length),
+      maxLength: finiteRuleNumber(record.maxLength ?? record.max_length),
+      min: finiteRuleNumber(record.min),
+      max: finiteRuleNumber(record.max),
+      pattern: typeof record.pattern === 'string' ? record.pattern : undefined,
+    }
+  } catch {
+    return {}
+  }
+}
+
+function finiteRuleNumber(value: unknown): number | undefined {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : undefined
+  }
+  return undefined
+}
+
+function getTextMaxLength(question: Question, rules: ValidationRules): number {
+  const configured = finiteRuleNumber(rules.maxLength)
+  if (configured !== undefined) return Math.max(0, Math.min(2000, Math.floor(configured)))
+  const legacyMax = finiteRuleNumber(rules.max)
+  if (legacyMax !== undefined) return Math.max(0, Math.min(2000, Math.floor(legacyMax)))
+  return question.question_type === 'long_text' ? 2000 : 500
+}
+
+function getTextMinLength(rules: ValidationRules): number {
+  const configured = finiteRuleNumber(rules.minLength)
+  if (configured !== undefined) return Math.max(0, Math.floor(configured))
+  const legacyMin = finiteRuleNumber(rules.min)
+  if (legacyMin !== undefined) return Math.max(0, Math.floor(legacyMin))
+  return 0
+}
+
+function getTextError(question: Question, value: string, rules: ValidationRules): string {
+  const required = question.is_required || rules.required === true
+  const trimmed = value.trim()
+  if (required && trimmed.length === 0) return 'This answer is required'
+  if (trimmed.length === 0) return ''
+
+  const maxLength = getTextMaxLength(question, rules)
+  const minLength = getTextMinLength(rules)
+  if (value.length > maxLength) return `Please use no more than ${maxLength} characters`
+  if (value.length < minLength) return `Please use at least ${minLength} characters`
+  if (rules.pattern) {
+    try {
+      if (!new RegExp(rules.pattern).test(value)) return 'Please use the requested format'
+    } catch {
+      // Ignore malformed admin rules rather than making the survey unusable.
+    }
+  }
+  return ''
+}
+
+function getRatingMax(question: Question, rules: ValidationRules): number {
+  const configured = finiteRuleNumber(rules.max)
+  return Math.max(1, Math.min(10, Math.floor(configured ?? 5)))
+}
+
+function getRatingMin(question: Question, rules: ValidationRules): number {
+  const configured = finiteRuleNumber(rules.min)
+  return Math.max(1, Math.min(getRatingMax(question, rules), Math.floor(configured ?? 1)))
+}
+
+function answerIsPresent(value: unknown): boolean {
+  if (value === undefined || value === null) return false
+  if (Array.isArray(value)) return value.length > 0
+  if (typeof value === 'string') return value.trim().length > 0
+  return true
+}
+
+/** Mirror of the API's condition evaluator so hidden questions are never sent. */
+function conditionMatches(condition: QuestionCondition, answers: Record<string, Answer>): boolean {
+  const value = answers[condition.depends_on_question_id]?.value
+  const answered = answerIsPresent(value)
+  if (condition.condition_type === 'answered') return answered
+  if (condition.condition_type === 'not_answered') return !answered
+  if (!answered) return false
+  const actual = Array.isArray(value) ? value.map(String) : [String(value)]
+  const expected = condition.condition_value
+  switch (condition.condition_type) {
+    case 'equals':
+      return actual.includes(expected)
+    case 'not_equals':
+      return !actual.includes(expected)
+    case 'contains':
+      return actual.some(item => item.includes(expected))
+    case 'greater_than':
+      return Number(actual[0]) > Number(expected)
+    case 'less_than':
+      return Number(actual[0]) < Number(expected)
+    default:
+      return false
+  }
+}
+
+function isQuestionVisible(question: Question, answers: Record<string, Answer>): boolean {
+  return (question.conditions || []).every(condition => conditionMatches(condition, answers))
+}
+
+function nearestVisibleIndex(questions: Question[], visibleIds: Set<string>, from: number): number {
+  for (let i = Math.max(0, from); i < questions.length; i++) {
+    if (visibleIds.has(questions[i].id)) return i
+  }
+  for (let i = Math.min(Math.max(0, from), questions.length - 1); i >= 0; i--) {
+    if (visibleIds.has(questions[i].id)) return i
+  }
+  return -1
+}
+
+/** An answer that carries no data must not be sent: the API rejects it. */
+function isEmptyAnswer(answer: Answer): boolean {
+  if (typeof answer.value === 'string') return answer.value.trim().length === 0
+  if (Array.isArray(answer.value)) return answer.value.length === 0
+  return answer.value === undefined || answer.value === null
+}
+
+function isAnswerComplete(question: Question, answer: Answer | undefined): boolean {
+  const rules = parseValidationRules(question.validation_rules)
+  const required = question.is_required || rules.required === true
+  if (!answer) return !required
+  if (isEmptyAnswer(answer)) return !required
+
+  switch (question.question_type) {
+    case 'rating': {
+      if (typeof answer.value !== 'number' || !Number.isFinite(answer.value)) return !required
+      const min = getRatingMin(question, rules)
+      const max = getRatingMax(question, rules)
+      return answer.value >= min && answer.value <= max
+    }
+    case 'number': {
+      const numeric = Number(answer.value)
+      if (!Number.isFinite(numeric)) return !required
+      const min = finiteRuleNumber(rules.min)
+      const max = finiteRuleNumber(rules.max)
+      return (min === undefined || numeric >= min) && (max === undefined || numeric <= max)
+    }
+    case 'text':
+    case 'long_text': {
+      if (typeof answer.value !== 'string') return !required
+      return getTextError(question, answer.value, rules) === ''
+    }
+    case 'single_choice':
+    case 'dropdown':
+      return typeof answer.value === 'string' && answer.value.length > 0
+    case 'multiple_choice': {
+      if (!Array.isArray(answer.value)) return !required
+      const min = finiteRuleNumber(rules.min) ?? (required ? 1 : 0)
+      const max = finiteRuleNumber(rules.max)
+      return answer.value.length >= min && (max === undefined || answer.value.length <= max)
+    }
+    case 'yes_no':
+      return typeof answer.value === 'string' && (answer.value === 'yes' || answer.value === 'no')
+    default:
+      return false
+  }
 }
 
 function Star({ filled, onChoose, label }: { filled: boolean; onChoose: () => void; label: string }) {
@@ -55,6 +247,47 @@ function Star({ filled, onChoose, label }: { filled: boolean; onChoose: () => vo
   )
 }
 
+const SUBMITTING_KEY = 'survey_submitting'
+const SUBMITTING_LEASE_MS = 2 * 60 * 1000
+
+function readSubmittingLease(): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    const raw = window.sessionStorage.getItem(SUBMITTING_KEY)
+    if (!raw) return false
+    const startedAt = Number(raw)
+    const age = Date.now() - startedAt
+    if (!Number.isFinite(startedAt) || age > SUBMITTING_LEASE_MS || age < -SUBMITTING_LEASE_MS) {
+      window.sessionStorage.removeItem(SUBMITTING_KEY)
+      return false
+    }
+    return true
+  } catch {
+    return false
+  }
+}
+
+function writeSubmittingLease(): void {
+  try {
+    window.sessionStorage.setItem(SUBMITTING_KEY, String(Date.now()))
+  } catch {
+    // The in-memory ref still prevents duplicate clicks in this tab.
+  }
+}
+
+function clearSubmittingLease(): void {
+  try {
+    window.sessionStorage.removeItem(SUBMITTING_KEY)
+  } catch {
+    // Ignore unavailable storage.
+  }
+}
+
+function newRequestId(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID()
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
 export default function SurveyPage() {
   const { t, language } = useLanguage()
   const router = useRouter()
@@ -68,29 +301,92 @@ export default function SurveyPage() {
   const [reviewMode, setReviewMode] = useState(false)
   const [ready, setReady] = useState(false)
   const [notice, setNotice] = useState(false)
+  const [progressRestored, setProgressRestored] = useState(false)
   const questionsRef = useRef<Question[]>([])
+  const currentQuestionIdRef = useRef('')
+  const submittingRef = useRef(false)
+  const progressRestoredRef = useRef(false)
+  const submissionEpochRef = useRef(0)
+  const activePollControllerRef = useRef<AbortController | null>(null)
+  const versionIdRef = useRef('')
+  const productIdRef = useRef('')
+  const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Auth is checked after hydration so storage access remains static-export safe.
   useEffect(() => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('survey_token') : null
-    if (!token) {
-      router.replace('/info')
+    if (!guarded) return
+    // A reload cannot still have the previous JavaScript request in flight.
+    // Remove old/legacy leases before enabling the submit button.
+    readSubmittingLease()
+    let cancelled = false
+    getValidToken().then(token => {
+      if (!cancelled && !token) router.replace('/info')
+    })
+    return () => {
+      cancelled = true
     }
-  }, [router])
+  }, [guarded, router])
+
+  // Restore the local snapshot before the first question response is applied.
+  useEffect(() => {
+    if (!guarded || progressRestoredRef.current) return
+    const progress = loadSurveyProgress()
+    if (progress) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setAnswers(progress.answers)
+      setCurrentIdx(progress.currentIdx)
+      currentQuestionIdRef.current = progress.currentQuestionId
+      setReviewMode(progress.reviewMode)
+    }
+    progressRestoredRef.current = true
+    setProgressRestored(true)
+  }, [guarded])
 
   useEffect(() => {
     if (!guarded) return
     let cancelled = false
     let initialDone = false
+    let requestSequence = 0
 
     const loadQuestions = (silent: boolean, forceRefresh = false) => {
-      fetch(`${API_BASE}/survey/questions?lang=${language}`, { cache: 'no-store' })
-        .then(r => r.json())
-        .then(data => {
-          if (cancelled) return
-          const qs: Question[] = data.success && data.data.questions ? data.data.questions : []
+      // A poll that starts during submission must never mutate the form. The
+      // epoch check below also protects responses that were already in flight.
+      if (submittingRef.current) return
+      const sequence = ++requestSequence
+      const startedEpoch = submissionEpochRef.current
+      const controller = new AbortController()
+      activePollControllerRef.current = controller
+
+      fetch(`${API_BASE}/survey/questions?lang=${language}`, {
+        cache: 'no-store',
+        signal: controller.signal,
+      })
+        .then(async response => {
+          const data = await response.json()
+          if (!response.ok || !data?.success || !Array.isArray(data.data?.questions)) {
+            throw new Error('invalid-survey-response')
+          }
+          return data.data as { version?: { id?: string; product_id?: string }; questions: Question[] }
+        })
+        .then(payload => {
+          const qs = payload.questions
+          if (
+            cancelled ||
+            sequence !== requestSequence ||
+            submittingRef.current ||
+            startedEpoch !== submissionEpochRef.current
+          ) return
+
           const ordered = [...qs].sort((a, b) => a.display_order - b.display_order)
+          // An empty successful payload is not evidence that the user's survey
+          // was removed. Keep the last good definition and show a recoverable
+          // error instead of erasing progress.
+          if (ordered.length === 0) {
+            if (!silent) setError(t('failedToLoad'))
+            return
+          }
+
           if (silent && forceRefresh) {
-            // Real-time sync: tell the user when admin changed the survey
             const prev = questionsRef.current
             const changed =
               ordered.length !== prev.length ||
@@ -98,29 +394,38 @@ export default function SurveyPage() {
               ordered.some((q, i) => q.question_text !== prev[i]?.question_text)
             if (changed) {
               setNotice(true)
-              setTimeout(() => setNotice(false), 4000)
+              if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current)
+              noticeTimerRef.current = setTimeout(() => setNotice(false), 4000)
             }
           }
+
+          const previousQuestionId = currentQuestionIdRef.current
+          const previousIndex = ordered.findIndex(q => q.id === previousQuestionId)
+          if (previousIndex >= 0) {
+            setCurrentIdx(previousIndex)
+          } else {
+            setCurrentIdx(prev => Math.min(prev, ordered.length - 1))
+          }
           questionsRef.current = ordered
+          versionIdRef.current = payload.version?.id || versionIdRef.current
+          productIdRef.current = payload.version?.product_id || productIdRef.current
           setQuestions(ordered)
-          // Drop answers for questions the admin removed/deactivated, keep the rest
-          setAnswers(prev => {
-            const keep: Record<string, Answer> = {}
-            for (const q of ordered) {
-              if (prev[q.id]) keep[q.id] = prev[q.id]
-            }
-            return keep
-          })
+          // Deliberately retain answers for questions that a transient poll does
+          // not return. This is local progress, not a destructive reconciliation.
+          setError('')
         })
         .catch(() => {
-          if (cancelled) return
-          if (!silent) {
+          if (cancelled || controller.signal.aborted || sequence !== requestSequence) return
+          // Never replace a good question list with an error/empty list.
+          if (!silent || questionsRef.current.length === 0) {
             setError(t('failedToLoad'))
-            setQuestions([])
           }
         })
         .finally(() => {
-          if (cancelled) return
+          if (activePollControllerRef.current === controller) {
+            activePollControllerRef.current = null
+          }
+          if (cancelled || sequence !== requestSequence) return
           if (!initialDone) {
             initialDone = true
             setLoading(false)
@@ -136,20 +441,42 @@ export default function SurveyPage() {
     }
     document.addEventListener('visibilitychange', onVisible)
     window.addEventListener('focus', onVisible)
-    // Live polling so admin add/remove reflects in real time while the form is open
-    const pollId = window.setInterval(() => {
-      if (!submitting) loadQuestions(true, true)
-    }, 12000)
+    // Live polling so admin edits reflect in real time while the form is open.
+    const pollId = window.setInterval(() => loadQuestions(true, true), 12000)
 
     return () => {
       cancelled = true
+      requestSequence += 1
+      activePollControllerRef.current?.abort()
+      activePollControllerRef.current = null
+      if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current)
       window.clearInterval(pollId)
       document.removeEventListener('visibilitychange', onVisible)
       window.removeEventListener('focus', onVisible)
     }
-    // Justification: loadQuestions/submitting/t deliberately omitted — the 12 s live-poll is keyed to language + auth only; adding 'submitting' would restart the interval on every answer.
+    // `submittingRef` is intentionally used instead of state: changing the
+    // submitting state must not tear down and recreate the polling effect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [language, guarded])
+
+  const visibleQuestions = questions.filter(q => isQuestionVisible(q, answers))
+  const visibleIds = new Set(visibleQuestions.map(q => q.id))
+  // When every question's condition currently fails there is nothing to answer;
+  // the review screen becomes the effective state rather than a dead card.
+  const inReview = reviewMode || (questions.length > 0 && visibleQuestions.length === 0)
+
+  useEffect(() => {
+    if (!guarded || !progressRestored || questions.length === 0) return
+    const visible = new Set(questions.filter(q => isQuestionVisible(q, answers)).map(q => q.id))
+    const rawIdx = Math.min(currentIdx, questions.length - 1)
+    const displayedIdx = visible.has(questions[rawIdx].id)
+      ? rawIdx
+      : nearestVisibleIndex(questions, visible, currentIdx)
+    const storedIdx = displayedIdx >= 0 ? displayedIdx : rawIdx
+    const currentQuestionId = questions[storedIdx]?.id || currentQuestionIdRef.current
+    currentQuestionIdRef.current = currentQuestionId
+    saveSurveyProgress({ answers, currentIdx: storedIdx, currentQuestionId, reviewMode })
+  }, [answers, currentIdx, guarded, progressRestored, questions, reviewMode])
 
   // Removed products fetch - questions now contain product_type and image_url directly
 
@@ -170,65 +497,85 @@ export default function SurveyPage() {
   }
 
   const handleTextChange = (questionId: string, value: string) => {
-    setAnswers(prev => ({ ...prev, [questionId]: { questionId, type: 'text', value } }))
+    const question = questionsRef.current.find(q => q.id === questionId)
+    const rules = question ? parseValidationRules(question.validation_rules) : {}
+    const maxLength = question ? getTextMaxLength(question, rules) : 2000
+    const type = question?.question_type === 'long_text' ? 'long_text' : 'text'
+    setAnswers(prev => ({
+      ...prev,
+      [questionId]: { questionId, type, value: value.slice(0, maxLength) },
+    }))
   }
 
   const handleYesNo = (questionId: string, value: string) => {
     setAnswers(prev => ({ ...prev, [questionId]: { questionId, type: 'yes_no', value } }))
   }
 
-  const idx = questions.length > 0 ? Math.min(currentIdx, questions.length - 1) : 0
-
-  const isQuestionComplete = (q: Question): boolean => {
-    if (!q.is_required) return true
-    const a = answers[q.id]
-    if (!a) return false
-    switch (q.question_type) {
-      case 'rating':
-        return typeof a.value === 'number' && a.value >= 1
-      case 'text':
-      case 'long_text':
-        return typeof a.value === 'string' && a.value.trim().length > 0
-      case 'single_choice':
-        return typeof a.value === 'string' && a.value.length > 0
-      case 'multiple_choice':
-        return Array.isArray(a.value) && a.value.length > 0
-      case 'yes_no':
-        return typeof a.value === 'string' && (a.value === 'yes' || a.value === 'no')
-      default:
-        return false
-    }
+  const handleNumberChange = (questionId: string, value: string) => {
+    setAnswers(prev => ({ ...prev, [questionId]: { questionId, type: 'number', value } }))
   }
 
-  const canProceed = questions.length > 0 && questions.every(q => q.is_required ? isQuestionComplete(q) : true)
+  const handleDropdown = (questionId: string, value: string) => {
+    setAnswers(prev => ({ ...prev, [questionId]: { questionId, type: 'dropdown', value } }))
+  }
+
+  // Conditional logic can hide the stored question index; anchor the display to
+  // the nearest visible question while keeping `currentIdx` as an index into
+  // the full definition list (progress save/restore depends on that).
+  const rawIdx = questions.length > 0 ? Math.min(currentIdx, questions.length - 1) : 0
+  const anchoredIdx = visibleQuestions.length > 0 ? nearestVisibleIndex(questions, visibleIds, rawIdx) : -1
+  const idx = anchoredIdx >= 0 ? anchoredIdx : rawIdx
+  const visiblePosition = visibleQuestions.findIndex(q => q.id === questions[idx]?.id)
+  const isQuestionComplete = (q: Question): boolean => isAnswerComplete(q, answers[q.id])
+  const canProceed = questions.length > 0 && visibleQuestions.every(isQuestionComplete)
+
+  let prevVisibleIdx = idx - 1
+  while (prevVisibleIdx >= 0 && !visibleIds.has(questions[prevVisibleIdx].id)) prevVisibleIdx -= 1
+  const hasPrevVisible = prevVisibleIdx >= 0
 
   const handleNext = () => {
     if (idx < questions.length - 1) {
-      setCurrentIdx(prev => prev + 1)
-    } else {
-      setReviewMode(true)
+      const next = nearestVisibleIndex(questions, visibleIds, idx + 1)
+      if (next > idx && next < questions.length) {
+        setCurrentIdx(next)
+        currentQuestionIdRef.current = questions[next].id
+        return
+      }
     }
+    setReviewMode(true)
   }
 
   const handlePrev = () => {
-    if (reviewMode) {
+    if (inReview) {
       setReviewMode(false)
-    } else if (idx > 0) {
-      setCurrentIdx(prev => prev - 1)
+      return
+    }
+    if (hasPrevVisible) {
+      setCurrentIdx(prevVisibleIdx)
+      currentQuestionIdRef.current = questions[prevVisibleIdx].id
     }
   }
 
   const handleSubmit = async () => {
-    if (typeof window !== 'undefined' && sessionStorage.getItem('survey_submitting')) return;
-    if (typeof window !== 'undefined') sessionStorage.setItem('survey_submitting', '1');
-    setSubmitting(true);
+    if (submittingRef.current || readSubmittingLease()) return
+    submittingRef.current = true
+    submissionEpochRef.current += 1
+    activePollControllerRef.current?.abort()
+    writeSubmittingLease()
+    setSubmitting(true)
+
+    const failAndRecover = () => {
+      clearIdentitySession()
+      setError(t('sessionExpired'))
+      router.replace('/info')
+    }
+
     try {
-      // The API derives the user from the JWT; refresh an expired token before
-      // submitting so a session that lapsed mid-survey does not lose answers.
-      const token = await getValidToken()
+      // Refresh an expired token before submitting so a session that lapsed
+      // mid-survey does not lose answers.
+      let token = await getValidToken()
       if (!token) {
-        setError(t('sessionExpired'))
-        router.replace('/info')
+        failAndRecover()
         return
       }
 
@@ -243,50 +590,126 @@ export default function SurveyPage() {
 
       // Stable idempotency key for this attempt: retries after a network blip
       // return the original response instead of creating a duplicate.
-      let submissionRequestId = sessionStorage.getItem('survey_submission_request_id')
+      let submissionRequestId: string | null = null
+      try {
+        submissionRequestId = window.sessionStorage.getItem('survey_submission_request_id')
+      } catch { /* storage unavailable */ }
       if (!submissionRequestId) {
-        submissionRequestId =
-          typeof crypto !== 'undefined' && 'randomUUID' in crypto
-            ? crypto.randomUUID()
-            : `${Date.now()}-${Math.random().toString(36).slice(2)}`
-        sessionStorage.setItem('survey_submission_request_id', submissionRequestId)
+        submissionRequestId = newRequestId()
+        try {
+          window.sessionStorage.setItem('survey_submission_request_id', submissionRequestId)
+        } catch { /* storage unavailable */ }
       }
 
-      const answerArray: Answer[] = Object.values(answers)
-      const res = await fetch(`${API_BASE}/survey/submit`, {
-        method: 'POST',
-        headers: surveyHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ campaignId, language, submissionRequestId, answers: answerArray })
+      // Only currently-visible questions may be submitted: the API rejects
+      // answers to hidden questions and empty values outright.
+      const activeQuestionIds = new Set(visibleQuestions.map(question => question.id))
+      const answerArray: Answer[] = Object.values(answers).filter(
+        answer => activeQuestionIds.has(answer.questionId) && !isEmptyAnswer(answer)
+      )
+      const body = JSON.stringify({
+        campaignId,
+        productId: productIdRef.current || undefined,
+        surveyVersionId: versionIdRef.current || undefined,
+        language,
+        submissionRequestId,
+        answers: answerArray,
       })
-      const data = await res.json()
-
-      if (data.success) {
-        if (typeof window !== 'undefined') {
-          sessionStorage.setItem('survey_response_id', data.data.responseId)
-          if (campaignId) sessionStorage.setItem('survey_campaign_id', campaignId)
-          sessionStorage.removeItem('survey_submission_request_id')
+      const send = async (authToken: string) => {
+        const res = await fetch(`${API_BASE}/survey/submit`, {
+          method: 'POST',
+          headers: surveyHeaders({
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${authToken}`,
+          }),
+          body,
+        })
+        return {
+          status: res.status,
+          body: await res.json().catch(() => null) as {
+            success?: boolean
+            data?: { responseId?: unknown }
+            error?: { code?: string; message?: string }
+          } | null,
         }
-        router.push('/spin')
-      } else if (data.error?.code === 'UNAUTHORIZED') {
-        if (typeof window !== 'undefined') localStorage.removeItem('survey_token')
-        setError(t('sessionExpired'))
+      }
+
+      let result = await send(token)
+      const isUnauthorized = result.status === 401 || result.body?.error?.code === 'UNAUTHORIZED'
+
+      // A locally valid JWT can still be rejected by the API. Force one refresh
+      // and retry the same idempotent request exactly once.
+      if (isUnauthorized) {
+        token = await getValidToken(true) || ''
+        if (!token) {
+          failAndRecover()
+          return
+        }
+        result = await send(token)
+      }
+
+      if (result.status === 401 || result.body?.error?.code === 'UNAUTHORIZED') {
+        failAndRecover()
+        return
+      }
+      if (result.body?.error?.code === 'RESUME_TOKEN_REQUIRED') {
+        markResumeTokenRecovery()
+        clearIdentitySession()
+        setError(t('resumeRecoveryRequired'))
         router.replace('/info')
+        return
+      }
+
+      if (result.body?.success && typeof result.body.data?.responseId === 'string' && result.body.data.responseId) {
+        try {
+          window.sessionStorage.setItem('survey_response_id', result.body.data.responseId)
+          if (campaignId) window.sessionStorage.setItem('survey_campaign_id', campaignId)
+          window.sessionStorage.removeItem('survey_submission_request_id')
+        } catch { /* storage unavailable */ }
+        clearSurveyProgress()
+        router.push('/spin')
       } else {
-        setError(data.error?.message || t('failedToSubmit'))
+        setError(result.body?.error?.message || t('failedToSubmit'))
       }
     } catch {
       setError(t('connectionFailed'))
     } finally {
-      sessionStorage.removeItem('survey_submitting');
-      setSubmitting(false);
+      clearSubmittingLease()
+      submittingRef.current = false
+      submissionEpochRef.current += 1
+      setSubmitting(false)
     }
   }
 
-  const total = Math.max(questions.length, 1)
-  const progress = reviewMode ? 100 : ((idx + 1) / total) * 100
+  const total = Math.max(visibleQuestions.length, 1)
+  const visibleStep = Math.max(0, visiblePosition) + 1
+  const progress = inReview ? 100 : (visibleStep / total) * 100
   const current = questions[Math.min(idx, Math.max(questions.length - 1, 0))]
+  const currentRules = current ? parseValidationRules(current.validation_rules) : {}
+  const currentTextValue = current && typeof answers[current.id]?.value === 'string'
+    ? answers[current.id].value as string
+    : ''
+  const currentTextMaxLength = current ? getTextMaxLength(current, currentRules) : 500
+  const currentTextError = current ? getTextError(current, currentTextValue, currentRules) : ''
+  const currentNumberValue = current && (typeof answers[current.id]?.value === 'string' || typeof answers[current.id]?.value === 'number')
+    ? String(answers[current.id].value)
+    : ''
+  const currentNumberMin = finiteRuleNumber(currentRules.min)
+  const currentNumberMax = finiteRuleNumber(currentRules.max)
+  const currentNumberError = !currentNumberValue.trim()
+    ? ''
+    : !Number.isFinite(Number(currentNumberValue))
+      ? 'Please enter a valid number'
+      : currentNumberMin !== undefined && Number(currentNumberValue) < currentNumberMin
+        ? `Please enter at least ${currentNumberMin}`
+        : currentNumberMax !== undefined && Number(currentNumberValue) > currentNumberMax
+          ? `Please enter at most ${currentNumberMax}`
+          : ''
+  const ratingMax = current ? getRatingMax(current, currentRules) : 5
+  const ratingMin = current ? getRatingMin(current, currentRules) : 1
   const complete = current ? isQuestionComplete(current) : false
-  const answeredCount = questions.filter(q => isQuestionComplete(q)).length
+  const hasNextVisible = nearestVisibleIndex(questions, visibleIds, idx + 1) > idx
+  const answeredCount = visibleQuestions.filter(q => answers[q.id] && isQuestionComplete(q)).length
 
   if (loading || !guarded) {
     return (
@@ -319,7 +742,7 @@ export default function SurveyPage() {
   }
 
   // ================================ REVIEW ================================
-  if (reviewMode) {
+  if (inReview) {
     return (
       <div className="min-h-screen bg-navy text-fg-bright overflow-hidden">
         <Header title={t('surveyTitle')} backHref="/survey" showBack={idx > 0} />
@@ -342,7 +765,7 @@ export default function SurveyPage() {
             <span className="inline-block px-3 py-1 rounded-full border border-gold/30 bg-gold/10 text-[10px] tracking-[0.3em] uppercase text-gold mb-3">03 · Review</span>
             <h2 className="font-display text-2xl md:text-3xl font-bold text-white">{t('reviewAnswers')}</h2>
             <div className="mx-auto my-4 h-px w-20 bg-gradient-to-r from-transparent via-gold to-transparent" />
-            <p className="text-sm text-fg-muted">{answeredCount} / {questions.length} {t('answered')}</p>
+            <p className="text-sm text-fg-muted">{answeredCount} / {visibleQuestions.length} {t('answered')}</p>
           </div>
 
           {error && (
@@ -355,12 +778,16 @@ export default function SurveyPage() {
           )}
 
           <div className="space-y-3 mb-8">
-            {questions.map((q, i) => {
+            {visibleQuestions.map((q, i) => {
               const a = answers[q.id]
               const isAnswered = isQuestionComplete(q)
               const valueText = (() => {
                 if (!a) return ''
-                if (q.question_type === 'rating') return '★'.repeat(Number(a.value)) + '☆'.repeat(5 - Number(a.value))
+                if (q.question_type === 'rating') {
+                  const rules = parseValidationRules(q.validation_rules)
+                  const max = getRatingMax(q, rules)
+                  return '★'.repeat(Number(a.value)) + '☆'.repeat(Math.max(0, max - Number(a.value)))
+                }
                 if (q.question_type === 'multiple_choice') return Array.isArray(a.value) ? a.value.join(', ') : String(a.value)
                 return String(a.value)
               })()
@@ -444,7 +871,7 @@ export default function SurveyPage() {
             <div className="flex items-center justify-between mb-3">
               <span className="flex items-center gap-3 text-sm text-fg-secondary">
                 <span className="w-7 h-7 rounded-lg bg-gold/15 border border-gold/30 flex items-center justify-center text-[10px] font-bold text-gold">02</span>
-                {t('question')} {idx + 1} <span className="text-fg-muted">{t('of')} {total}</span>
+                {t('question')} {visibleStep} <span className="text-fg-muted">{t('of')} {total}</span>
               </span>
               <span className="text-xs font-bold text-gold px-2.5 py-1 rounded-full bg-gold/10 border border-gold/20">
                 {Math.round(progress)}%
@@ -453,7 +880,7 @@ export default function SurveyPage() {
             <div className="h-2 bg-white/[0.06] rounded-full overflow-hidden">
               <div
                 className="h-full bg-gold-gradient rounded-full transition-all duration-500 ease-out"
-                style={{ width: `${Math.max(progress, ((idx + 1) / total) * 100)}%` }}
+                style={{ width: `${Math.max(progress, (visibleStep / total) * 100)}%` }}
               />
             </div>
           </div>
@@ -465,7 +892,7 @@ export default function SurveyPage() {
 
               <div className="flex items-center justify-between mb-4">
                 <span className="text-[10px] tracking-[0.3em] uppercase text-gold/80">
-                  {current.question_type.replace('_', ' ')} · {String(idx + 1).padStart(2, '0')}
+                  {current.question_type.replace('_', ' ')} · {String(visibleStep).padStart(2, '0')}
                 </span>
                 {current.is_required && (
                   <span className="text-[10px] font-semibold uppercase tracking-widest text-warning px-2.5 py-1 rounded-full bg-warning/10 border border-warning/30">
@@ -503,8 +930,8 @@ export default function SurveyPage() {
 
               {/* --- rating --- */}
               {current.question_type === 'rating' && (
-                <div className="mt-6 flex items-center justify-center gap-2 md:gap-3" key={String(answers[current.id]?.value ?? '')}>
-                  {[1, 2, 3, 4, 5].map(rating => (
+                <div className="mt-6 flex flex-wrap items-center justify-center gap-2 md:gap-3" key={String(answers[current.id]?.value ?? '')}>
+                  {Array.from({ length: ratingMax - ratingMin + 1 }, (_, index) => ratingMin + index).map(rating => (
                     <Star
                       key={rating}
                       filled={!!answers[current.id]?.value && Number(answers[current.id].value) >= rating}
@@ -575,12 +1002,17 @@ export default function SurveyPage() {
               {(current.question_type === 'text' || current.question_type === 'long_text') && (
                 <div className="mt-5">
                   <textarea
-                    value={(answers[current.id]?.value as string) || ''}
+                    value={currentTextValue}
                     onChange={(e) => handleTextChange(current.id, e.target.value)}
+                    maxLength={currentTextMaxLength}
                     className={`survey-input resize-none min-h-[120px] leading-relaxed ${language === 'my' ? 'font-myanmar' : ''}`}
                     placeholder={t('textPlaceholder')}
-                    rows={4}
+                    rows={current.question_type === 'long_text' ? 7 : 4}
+                    aria-invalid={Boolean(currentTextError)}
                   />
+                  {currentTextError && currentTextValue.trim().length > 0 && (
+                    <p className="mt-2 text-xs text-error" role="alert">{currentTextError}</p>
+                  )}
                   <div className="mt-3 flex items-center justify-between text-xs">
                     <span className={`flex items-center gap-1.5 ${complete ? 'text-success' : 'text-fg-muted'}`}>
                       {complete && (
@@ -591,9 +1023,59 @@ export default function SurveyPage() {
                       {complete ? t('answered') : t('notAnswered')}
                     </span>
                     <span className="text-fg-muted">
-                      {answers[current.id]?.value ? `${String(answers[current.id].value).length} / 500` : '0 / 500'}
+                      {currentTextValue.length} / {currentTextMaxLength}
                     </span>
                   </div>
+                </div>
+              )}
+
+              {/* --- number --- */}
+              {current.question_type === 'number' && (
+                <div className="mt-5">
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={currentNumberValue}
+                    min={currentNumberMin}
+                    max={currentNumberMax}
+                    step={currentRules.min !== undefined || currentRules.max !== undefined ? 1 : 'any'}
+                    onChange={(e) => handleNumberChange(current.id, e.target.value)}
+                    className="survey-input"
+                    placeholder={t('textPlaceholder')}
+                    aria-invalid={Boolean(currentNumberError)}
+                  />
+                  {currentNumberError && (
+                    <p className="mt-2 text-xs text-error" role="alert">{currentNumberError}</p>
+                  )}
+                  <div className="mt-3 flex items-center gap-1.5 text-xs">
+                    <span className={`flex items-center gap-1.5 ${complete ? 'text-success' : 'text-fg-muted'}`}>
+                      {complete && (
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                      {complete ? t('answered') : t('notAnswered')}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* --- dropdown --- */}
+              {current.question_type === 'dropdown' && (
+                <div className="mt-5">
+                  <select
+                    value={typeof answers[current.id]?.value === 'string' ? (answers[current.id].value as string) : ''}
+                    onChange={(e) => handleDropdown(current.id, e.target.value)}
+                    className="survey-input"
+                    aria-label={current.question_text}
+                  >
+                    <option value="">{t('selectOne')}</option>
+                    {(current.options || []).map(opt => (
+                      <option key={opt.id} value={opt.option_value}>
+                        {opt.option_text}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               )}
 
@@ -626,7 +1108,7 @@ export default function SurveyPage() {
           <div className="mt-6 flex gap-3">
             <button
               onClick={handlePrev}
-              disabled={idx === 0 && !reviewMode}
+              disabled={!inReview && !hasPrevVisible}
               aria-label={t('back')}
               className="w-14 h-14 rounded-2xl border border-white/10 bg-white/[0.04] text-fg-secondary hover:bg-white/10 hover:text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0 flex items-center justify-center"
             >
@@ -639,7 +1121,7 @@ export default function SurveyPage() {
               disabled={!complete}
               className="group flex-1 py-4 bg-lager-gradient text-white rounded-2xl font-bold text-lg shadow-lager hover:shadow-lager-lg hover:scale-[1.01] transition-all inline-flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
             >
-              {idx === questions.length - 1 ? t('review') : t('next')}
+              {hasNextVisible ? t('next') : t('review')}
               <svg className="w-5 h-5 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5-5 5M6 12h12" />
               </svg>

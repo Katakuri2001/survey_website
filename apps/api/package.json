@@ -3,11 +3,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
-    "d1:execute": "wrangler d1 execute survey-db --local --command=",
-    "d1:migrate": "wrangler d1 migrate create",
-    "d1:push": "wrangler d1 execute survey-db --file=",
+    "dev": "wrangler dev --config ../../wrangler.toml --env development",
+    "deploy": "wrangler deploy --config ../../wrangler.toml --env production",
+    "d1:execute": "wrangler d1 execute survey-db --config ../../wrangler.toml --env development --local",
+    "d1:migrate": "wrangler d1 migrations create survey-db --config ../../wrangler.toml --env development",
+    "d1:push": "wrangler d1 execute survey-db --config ../../wrangler.toml --env development --local --file",
+    "d1:apply": "wrangler d1 migrations apply survey-db --config ../../wrangler.toml --env development --local",
+    "d1:apply:production": "wrangler d1 migrations apply survey-db --config ../../wrangler.toml --env production --remote",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "tsc --noEmit -p tsconfig.json"
   },

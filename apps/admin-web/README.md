@@ -8,7 +8,7 @@ Standalone admin dashboard for the Myanmar Beer survey & rewards platform — pr
 cd apps/admin-web
 
 npm run dev        # next dev --turbopack (see "Port" note below)
-npm run build      # static export → out/
+npm run build      # production-safe static export → out/ + artifact check
 npm run lint       # eslint .
 npm run typecheck  # tsc --noEmit -p tsconfig.json
 ```
@@ -39,9 +39,9 @@ Full per-function reference: [`../../docs/admin-web-functions.md`](../../docs/ad
 
 | Variable | Description | Default |
 |---|---|---|
-| `NEXT_PUBLIC_API_BASE` | API base URL used for every fetch (inlined at build time) | `https://myanmarbeer.boom.com.mm/api` |
+| `NEXT_PUBLIC_API_BASE` | API base URL used for every fetch (inlined at build time) | `/api` for production Pages builds |
 
-Local values (see `../../.env.example`): `http://localhost:8787` for the wrangler API worker, or the relative `/api` to go through the same-origin Pages Function. There are no other app-level env vars — secrets (`JWT_SECRET`) belong to the Pages/Workers runtime, not this bundle.
+Local values (see `../../.env.example`): `http://localhost:8787` for the wrangler API worker, or the relative `/api` to go through the same-origin Pages Function. There are no other app-level env vars — secrets (`JWT_SECRET`) belong to the Pages/Workers runtime, not this bundle. The `prebuild`/`build` wrapper makes a normal production build use `/api` even when an ignored `.env.local` contains localhost; `BUILD_TARGET=local` is the explicit opt-out for a local static preview.
 
 ## Auth model
 
@@ -69,10 +69,12 @@ Local values (see `../../.env.example`): `http://localhost:8787` for the wrangle
 ## Deployment
 
 ```bash
-cd apps/admin-web && npm run build && npx wrangler pages deploy
+# From the repository root:
+npm run build --workspace=apps/admin-web
+npx wrangler pages deploy apps/admin-web/out --project-name alcohol-survey-admin --branch main
 ```
 
-The Pages project serves `out/` plus the `/api/*` function, so the same `JWT_SECRET` must be set on the project:
+The Pages project serves `out/` plus the `/api/*` function, so the same `JWT_SECRET` must be set on the project. The Worker release is a separate, explicit `--env production` target.
 
 ```bash
 npx wrangler pages secret put JWT_SECRET --project-name alcohol-survey-admin

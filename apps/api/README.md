@@ -10,15 +10,27 @@ Full per-function and per-endpoint documentation lives in [`../../docs/api-funct
 ## Commands
 
 ```bash
-npm run dev        # wrangler dev — local API on http://localhost:8787
+npm run dev        # wrangler dev --config ../../wrangler.toml --env development
 npm run typecheck  # tsc --noEmit -p tsconfig.json
-npm run deploy     # wrangler deploy (uses the repo-root wrangler.toml)
+npm run deploy     # explicit production Worker target
 npm run lint       # alias of typecheck
 ```
 
-D1 helpers: `npm run d1:migrate` (create a migration), `npm run d1:push -- --file=…`, `npm run d1:execute -- --command='…'` (local `survey-db`).
+D1 helpers: `npm run d1:migrate -- <message>` (create a migration), `npm run d1:apply` (apply pending local migrations), `npm run d1:push -- <file.sql>` (execute a local SQL file), and `npm run d1:execute -- --command='…'` (execute a local query). The `d1:*` helpers explicitly use the `development` environment and `--local`; remote migration application is a separate, credentialed `d1:apply:production` command.
 
-Run commands from `apps/api/` (or use root `npm run dev` / `npm run typecheck`, which fan out through turbo). Configuration lives in the repo-root `wrangler.toml`; secrets are never committed there — set `JWT_SECRET` with `wrangler secret put JWT_SECRET`, and for Pages: `npx wrangler pages secret put JWT_SECRET --project-name alcohol-survey`.
+Run commands from `apps/api/` (or use root `npm run dev` / `npm run typecheck`, which fan out through turbo). Configuration lives in the repo-root `wrangler.toml`; secrets are never committed there. The Worker release and secret commands always use the explicit production target:
+
+```bash
+npm run deploy
+npx wrangler secret put JWT_SECRET --config ../../wrangler.toml --env production
+```
+
+For Pages Functions, set the same secret on each named project (Pages secrets do not use a Worker `--env`):
+
+```bash
+npx wrangler pages secret put JWT_SECRET --project-name alcohol-survey
+npx wrangler pages secret put JWT_SECRET --project-name alcohol-survey-admin
+```
 
 Health check: `curl http://localhost:8787/health` should return `"status": "ok"` once D1 is reachable.
 

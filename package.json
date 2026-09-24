@@ -7,13 +7,25 @@
   "packageManager": "npm@10.0.0",
   "scripts": {
     "dev": "turbo run dev",
-    "build": "turbo run build",
+    "prebuild": "node scripts/production-env-guard.mjs",
+    "build": "node scripts/build-production.mjs",
+    "postbuild": "node scripts/check-artifacts.mjs apps/survey-web/out apps/admin-web/out",
+    "build:survey": "npm run build --workspace=apps/survey-web",
+    "build:admin": "npm run build --workspace=apps/admin-web",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
-    "test": "turbo run test",
+    "test": "node tests/run-tests.mjs",
+    "test:api": "node tests/api-tests.mjs",
     "test:hardening": "node tests/hardening.test.mjs",
+    "test:live": "npm run test:api && npm run test:hardening",
     "test:load": "k6 run loadtest/k6-spin.js",
-    "wrangler": "wrangler"
+    "migrations:validate": "node scripts/validate-migrations.mjs",
+    "admin:bootstrap": "node scripts/bootstrap-admin.mjs",
+    "pages:build": "node scripts/build-pages-functions.mjs",
+    "check:artifacts": "node scripts/check-artifacts.mjs",
+    "wrangler": "wrangler",
+    "wrangler:dev": "wrangler dev --config wrangler.toml --env development",
+    "deploy:api": "wrangler deploy --config wrangler.toml --env production"
   },
   "devDependencies": {
     "wrangler": "^4.134.0",

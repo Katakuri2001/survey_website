@@ -3,7 +3,8 @@ pages_build_output_dir = "out"
 compatibility_date = "2026-05-03"
 
 # Non-secret runtime config for the Pages Function that serves /api/*.
-# Set JWT_SECRET as a Pages secret:
+# This is a Pages project, not a Wrangler Worker environment. Set the same
+# JWT_SECRET on this project; the Worker release uses --env production:
 #   npx wrangler pages secret put JWT_SECRET --project-name alcohol-survey
 [vars]
 ENVIRONMENT = "production"

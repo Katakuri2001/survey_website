@@ -15,7 +15,7 @@ Run from this directory (`apps/survey-web`):
 | Command | What it does |
 |---|---|
 | `npm run dev` | `next dev --turbopack` — dev server on **http://localhost:3000** |
-| `npm run build` | `next build` — static export into `out/` (`distDir: 'out'`) |
+| `npm run build` | production-safe `next build` wrapper — static export into `out/` (`distDir: 'out'`) |
 | `npm run start` | `next start` (note: with `output: 'export'` serve `out/` with any static file server instead) |
 | `npm run lint` | `eslint .` |
 | `npm run typecheck` | `tsc --noEmit -p tsconfig.json` |
@@ -29,8 +29,8 @@ From the repo root the same scripts run through Turbo: `npm run dev`, `npm run b
 |---|---|
 | `/` | Landing page — hero, "How to Win" steps, CTAs into the funnel |
 | `/login` | Legacy route; immediately redirects to `/info` |
-| `/info` | Personal info form (name, phone, DOB, Myanmar NRC) → guest registration, stores the JWT |
-| `/survey` | One-question-at-a-time survey with a review screen → submit → `/spin` |
+| `/info` | Personal info form (name, phone, DOB, Myanmar NRC) → guest registration, stores the JWT and resume token |
+| `/survey` | One-question-at-a-time survey with a review screen → submit → `/spin`; answers/current question survive reloads |
 | `/spin` | Prize wheel; the server decides the reward (idempotency-keyed), win card shown on return |
 | `/delivery` | Shipping-address claim for rewards with `requiresDelivery` (`?reward=<userRewardId>`) |
 
@@ -38,7 +38,7 @@ From the repo root the same scripts run through Turbo: `npm run dev`, `npm run b
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `NEXT_PUBLIC_API_BASE` | API origin used by every `fetch` (see `app/lib/config.ts`) | `https://myanmarbeer.boom.com.mm/api` |
+| `NEXT_PUBLIC_API_BASE` | API origin used by every `fetch` (see `app/lib/config.ts`) | `/api` for production Pages builds |
 
 Conventions in this repo:
 
@@ -47,7 +47,7 @@ Conventions in this repo:
   `functions/api/[[route]].ts`, which mounts the full API under `/api/*` on Cloudflare Pages —
   this avoids the `*.workers.dev` API domain that many mobile/carrier networks cannot reach)
 
-Being `NEXT_PUBLIC_*`, the value is inlined at build time; change it before building, not after.
+Being `NEXT_PUBLIC_*`, the value is inlined at build time; change it before building, not after. The `prebuild`/`build` wrapper treats a normal build as production: an ignored `.env.local` localhost value is overridden with `/api`, and `postbuild` rejects localhost URLs or source maps in `out/`. Use `BUILD_TARGET=local` only when a local static artifact is intentional.
 
 ## Static-export constraints
 
@@ -63,6 +63,23 @@ Being `NEXT_PUBLIC_*`, the value is inlined at build time; change it before buil
   JWT in `localStorage`, and pages defer storage/query-string reads behind `useHydrated()` to
   stay hydration-safe.
 
+## Session recovery and progress
+
+- `POST /users/guest` must accept an optional `resumeToken` and return
+  `data.resumeToken` on every successful response. The client stores that value as
+  `survey_resume_token` and sends it with both the initial guest request and forced token
+  refreshes.
+- A `RESUME_TOKEN_REQUIRED` response clears the stale identity/session keys and leaves a
+  recovery notice for `/info`; in-progress survey answers are intentionally retained.
+- Survey progress is stored as the validated `survey_progress` snapshot in
+  `sessionStorage` (answers, current question id/index, and review mode). Polls use a
+  request sequence and submission epoch so late/error responses cannot replace newer
+  progress.
+- The API must expose the awarded rows through `GET /rewards/my` with non-null
+  `reward_id` and `user_reward_id`. The spin UI uses that endpoint when a prior award is
+  no longer present in the public `/rewards` catalogue. A successful spin envelope with
+  null/canceled identifiers is never rendered as a win.
+
 ## Internationalisation (EN / MY)
 
 - Copy lives in `app/lib/translations.ts` — two flat dictionaries, `en` and `my`, with the same
@@ -75,13 +92,36 @@ Being `NEXT_PUBLIC_*`, the value is inlined at build time; change it before buil
 
 ## Myanmar NRC data
 
-- **Validation/formatting helpers used by the UI:** `app/lib/nrc.ts`
-  (`normalizeMyanmarNumerals`, `validateSerial`, `validateNrc`, `formatNrcDisplay`,
-  `isNrcComplete`, `NRC_TYPES`, `parseNrc`). The widget is `app/components/NrcInput.tsx`
-  (Region 1–14, type letter, 6-digit serial — township is not collected).
-- **Full dataset:** `app/data/myanmar-nrc.ts` — 14 State/Regions with bilingual township lists
-  plus lookup/validation helpers (`getStateRegion`, `getTownships`, `validateNrcComponents`,
-  `formatNrc`). Currently not imported by any page (reference data for the NRC doc).
+- **Source of truth:** [`mm-nrc`](https://github.com/wai-lin/mm-nrc) (MIT) is a direct
+  dependency — it ships 15 states (1–14 + Naypyitaw `9*`), 471 townships with official
+  3-letter codes, and the citizenship type letters (N/E/P/T/Y/S).
+- **Adapter:** `app/data/myanmar-nrc.ts` derives `MYANMAR_NRC_DATA`, `NRC_TYPES` and the
+  lookup/validation helpers (`getStateRegion`, `getTownships`, `getTownship`,
+  `validateNrcComponents`, `formatNrc`) from the package at module load — do not hand-edit.
+- **Validation/formatting:** `app/lib/nrc.ts` (`normalizeMyanmarNumerals`, `validateSerial`,
+  `validateNrc`, `formatNrcDisplay`, `isNrcComplete`, `parseNrc`; `NRC_TYPES` re-exported).
+  All four components are required; the canonical display is `12/TAMANA(N)112233`.
+  Myanmar numerals are normalized to ASCII, serials must be exactly six digits, and the
+  upstream dataset is used to reject placeholder `-` codes and ambiguous duplicate township
+  codes.
+- **Widget:** `app/components/NrcInput.tsx` — Region → Township → Type → Serial (only
+  unambiguous, non-placeholder township codes are selectable; validation is derived from the
+  current controlled value). Used on `/info`.
+
+## API dependencies for the P1 client fixes
+
+The browser implementation is ready for the agreed contracts, but deployment still depends on
+API behavior outside this app:
+
+- `/users/guest` must validate `resumeToken`, rotate/return `data.resumeToken`, and return the
+  stable error code `RESUME_TOKEN_REQUIRED` when an existing phone cannot be resumed.
+- Authenticated survey/spin/delivery endpoints must return a parseable 401 (or
+  `UNAUTHORIZED`) envelope so the one forced-refresh retry can run.
+- `GET /rewards/my` must include the durable user-reward id, reward id/name/image, delivery
+  flag, and status; canceled rows should not be presented as awards.
+- Survey question `validation_rules` is JSON (for example `{"required":true,"maxLength":500}`);
+  the client applies `required`, length, min/max, and regex rules to text/rating/choice
+  answers before submission.
 
 ## Further documentation
 

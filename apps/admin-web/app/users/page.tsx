@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 
-import { API_BASE } from '../lib/api'
+import { API_BASE, adminHeaders, apiErrorMessage, readApiData, readApiPayload } from '../lib/api'
 import { exportToExcel, type ExcelColumn } from '../lib/excel'
 
 interface UserList {
@@ -58,7 +58,8 @@ interface RewardHistory {
 }
 
 const ITEMS_PER_PAGE = 50
-const MAX_LIMIT = 1000
+const EXPORT_PAGE_SIZE = 200
+const MAX_EXPORT_ROWS = 10000
 
 interface SurveyExportRow {
   id: string
@@ -477,7 +478,8 @@ function InfoItem({ label, value }: { label: string; value: string }) {
 export default function UsersPage() {
   const [users, setUsers] = useState<UserList[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const [listError, setListError] = useState('')
+  const [exportError, setExportError] = useState('')
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [page, setPage] = useState(0)
@@ -485,6 +487,7 @@ export default function UsersPage() {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
   const [showExportMenu, setShowExportMenu] = useState(false)
+  const listRequestId = useRef(0)
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -495,30 +498,24 @@ export default function UsersPage() {
   }, [search])
 
   const fetchUsers = useCallback(async () => {
+    const requestId = ++listRequestId.current
     setLoading(true)
-    setError('')
+    setListError('')
     try {
-      const token = localStorage.getItem('admin_token')
-      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
       const params = new URLSearchParams({
         limit: String(ITEMS_PER_PAGE),
         offset: String(page * ITEMS_PER_PAGE),
       })
-      if (debouncedSearch) {
-        params.set('search', debouncedSearch)
-      }
-      const res = await fetch(`${API_BASE}/admin/users?${params}`, { headers })
-      const data = await res.json()
-      if (data.success) {
-        setUsers(data.data.users || [])
-        setTotal(data.data.total || 0)
-      } else {
-        setError(data.message || 'Failed to load users')
-      }
-    } catch {
-      setError('Could not connect to the server')
+      if (debouncedSearch) params.set('search', debouncedSearch)
+      const response = await fetch(`${API_BASE}/admin/users?${params}`, { headers: adminHeaders() })
+      const data = await readApiData<{ users?: UserList[]; total?: number }>(response, 'Failed to load users')
+      if (requestId !== listRequestId.current) return
+      setUsers(data.users || [])
+      setTotal(data.total || 0)
+    } catch (error) {
+      if (requestId === listRequestId.current) setListError(error instanceof Error ? error.message : 'Could not connect to the server')
     } finally {
-      setLoading(false)
+      if (requestId === listRequestId.current) setLoading(false)
     }
   }, [page, debouncedSearch])
 
@@ -528,49 +525,61 @@ export default function UsersPage() {
     fetchUsers()
   }, [fetchUsers])
 
+  const fetchExportPages = useCallback(async <T,>(buildUrl: (offset: number) => string): Promise<T[]> => {
+    const rows: T[] = []
+    let offset = 0
+    while (rows.length < MAX_EXPORT_ROWS) {
+      const response = await fetch(buildUrl(offset), { headers: adminHeaders() })
+      const payload = await readApiPayload(response)
+      if (!response.ok || !payload || payload.success !== true) throw new Error(apiErrorMessage(payload, 'Export request failed'))
+      const data = payload.data as { data?: T[] } | T[] | undefined
+      const page = Array.isArray(data) ? data : data?.data || []
+      rows.push(...page)
+      if (page.length < EXPORT_PAGE_SIZE) break
+      offset += page.length
+    }
+    if (rows.length >= MAX_EXPORT_ROWS) throw new Error(`Export exceeds the ${MAX_EXPORT_ROWS.toLocaleString()} row safety limit`)
+    return rows
+  }, [])
+
   const exportSurveys = useCallback(async () => {
     setExporting(true)
-    setError('')
+    setExportError('')
     try {
-      const token = localStorage.getItem('admin_token')
-      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
-      const res = await fetch(`${API_BASE}/admin/surveys/export`, { headers })
-      const data = await res.json()
-      if (!data.success) {
-        setError(data.message || 'Failed to export surveys')
-        return
-      }
-      const rows: SurveyExportRow[] = data.data.data || []
+      const rows = await fetchExportPages<SurveyExportRow>((offset) => {
+        const params = new URLSearchParams({ limit: String(EXPORT_PAGE_SIZE), offset: String(offset) })
+        return `${API_BASE}/admin/surveys/export?${params}`
+      })
       const stamp = new Date().toISOString().slice(0, 10)
       exportToExcel(`survey-details-${stamp}.xls`, 'Survey Details', surveyExportColumns, rows)
-    } catch {
-      setError('Could not connect to the server')
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : 'Could not connect to the server')
     } finally {
       setExporting(false)
     }
-  }, [])
+  }, [fetchExportPages])
 
   const exportUserSurveys = useCallback(async (days: number, sortBy: 'created_at' | 'completed_at') => {
     setExporting(true)
-    setError('')
+    setExportError('')
     try {
-      const token = localStorage.getItem('admin_token')
-      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
-      const res = await fetch(`${API_BASE}/admin/users/export?days=${days}&sortBy=${sortBy}&limit=${MAX_LIMIT}`, { headers })
-      const data = await res.json()
-      if (!data.success) {
-        setError(data.message || 'Failed to export user surveys')
-        return
-      }
-      const rows: UserSurveyExportRow[] = data.data.data || []
+      const rows = await fetchExportPages<UserSurveyExportRow>((offset) => {
+        const params = new URLSearchParams({
+          days: String(days),
+          sortBy,
+          limit: String(EXPORT_PAGE_SIZE),
+          offset: String(offset),
+        })
+        return `${API_BASE}/admin/users/export?${params}`
+      })
       const stamp = new Date().toISOString().slice(0, 10)
       exportToExcel(`user-surveys-${days}d-${stamp}.xls`, 'User Surveys', userSurveyExportColumns, rows)
-    } catch {
-      setError('Could not connect to the server')
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : 'Could not connect to the server')
     } finally {
       setExporting(false)
     }
-  }, [])
+  }, [fetchExportPages])
 
   const totalPages = Math.ceil(total / ITEMS_PER_PAGE)
 
@@ -684,16 +693,27 @@ export default function UsersPage() {
         </p>
       </div>
 
-      {/* Error */}
-      {!loading && error && <ErrorState message={error} onRetry={fetchUsers} />}
+      {listError && (
+        <div role="alert" className="flex flex-col gap-2 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 sm:flex-row sm:items-center sm:justify-between">
+          <span>{listError}</span>
+          <button type="button" onClick={() => void fetchUsers()} className="font-semibold underline">Retry</button>
+        </div>
+      )}
+      {exportError && (
+        <div role="alert" className="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+          <span>Export failed: {exportError}</span>
+          <button type="button" onClick={() => setExportError('')} className="ml-4 font-semibold underline">Dismiss</button>
+        </div>
+      )}
 
-      {/* Empty */}
-      {!loading && !error && users.length === 0 && (
+      {/* Empty / initial error only when no table data is available to preserve. */}
+      {!loading && listError && users.length === 0 && <ErrorState message={listError} onRetry={() => void fetchUsers()} />}
+      {!loading && !listError && users.length === 0 && (
         <EmptyState message={debouncedSearch ? 'No users found' : 'No users yet'} />
       )}
 
-      {/* Table */}
-      {!loading && !error && users.length > 0 && (
+      {/* Table remains visible when a later refresh or export request fails. */}
+      {users.length > 0 && (
         <div className="card overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

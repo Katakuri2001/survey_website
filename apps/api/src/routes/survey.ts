@@ -3,7 +3,7 @@ import type { AppContext } from '../types';
 import { ErrorCode, failure, isUniqueViolation, logEvent, success } from '../lib/http';
 import { authMiddleware } from '../lib/auth';
 import { enforceRateLimit, maintenanceResponse, RATE_POLICIES } from '../lib/security';
-import { isAnswerPresent } from '../lib/survey';
+import { conditionMatches, loadSurveyConfig, validateQuestionAnswer } from '../lib/survey';
 import { generateId } from '../lib/ids';
 import { readJson, surveySubmitSchema } from '../lib/validation';
 
@@ -28,15 +28,26 @@ surveyRoutes.post('/survey/submit', authMiddleware, async (c) => {
 
   const db = c.env.survey_db;
 
-  const version = await db
-    .prepare(
-      `SELECT id, product_id, title FROM survey_versions
-       WHERE is_active = 1
-       ORDER BY created_at DESC LIMIT 1`
-    )
-    .first<VersionRow>();
+  const version = body.surveyVersionId
+    ? await db
+        .prepare(
+          `SELECT id, product_id, title FROM survey_versions
+           WHERE id = ? AND is_active = 1 LIMIT 1`
+        )
+        .bind(body.surveyVersionId)
+        .first<VersionRow>()
+    : await db
+        .prepare(
+          `SELECT id, product_id, title FROM survey_versions
+           WHERE is_active = 1
+           ORDER BY created_at DESC LIMIT 1`
+        )
+        .first<VersionRow>();
 
   if (!version) return failure(c, ErrorCode.NOT_FOUND, 'No active survey found');
+  if (body.productId && body.productId !== version.product_id) {
+    return failure(c, ErrorCode.VALIDATION_FAILED, 'Survey version does not belong to the selected product', 422);
+  }
   const productId = version.product_id;
 
   // Idempotency: replaying a known submission request returns the original id.
@@ -60,21 +71,43 @@ surveyRoutes.post('/survey/submit', authMiddleware, async (c) => {
     return success(c, { responseId: existing.id, idempotent: true, message: 'Survey already submitted' });
   }
 
-  // Validate required questions against the live survey definition.
-  const questions = await db
-    .prepare(
-      `SELECT id, question_type, is_required, question_text FROM survey_questions
-       WHERE survey_version_id = ? AND is_active = 1`
-    )
-    .bind(version.id)
-    .all<{ id: string; question_type: string; is_required: number; question_text: string }>();
+  // Validate against the exact active version and its options/rules.
+  const config = await loadSurveyConfig(db, 'en', version.id);
+  if (!config.questions.length) {
+    return failure(c, ErrorCode.VALIDATION_FAILED, 'The active survey has no questions', 422);
+  }
+  const questionMap = new Map(config.questions.map((question) => [question.id, question]));
+  const answersByQuestion = new Map<string, unknown>();
+  for (const answer of body.answers) {
+    if (answersByQuestion.has(answer.questionId)) {
+      return failure(c, ErrorCode.VALIDATION_FAILED, `Duplicate answer for question: ${answer.questionId}`, 422);
+    }
+    const question = questionMap.get(answer.questionId);
+    if (!question) {
+      return failure(c, ErrorCode.VALIDATION_FAILED, `Answer references an unknown question: ${answer.questionId}`, 422);
+    }
+    answersByQuestion.set(answer.questionId, answer.value);
+  }
 
-  const answersByQuestion = new Map(body.answers.map((answer) => [answer.questionId, answer]));
-  for (const question of questions.results || []) {
-    if (!question.is_required) continue;
-    const answer = answersByQuestion.get(question.id);
-    if (!isAnswerPresent(question.question_type, answer?.value)) {
+  const visibleAnswers: Array<{ questionId: string; value: unknown }> = [];
+  for (const question of config.questions) {
+    const visible = question.conditions.every((condition) => conditionMatches(condition, answersByQuestion));
+    const answer = body.answers.find((candidate) => candidate.questionId === question.id);
+    if (!visible) {
+      if (answer) {
+        return failure(c, ErrorCode.VALIDATION_FAILED, `Answer references a hidden question: ${question.id}`, 422);
+      }
+      continue;
+    }
+    if (question.is_required && !answer) {
       return failure(c, ErrorCode.VALIDATION_FAILED, `Missing required answer for: ${question.question_text}`, 422);
+    }
+    if (answer) {
+      const validationError = validateQuestionAnswer(question, answer.value);
+      if (validationError) {
+        return failure(c, ErrorCode.VALIDATION_FAILED, `${question.question_text}: ${validationError}`, 422);
+      }
+      visibleAnswers.push({ questionId: question.id, value: answer.value });
     }
   }
 
@@ -98,23 +131,21 @@ surveyRoutes.post('/survey/submit', authMiddleware, async (c) => {
       ),
   ];
 
-  for (const answer of body.answers) {
+  for (const answer of visibleAnswers) {
+    const question = questionMap.get(answer.questionId);
+    if (!question) continue;
     let answerText: string | null = null;
     let answerNumber: number | null = null;
     let answerChoice: string | null = null;
     let answerRating: number | null = null;
 
-    if (answer.type === 'text' || answer.type === 'long_text') {
+    if (question.question_type === 'text' || question.question_type === 'long_text') {
       answerText = String(answer.value);
-    } else if (answer.type === 'number' || answer.type === 'rating') {
-      const numeric = Number(answer.value);
-      answerNumber = Number.isNaN(numeric) ? null : numeric;
-      answerRating = answer.type === 'rating' ? answerNumber : null;
-    } else if (['single_choice', 'multiple_choice', 'yes_no', 'dropdown'].includes(answer.type || '')) {
-      answerChoice = Array.isArray(answer.value) ? answer.value.join(',') : String(answer.value);
+    } else if (question.question_type === 'number' || question.question_type === 'rating') {
+      answerNumber = Number(answer.value);
+      answerRating = question.question_type === 'rating' ? answerNumber : null;
     } else {
-      // Unknown type: persist the raw text rather than silently dropping it.
-      answerText = Array.isArray(answer.value) ? answer.value.join(',') : String(answer.value);
+      answerChoice = Array.isArray(answer.value) ? answer.value.join(',') : String(answer.value);
     }
 
     statements.push(

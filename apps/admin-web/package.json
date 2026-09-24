@@ -4,7 +4,9 @@
   "type": "module",
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "next build",
+    "prebuild": "node ../../scripts/production-env-guard.mjs",
+    "build": "node ../../scripts/build-web.mjs",
+    "postbuild": "node ../../scripts/check-artifacts.mjs out",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.json"

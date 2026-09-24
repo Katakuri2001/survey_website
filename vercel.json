@@ -1,25 +1,14 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
-  "buildCommand": "npm run build",
-  "devCommand": "npm run dev",
-  "installCommand": "npm install",
+  "buildCommand": "npm run build --workspace=apps/survey-web",
+  "devCommand": "npm run dev --workspace=apps/survey-web",
+  "installCommand": "npm ci",
   "framework": "nextjs",
-  "outputDirectory": "apps/survey-web/.next",
+  "outputDirectory": "apps/survey-web/out",
   "github": {
-    "enabled": true,
-    "autoAlias": true,
-    "silent": false
+    "enabled": false
   },
-  "projects": {
-    "survey-website": {
-      "name": "survey-website",
-      "directory": "apps/survey-web",
-      "framework": "nextjs"
-    },
-    "survey-admin": {
-      "name": "survey-admin",
-      "directory": "apps/admin-web",
-      "framework": "nextjs"
-    }
-  }
+  "cleanUrls": true,
+  "trailingSlash": true
 }
