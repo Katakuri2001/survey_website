@@ -1,0 +1,26 @@
+{
+  "name": "projects/alcohol-survey-platform",
+  "projectId": "alcohol-survey-platform",
+  "title": "Myanmar Beer Survey & Rewards",
+  "visibility": "PRIVATE",
+  "designTheme": {
+    "colorMode": "DARK",
+    "font": "Poppins",
+    "roundness": "ROUND_EIGHT",
+    "customColor": "#E2C97F",
+    "saturation": 3
+  },
+  "screens": {
+    "spin": {
+      "id": "spin-wheel-enhanced",
+      "sourceScreen": "projects/alcohol-survey-platform/screens/spin-wheel-enhanced",
+      "x": 0,
+      "y": 0,
+      "width": 390,
+      "height": 1249
+    }
+  },
+  "metadata": {
+    "userRole": "OWNER"
+  }
+}
