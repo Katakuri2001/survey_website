@@ -84,17 +84,28 @@ export default function Home() {
             </Link>
           </div>
 
-          <div className="mt-6 sm:mt-8 text-center">
-            <span className="text-[10px] tracking-[0.3em] uppercase text-fg-muted">{t('scrollHint')}</span>
-            <div className="mx-auto mt-2 w-5 h-8 rounded-full border border-white/20 flex justify-center pt-1.5">
-              <div className="w-1 h-2 rounded-full bg-gold animate-float" />
-            </div>
-          </div>
+          <button
+            type="button"
+            aria-label={t('scrollHint')}
+            onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+            className="group mx-auto mt-6 sm:mt-8 block text-center cursor-pointer rounded-lg transition-opacity hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 focus-visible:ring-offset-2 focus-visible:ring-offset-navy"
+          >
+            <span className="text-[10px] tracking-[0.3em] uppercase text-fg-muted transition-colors group-hover:text-gold">{t('scrollHint')}</span>
+            <svg
+              className="block mx-auto mt-2 w-6 h-6 text-gold animate-float transition-colors group-hover:text-white"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19.5 13.5 12 21m0 0-7.5-7.5M12 21V3" />
+            </svg>
+          </button>
         </div>
       </section>
 
       {/* ============================ HOW IT WORKS ============================ */}
-      <section className="relative mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 pb-16 sm:pb-20 md:pb-28">
+      <section id="how-it-works" className="relative mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 pb-16 sm:pb-20 md:pb-28">
         <div className="text-center mb-10 sm:mb-14">
           <span className="text-[10px] sm:text-[11px] tracking-[0.3em] uppercase text-gold">{t('howItWorks').toUpperCase()}</span>
           <h2 className="font-display text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mt-2 sm:mt-3 text-white">{t('howItWorks')}</h2>
@@ -104,7 +115,6 @@ export default function Home() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           {steps.map((s) => (
             <div key={s.n} className="relative rounded-2xl sm:rounded-3xl bg-brand-emerald/40 border border-white/[0.07] p-6 sm:p-8 text-center overflow-hidden">
-              <span className="absolute -top-3 right-3 sm:-top-4 sm:-right-4 font-display text-4xl sm:text-5xl md:text-6xl font-extrabold text-white/[0.03]">{s.n}</span>
               <div className="mx-auto mb-4 sm:mb-5 w-12 sm:w-14 h-12 sm:h-14 rounded-xl sm:rounded-2xl bg-gold/15 border border-gold/30 flex items-center justify-center gold-border">
                 <svg className="w-6 h-6 sm:w-7 sm:h-7 text-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d={s.icon} />

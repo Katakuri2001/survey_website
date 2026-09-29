@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev --turbopack -p 3001",
     "prebuild": "node ../../scripts/production-env-guard.mjs",
     "build": "node ../../scripts/build-web.mjs",
     "postbuild": "node ../../scripts/check-artifacts.mjs out",
