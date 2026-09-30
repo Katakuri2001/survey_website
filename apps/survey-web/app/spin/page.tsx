@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { useLanguage } from '../context/I18nProvider'
@@ -260,9 +260,9 @@ export default function SpinPage() {
   useEffect(() => {
     if (!hydrated) return
     let cancelled = false
-    setSurveyCompleted(Boolean(sessionGet('survey_response_id')))
     getValidToken().then(token => {
       if (cancelled) return
+      setSurveyCompleted(Boolean(sessionGet('survey_response_id')))
       if (!token) {
         setLoading(false)
         router.replace('/info')
