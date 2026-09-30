@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useLanguage } from '../context/LanguageContext'
 import Header from '../components/Header'
-import { API_BASE, getValidToken, surveyHeaders } from '../lib/api'
+import { API_BASE, clearIdentitySession, getValidToken, markResumeTokenRecovery, surveyHeaders } from '../lib/api'
 import { useHydrated } from '../lib/useHydrated'
 
 interface ProfileDraft {
@@ -31,7 +31,11 @@ function resolveRewardId(): string {
   } catch {
     // ignore malformed query
   }
-  return sessionStorage.getItem('user_reward_id') || ''
+  try {
+    return window.sessionStorage.getItem('user_reward_id') || ''
+  } catch {
+    return ''
+  }
 }
 
 export default function DeliveryPage() {
@@ -111,14 +115,31 @@ export default function DeliveryPage() {
         if (refreshed) {
           token = refreshed
           res = await send(token)
+        } else {
+          clearIdentitySession()
+          router.replace('/info')
+          return
         }
       }
 
       const data = await res.json()
+      if (res.status === 401 || data?.error?.code === 'UNAUTHORIZED') {
+        clearIdentitySession()
+        router.replace('/info')
+        return
+      }
+      if (data?.error?.code === 'RESUME_TOKEN_REQUIRED') {
+        markResumeTokenRecovery()
+        clearIdentitySession()
+        router.replace('/info')
+        return
+      }
       if (data.success) {
-        if (typeof window !== 'undefined') {
-          sessionStorage.removeItem('user_reward_id')
-          sessionStorage.removeItem('reward_name')
+        try {
+          window.sessionStorage.removeItem('user_reward_id')
+          window.sessionStorage.removeItem('reward_name')
+        } catch {
+          // The submitted state is still authoritative in memory.
         }
         setSubmitted(true)
       } else if (data.error?.code === 'NOT_FOUND') {

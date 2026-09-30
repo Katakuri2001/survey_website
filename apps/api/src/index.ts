@@ -41,7 +41,7 @@ export const app = new Hono<AppContext>();
 
 app.use('*', async (c, next) => {
   c.set('requestId', resolveRequestId(c.req.header('x-request-id')));
-  c.set('clientIp', clientIp(c));
+  c.set('clientIp', clientIp(c, c.env.ENVIRONMENT || 'production'));
   c.set('startedAt', Date.now());
   await next();
 });
@@ -167,26 +167,71 @@ app.onError((err, c) => {
 // ------------------------------------------------------------------
 
 /**
- * Cancels spins that were left in-flight ('PENDING') by a crash between the
- * inventory reservation and the final batch. This lets the user retry instead
- * of being permanently stuck on `SPIN_IN_PROGRESS`. Only 'PENDING' is targeted:
- * 'PROCESSING' is a real delivery status set by admins, so it must never be
- * cancelled here. Stock reserved by such a spin is not restored (the reserved
- * reward is not recorded until finalisation); the window is the few
- * milliseconds of the final `db.batch()`.
+ * Cleans up stale in-flight spins. New reservations are recorded on the reward
+ * row itself, so cleanup can restore a crashed reservation before cancelling
+ * the spin. Legacy PENDING rows without a reservation are cancelled without a
+ * blind inventory increment.
  */
 async function runScheduled(env: Bindings): Promise<void> {
   try {
-    const result = await env.survey_db
+    const cutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+    const stale = await env.survey_db
       .prepare(
-        `UPDATE reward_spins
-            SET status = 'CANCELLED', updated_at = ?
-          WHERE status = 'PENDING'
-            AND updated_at < ?`
+        `SELECT rs.id AS spin_id, r.id AS reward_id
+         FROM reward_spins rs
+         JOIN rewards r ON r.reservation_spin_id = rs.id
+         WHERE rs.status = 'PENDING' AND rs.updated_at < ?`
       )
-      .bind(new Date().toISOString(), new Date(Date.now() - 15 * 60 * 1000).toISOString())
+      .bind(cutoff)
+      .all<{ spin_id: string; reward_id: string }>();
+    let restored = 0;
+    for (const row of stale.results || []) {
+      const now = new Date().toISOString();
+      await env.survey_db.batch([
+        env.survey_db
+          .prepare(
+            `UPDATE rewards
+             SET remaining_quantity = remaining_quantity + 1,
+                 status = CASE
+                   WHEN status = 'PAUSED' THEN 'PAUSED'
+                   WHEN remaining_quantity + 1 <= 0 THEN 'EXHAUSTED'
+                   WHEN remaining_quantity + 1 <= low_stock_threshold THEN 'LOW_STOCK'
+                   ELSE 'AVAILABLE'
+                 END,
+                 reservation_spin_id = NULL,
+                 updated_at = ?
+             WHERE id = ? AND reservation_spin_id = ?`
+          )
+          .bind(now, row.reward_id, row.spin_id),
+        env.survey_db
+          .prepare(
+            `UPDATE reward_spins SET status = 'CANCELLED', updated_at = ?
+             WHERE id = ? AND status = 'PENDING'`
+          )
+          .bind(now, row.spin_id),
+        env.survey_db
+          .prepare(
+            `INSERT INTO reward_inventory_transactions
+               (id, reward_id, type, quantity, reference_type, reference_id, notes, created_by, created_at)
+             SELECT ?, ?, 'CANCELLATION_RETURN', 1, 'spin_cleanup', ?, 'Stale spin reservation restored', NULL, ?
+             WHERE EXISTS (SELECT 1 FROM reward_spins WHERE id = ? AND status = 'CANCELLED')`
+          )
+          .bind(crypto.randomUUID(), row.reward_id, row.spin_id, now, row.spin_id),
+      ]);
+      restored += 1;
+    }
+
+    const legacy = await env.survey_db
+      .prepare(
+        `UPDATE reward_spins SET status = 'CANCELLED', updated_at = ?
+         WHERE status = 'PENDING' AND updated_at < ?
+           AND NOT EXISTS (
+             SELECT 1 FROM rewards r WHERE r.reservation_spin_id = reward_spins.id
+           )`
+      )
+      .bind(new Date().toISOString(), cutoff)
       .run();
-    logEvent('info', 'scheduled_stale_spin_cleanup', { cancelled: result.meta.changes });
+    logEvent('info', 'scheduled_stale_spin_cleanup', { restored, legacyCancelled: legacy.meta.changes });
   } catch (error) {
     logEvent('error', 'scheduled_cleanup_failed', { error: describeError(error) });
   }

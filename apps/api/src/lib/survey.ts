@@ -152,6 +152,81 @@ export function isAnswerPresent(type: string | undefined, value: unknown): boole
   return String(value).trim().length > 0;
 }
 
+export function parseValidationRules(raw: string | null): Record<string, unknown> {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Validate a value against the live question definition, not client metadata. */
+export function validateQuestionAnswer(question: SurveyQuestion, value: unknown): string | null {
+  if (!isAnswerPresent(question.question_type, value)) return 'Answer is required';
+  const rules = parseValidationRules(question.validation_rules);
+  const type = question.question_type;
+  if (type === 'rating' || type === 'number') {
+    const numeric = Number(value);
+    const min = typeof rules.min === 'number' ? rules.min : type === 'rating' ? 1 : undefined;
+    const max = typeof rules.max === 'number' ? rules.max : type === 'rating' ? 10 : undefined;
+    if (!Number.isFinite(numeric)) return 'Answer must be a finite number';
+    if (min !== undefined && numeric < min) return `Answer must be at least ${min}`;
+    if (max !== undefined && numeric > max) return `Answer must be at most ${max}`;
+    return null;
+  }
+  if (type === 'text' || type === 'long_text') {
+    const maxLength = typeof rules.maxLength === 'number' ? rules.maxLength : 2000;
+    if (String(value).length > maxLength) return `Answer must be at most ${maxLength} characters`;
+    return null;
+  }
+  if (type === 'yes_no') {
+    return value === 'yes' || value === 'no' ? null : 'Answer must be yes or no';
+  }
+  const allowed = new Set(
+    question.options
+      .map((option) => option.option_value ?? option.option_text)
+      .filter((value): value is string => Boolean(value))
+  );
+  if (type === 'multiple_choice') {
+    if (!Array.isArray(value) || value.length === 0) return 'Choose at least one option';
+    if (new Set(value).size !== value.length) return 'Duplicate choices are not allowed';
+    return value.every((choice) => allowed.has(String(choice))) ? null : 'Answer contains an unknown option';
+  }
+  if (type === 'single_choice' || type === 'dropdown') {
+    return allowed.has(String(value)) ? null : 'Answer contains an unknown option';
+  }
+  return null;
+}
+
+export function conditionMatches(
+  condition: SurveyCondition,
+  answers: Map<string, unknown>
+): boolean {
+  const value = answers.get(condition.depends_on_question_id);
+  const answered = isAnswerPresent(undefined, value);
+  if (condition.condition_type === 'answered') return answered;
+  if (condition.condition_type === 'not_answered') return !answered;
+  if (!answered) return false;
+  const actualValues: string[] = Array.isArray(value) ? value.map(String) : [String(value)];
+  const expected = condition.condition_value;
+  switch (condition.condition_type) {
+    case 'equals':
+      return actualValues.includes(expected);
+    case 'not_equals':
+      return !actualValues.includes(expected);
+    case 'contains':
+      return actualValues.some((item: string) => item.includes(expected));
+    case 'greater_than':
+      return Number(actualValues[0]) > Number(expected);
+    case 'less_than':
+      return Number(actualValues[0]) < Number(expected);
+    default:
+      return false;
+  }
+}
+
 /**
  * Weighted selection across eligible rewards. `winning_ratio` values are
  * treated as fixed percentages and the remaining probability mass is shared by

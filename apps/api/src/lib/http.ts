@@ -15,6 +15,9 @@ export const ErrorCode = {
   ALREADY_SUBMITTED: 'ALREADY_SUBMITTED',
   ALREADY_SPUN: 'ALREADY_SPUN',
   SPIN_IN_PROGRESS: 'SPIN_IN_PROGRESS',
+  RESUME_TOKEN_REQUIRED: 'RESUME_TOKEN_REQUIRED',
+  SURVEY_REQUIRED: 'SURVEY_REQUIRED',
+  INVALID_STATE_TRANSITION: 'INVALID_STATE_TRANSITION',
   REWARD_UNAVAILABLE: 'REWARD_UNAVAILABLE',
   FEATURE_DISABLED: 'FEATURE_DISABLED',
   MAINTENANCE: 'MAINTENANCE',
@@ -35,6 +38,9 @@ const STATUS_BY_CODE: Record<string, number> = {
   [ErrorCode.ALREADY_SUBMITTED]: 409,
   [ErrorCode.ALREADY_SPUN]: 409,
   [ErrorCode.SPIN_IN_PROGRESS]: 409,
+  [ErrorCode.RESUME_TOKEN_REQUIRED]: 409,
+  [ErrorCode.SURVEY_REQUIRED]: 409,
+  [ErrorCode.INVALID_STATE_TRANSITION]: 409,
   [ErrorCode.REWARD_UNAVAILABLE]: 409,
   [ErrorCode.FEATURE_DISABLED]: 409,
   [ErrorCode.MAINTENANCE]: 503,
@@ -95,13 +101,17 @@ export function resolveRequestId(header: string | undefined): string {
   return crypto.randomUUID();
 }
 
-export function clientIp(c: Context<AppContext>): string {
-  return (
-    c.req.header('cf-connecting-ip') ||
-    c.req.header('x-real-ip') ||
-    (c.req.header('x-forwarded-for') || '').split(',')[0]?.trim() ||
-    'unknown'
-  );
+export function clientIp(c: Context<AppContext>, environment = 'production'): string {
+  const cloudflareIp = c.req.header('cf-connecting-ip');
+  if (cloudflareIp) return cloudflareIp;
+  if (environment !== 'production') {
+    return (
+      c.req.header('x-real-ip') ||
+      (c.req.header('x-forwarded-for') || '').split(',')[0]?.trim() ||
+      'unknown'
+    );
+  }
+  return 'unknown';
 }
 
 const SECURITY_HEADERS: Record<string, string> = {

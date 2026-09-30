@@ -4,8 +4,8 @@ Two complementary tools are included:
 
 | Tool | What it proves | Run against |
 |---|---|---|
-| `tests/hardening.test.mjs` | Correctness under concurrency: idempotency, single-award spin, auth boundaries, envelopes. | Local or staging. |
-| `loadtest/k6-spin.js` | Throughput/latency under sustained concurrent load. | **Staging only.** |
+| `tests/hardening.test.mjs` | Correctness under concurrency: idempotency, single-award spin, auth boundaries, envelopes. | Local or explicitly named staging. |
+| `loadtest/k6-spin.js` | Throughput/latency under sustained concurrent load. | Local or **staging only**; production is refused. |
 
 > Never point a raw load test at production. Use a staging environment with the
 > same D1 database size/schema and the same feature flags.
@@ -16,7 +16,7 @@ Start the API (with a migrated and seeded local D1):
 
 ```bash
 cd apps/api
-npx wrangler d1 execute survey-db --local --file=migrations/0001_initial.sql
+npx wrangler d1 execute survey-db --config ../../wrangler.toml --env development --local --file=../../migrations/0001_initial.sql
 # …apply each migration in order (or use your normal migration flow)…
 npm run dev
 ```
@@ -41,7 +41,10 @@ It asserts:
 - delivery submission is idempotent;
 - ten parallel guest creations for the same phone resolve to a single user id.
 
-Exit code is `0` only when every assertion passes.
+Exit code is `0` only when every assertion passes. Both live suites refuse
+non-local/non-staging hosts before making a request. The optional destructive
+stock-contention branch requires a second acknowledgement:
+`TEST_STOCK_CONTENTION=1 ALLOW_DESTRUCTIVE_TESTS=1 API_BASE=http://localhost:8787 npm run test:hardening`.
 
 ## 2. k6 load test
 
@@ -61,12 +64,20 @@ Environment variables:
 | `USERS` | `500` | Unique users seeded in `setup()` and driven through the flow. |
 | `HOLD` | `60` | Seconds at peak load. |
 | `RAMP` | `30` | Seconds to ramp to peak. |
+| `REQUEST_TIMEOUT` | `30s` | Per-request timeout used by setup and the workload. |
+| `SETUP_TIMEOUT` | `30m` | Maximum time allowed for the sequential seed phase. |
 
 The script seeds one guest + one completed survey per user during `setup()`,
 then each virtual user repeatedly calls `GET /public/config` (the app's poll
-path) and `POST /rewards/spin`. A spin that returns a controlled rejection
-(`ALREADY_SPUN`, `SPIN_IN_PROGRESS`, `RATE_LIMITED`, `NO_REWARDS_AVAILABLE`) is
-treated as a pass; only unexpected statuses fail.
+path) and `POST /rewards/spin`. Setup fails on any non-success status, missing
+survey questions, missing token, or failed submission; an empty seed is an
+error rather than a zero-workload pass. A spin that returns a controlled
+rejection (`ALREADY_SPUN`, `SPIN_IN_PROGRESS`, `RATE_LIMITED`,
+`NO_REWARDS_AVAILABLE`) is treated as a pass; unexpected statuses fail.
+
+The k6 target is checked during initialization. Only loopback/localhost or a
+hostname containing `staging` or `stage` is accepted;
+production and arbitrary hosts are refused before any request is sent.
 
 Thresholds enforced by k6:
 

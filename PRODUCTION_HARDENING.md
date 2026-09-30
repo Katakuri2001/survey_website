@@ -16,7 +16,8 @@ for the underlying analysis and [`MONITORING.md`](./MONITORING.md) /
 2. **Set `JWT_SECRET` as a secret** on both Pages projects (and the API worker).
    Without it, authentication is disabled in production by design.
 3. Deploy the API worker and both Pages apps. Run the hardening smoke test
-   against the API — `API_BASE=http://localhost:8788/api npm run test:hardening`.
+   against a local or explicitly named staging API — `API_BASE=http://localhost:8787 npm run test:hardening`.
+   The script refuses production and arbitrary hosts before sending a request.
 4. **Bot protection (Turnstile) is not part of this build** — the widget,
    server verifier and its config were removed, so the survey journey is
    challenge-free by construction. Optional bindings are listed below.
@@ -36,15 +37,15 @@ match the live schema first, then apply only the pending migration:
 
 ```bash
 # 1. Rollback point: D1 time-travel bookmark (primary), plus an export if reachable.
-npx wrangler d1 time-travel info survey-db
-npx wrangler d1 export survey-db --remote --output survey-db-backup.sql
+npx wrangler d1 time-travel info survey-db --config wrangler.toml --env production
+npx wrangler d1 export survey-db --config wrangler.toml --env production --remote --output survey-db-backup.sql
 
 # 2. Insert rows for the migrations the live schema already reflects, e.g.
 #    INSERT INTO d1_migrations (name) VALUES ('0002_...sql'), ... ;
 #    then verify `SELECT name FROM d1_migrations ORDER BY id`.
 
 # 3. Apply — this now runs only 0014.
-npx wrangler d1 migrations apply survey-db --remote
+npx wrangler d1 migrations apply survey-db --config wrangler.toml --env production --remote
 ```
 
 Some networks block the `d1 export` and `d1 execute --file` endpoints
@@ -52,7 +53,9 @@ Some networks block the `d1 export` and `d1 execute --file` endpoints
 bookmark is the primary rollback for D1.
 
 > The smoke test sends a synthetic `CF-Connecting-IP` only when run against
-> `localhost`, so repeated local runs get a fresh rate-limit budget. Cloudflare's
+> `localhost`, so repeated local runs get a fresh rate-limit budget. The optional
+> stock-contention branch is destructive and additionally requires
+> `ALLOW_DESTRUCTIVE_TESTS=1`; never use it against production. Cloudflare's
 > edge rejects a client-supplied `CF-Connecting-IP` (error 1000 / HTTP 403), so
 > the header is omitted for a deployed API.
 
@@ -145,8 +148,8 @@ bookmark is the primary rollback for D1.
 Set secrets per project (run from the repo root):
 
 ```bash
-# API worker + cron (root wrangler.toml)
-npx wrangler secret put JWT_SECRET
+# API worker + cron (explicit production target)
+npx wrangler secret put JWT_SECRET --config wrangler.toml --env production
 
 # Pages projects (each serves its own /api/* Function)
 npx wrangler pages secret put JWT_SECRET --project-name alcohol-survey
@@ -159,11 +162,11 @@ During an incident an operator can throttle the event without a deploy:
 
 ```bash
 # Pause the public write paths (survey submit, spin, delivery, guest signup)
-npx wrangler d1 execute survey-db --remote --command \
+npx wrangler d1 execute survey-db --config wrangler.toml --env production --remote --command \
   "UPDATE settings SET value='1' WHERE key='maintenance_mode'"
 
 # Close just the survey or the spin
-npx wrangler d1 execute survey-db --remote --command \
+npx wrangler d1 execute survey-db --config wrangler.toml --env production --remote --command \
   "UPDATE settings SET value='0' WHERE key='survey_enabled'"
 ```
 

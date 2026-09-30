@@ -234,7 +234,12 @@ publicRoutes.get('/survey/questions', async (c) => {
       throw new Error('NO_ACTIVE_SURVEY');
     }
     return config;
-  }).catch(() => failure(c, ErrorCode.NOT_FOUND, 'No active survey found'));
+  }).catch((error: unknown) => {
+    if (error instanceof Error && error.message === 'NO_ACTIVE_SURVEY') {
+      return failure(c, ErrorCode.NOT_FOUND, 'No active survey found');
+    }
+    throw error;
+  });
 });
 
 // Active survey for one product (legacy).
@@ -257,5 +262,10 @@ publicRoutes.get('/survey/questions/:productId', async (c) => {
       if (!version) throw new Error('NO_ACTIVE_SURVEY');
       return loadSurveyConfig(c.env.survey_db, language, version.id);
     }
-  ).catch(() => failure(c, ErrorCode.NOT_FOUND, 'No active survey found'));
+  ).catch((error: unknown) => {
+    if (error instanceof Error && error.message === 'NO_ACTIVE_SURVEY') {
+      return failure(c, ErrorCode.NOT_FOUND, 'No active survey found');
+    }
+    throw error;
+  });
 });

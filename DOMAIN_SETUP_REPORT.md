@@ -1,9 +1,15 @@
 # Domain Setup Report: myanmarbeer.com.mm for Survey Web & Admin Dashboard
 
+> **Historical planning note:** the current supported topology is the one in
+> the root `README.md`: `alcohol-survey` and `alcohol-survey-admin` are two
+> standalone Cloudflare Pages projects, and the admin app is not mounted under
+> `/admin`. The sub-path proposal below is retained for context only; do not
+> use its old project names or deployment commands.
+
 ## Current Architecture
 
-- **survey-web** (`apps/survey-web`): Next.js 15, static export (`output: 'export'`), routes: `/`, `/survey`, `/spin`, `/info`, `/login`
-- **admin-web** (`apps/admin-web`): Next.js 15, static export (`output: 'export'`), routes: `/`, `/dashboard`, `/surveys`, `/products`, `/analytics`, `/rewards`, `/settings`, `/users`, `/login`
+- **survey-web** (`apps/survey-web`): Next.js 16, static export (`output: 'export'`), routes: `/`, `/survey`, `/spin`, `/info`, `/login`, `/delivery`
+- **admin-web** (`apps/admin-web`): Next.js 16, static export (`output: 'export'`), routes: `/`, `/dashboard`, `/surveys`, `/products`, `/analytics`, `/rewards`, `/settings`, `/users`, `/audit`, `/login`
 - **api** (`apps/api`): Hono on Cloudflare Workers with D1 database
 
 ## Recommended Domain Structure
@@ -49,9 +55,10 @@ Use **Cloudflare Pages routing rules** to handle the sub-path.
 
 ### 3. Cloudflare Workers (API)
 
-Already configured in `wrangler.toml`. Deploy with:
+Already configured in the repository-root `wrangler.toml`. The Worker has one
+explicit release target:
 ```bash
-cd apps/api && wrangler deploy --env production
+npx wrangler deploy --config wrangler.toml --env production
 ```
 
 ### 4. DNS Configuration
@@ -81,8 +88,8 @@ Update both Next.js apps to use absolute API URL:
 
 ## Deployment Steps
 
-1. **Typecheck & Build** - Run `npm run lint && npm run build`
-2. **Deploy API** - `cd apps/api && wrangler deploy --env production`
-3. **Deploy to Cloudflare Pages** - Via dashboard or wrangler
+1. **Typecheck & Build** - Run `npm run lint && npm run build` (the build wrapper rejects localhost artifacts)
+2. **Deploy API** - `npx wrangler deploy --config wrangler.toml --env production`
+3. **Deploy to Cloudflare Pages** - `npm run build --workspace=apps/survey-web && npx wrangler pages deploy apps/survey-web/out --project-name alcohol-survey --branch main` and the equivalent `admin-web` command
 4. **Configure Custom Domain** - In Cloudflare Pages dashboard
 5. **Test** - Verify all routes work

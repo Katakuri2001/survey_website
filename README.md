@@ -8,6 +8,7 @@ A full-stack web application built for Myanmar Beer's customer survey and reward
 |---|---|
 | **[`AGENT.md`](./AGENT.md)** | Rules for working in this repo (commands, invariants, conventions) |
 | **[`test.md`](./test.md) §0** | **The gate: TypeScript + lint + build + CSS checks to run before every commit / push / deploy** |
+| **[`WEBSITE_WORKFLOW_AND_SERVICES.md`](./WEBSITE_WORKFLOW_AND_SERVICES.md)** | End-to-end working flow (Mermaid diagrams), marketing/service catalogue, pros & cons, and the loophole/awareness map |
 | [`docs/README.md`](./docs/README.md) | Index of all detailed docs |
 | `docs/*-functions.md` | Per-function reference for each app (what every function does and why) |
 | [`docs/database.md`](./docs/database.md) | Schema, all 13 migrations, invariants |
@@ -50,9 +51,9 @@ alcohol-survey-admin.pages.dev/     → admin-web (standalone dashboard)
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 22+
 - npm 10+
-- Wrangler CLI (`npm install -g wrangler`)
+- Wrangler CLI (provided by the root dev dependency; `npx wrangler`)
 - Cloudflare account with `survey-db` D1 database
 
 ### Local Development
@@ -75,26 +76,50 @@ cd apps/admin-web && npm run dev  # Admin web on :3001
 ### Database Setup
 
 ```bash
-# Apply all pending migrations (tracked in d1_migrations). Add --local for local dev.
-npx wrangler d1 migrations apply survey-db --remote
-npx wrangler d1 migrations apply survey-db --local
+# Apply pending migrations to the disposable local development D1.
+npx wrangler d1 migrations apply survey-db --config wrangler.toml --env development --local
+
+# Production is explicit and requires Cloudflare credentials. Review the
+# migration ledger and take a D1 time-travel bookmark before running it.
+npx wrangler d1 migrations apply survey-db --config wrangler.toml --env production --remote
 ```
 
 > `migrations/0014_production_hardening.sql` adds the `settings` table (feature
 > flags / maintenance mode), idempotency columns, and the indexes used by the
 > hardened queries. It is additive and safe to apply to a live database.
+>
+> `migrations/0015_security_reservations_and_demo_cleanup.sql` adds rotating
+> guest resume-token hashes, token revocation state, and recoverable spin
+> reservations, then removes migration-seeded demo users/responses and disables
+> the legacy default administrator. After applying it, create or rotate the
+> administrator explicitly:
+>
+> ```bash
+> ADMIN_EMAIL=admin@example.com ADMIN_PASSWORD='a-long-unique-password' \
+>   npm run admin:bootstrap -- --remote
+> ```
+>
+> Existing guest users created before this migration do not have a resume token;
+> reset one through `POST /admin/users/:id/resume-token` (the plaintext value is
+> returned once) before they can resume.
 
 ### Environment Variables
 
 | Variable | Description | Default |
 |---|---|---|
-| `NEXT_PUBLIC_API_BASE` | API base URL used by the web apps | `https://myanmarbeer.boom.com.mm/api` |
+| `NEXT_PUBLIC_API_BASE` | API base URL inlined into the web apps; production builds default to same-origin `/api` | `/api` |
 | `JWT_SECRET` | JWT signing secret (**required in production**, ≥16 chars) | none — auth is disabled in prod if unset |
 | `ENVIRONMENT` | `production` / `staging` / `development` | `production` |
 | `ALLOWED_ORIGINS` | Extra CORS origins (comma-separated) | same-origin only |
 
 See [`.env.example`](./.env.example) and
 [`PRODUCTION_HARDENING.md`](./PRODUCTION_HARDENING.md) for the full reference.
+
+`npm run build` is a production-safe build: its prebuild guard resolves the API
+base before Next starts, overrides an ignored `.env.local` value such as
+`http://localhost:8787` with `/api`, and the postbuild check rejects localhost
+URLs or source maps in `out/`. For an intentionally local static preview, set
+`BUILD_TARGET=local` explicitly; local API/live-test commands remain opt-in.
 
 ## API Endpoints
 
@@ -194,10 +219,12 @@ Complete Survey → /survey/submit → /spin → GET /rewards → POST /rewards/
 
 ```bash
 # survey-web (project: alcohol-survey, custom domain myanmarbeer.boom.com.mm)
-cd apps/survey-web && npm run build && npx wrangler pages deploy
+npm run build --workspace=apps/survey-web
+npx wrangler pages deploy apps/survey-web/out --project-name alcohol-survey --branch main
 
 # admin-web (project: alcohol-survey-admin, standalone at its own .pages.dev domain)
-cd apps/admin-web && npm run build && npx wrangler pages deploy
+npm run build --workspace=apps/admin-web
+npx wrangler pages deploy apps/admin-web/out --project-name alcohol-survey-admin --branch main
 ```
 
 Both Pages projects also run the API as a Function (`functions/api/[[route]].ts`),
@@ -210,22 +237,31 @@ npx wrangler pages secret put JWT_SECRET --project-name alcohol-survey-admin
 
 ### Cloudflare Workers (API + cron)
 
-The root `wrangler.toml` deploys the API worker (`alcohol-survey-platform`) and
-its 15-minute spin-cleanup cron. Set secrets from the repo root:
+The root `wrangler.toml` has one release target: the explicit `production`
+environment. The top-level environment is not a deployment target.
 
 ```bash
-npx wrangler secret put JWT_SECRET
-npx wrangler deploy
+npx wrangler secret put JWT_SECRET --config wrangler.toml --env production
+npx wrangler deploy --config wrangler.toml --env production
 ```
+
+Pages Functions use named project secrets (there is no Worker `--env` flag for
+`wrangler pages secret put`); keep the secret values identical across both
+Pages projects and the production Worker.
+
+### Vercel (static-only compatibility path)
+
+Cloudflare Pages is the supported deployment path. `vercel.json` is retained
+only as a valid single-project static-export fallback for `survey-web`; it
+points at `apps/survey-web/out` and does not claim to provide the Cloudflare
+Pages `/api/*` Function. The admin app and API remain Cloudflare-only unless a
+separate Vercel API design is deliberately added.
 
 ### Verify after deploy
 
 ```bash
-# The hardening test runs against a local/dev API:
-API_BASE=http://localhost:8788/api npm run test:hardening
-
-# Production sanity checks:
-curl https://myanmarbeer.boom.com.mm/api/health
+# The hardening test runs against a local/dev API and refuses production hosts:
+API_BASE=http://localhost:8787 npm run test:hardening
 ```
 
 ## Testing
@@ -234,9 +270,12 @@ curl https://myanmarbeer.boom.com.mm/api/health
   build, CSS checks, smoke flow); sections 1–6 are the full manual QA checklist.
 - `npm run typecheck` — TypeScript for all three apps (incl. `apps/api`).
 - `npm run lint` — ESLint (web apps) + typecheck (API).
-- `npm run build` — static export for both web apps.
-- `npm run test:hardening` — concurrency/idempotency smoke test against a running API.
-- `npm run test:load` — k6 load test (staging only).
+- `npm run build` — production-safe static exports plus artifact localhost checks.
+- `npm test` — safe repository/config tests; live API suites are skipped unless `RUN_LIVE_API_TESTS=1`.
+- `npm run test:api` / `npm run test:hardening` — live API suites; both require a local/staging API.
+- `RUN_LIVE_API_TESTS=1 API_BASE=http://localhost:8787 npm test` — run both live suites explicitly.
+- `npm run test:load` — k6 load test (local or staging only; it refuses production hosts).
+- `npm run migrations:validate` and `npm run pages:build` — local migration and Pages Function checks.
 
 See [`LOAD_TESTING.md`](./LOAD_TESTING.md) for details.
 

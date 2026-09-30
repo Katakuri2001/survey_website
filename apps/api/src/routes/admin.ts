@@ -2,12 +2,13 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AppContext } from '../types';
 import { ErrorCode, failure, success } from '../lib/http';
-import { adminMiddleware, authMiddleware } from '../lib/auth';
+import { adminMiddleware, authMiddleware, createGuestResumeToken, hashGuestResumeToken } from '../lib/auth';
 import { enforceRateLimit, invalidateSettingsCache } from '../lib/security';
-import { generateId } from '../lib/ids';
+import { generateId, isoTimestamp } from '../lib/ids';
 import { logAudit } from '../lib/audit';
 import {
   deliveryStatusSchema,
+  exportPaginationSchema,
   paginationSchema,
   productCreateSchema,
   productUpdateSchema,
@@ -20,6 +21,7 @@ import {
   settingsUpdateSchema,
   stockAdjustSchema,
   surveyVersionCreateSchema,
+  surveyVersionStatusSchema,
 } from '../lib/validation';
 
 export const adminRoutes = new Hono<AppContext>();
@@ -40,7 +42,7 @@ const responsesQuerySchema = paginationSchema.extend({
   productId: z.string().trim().max(100).optional(),
   status: z.string().trim().max(32).optional(),
 });
-const exportQuerySchema = paginationSchema.extend({
+const exportQuerySchema = exportPaginationSchema.extend({
   days: z.coerce.number().int().min(1).max(3650).default(30),
   sortBy: z.enum(['created_at', 'completed_at']).catch('created_at'),
 });
@@ -179,17 +181,63 @@ adminRoutes.get('/analytics/trend', async (c) => {
 // ============================================================
 
 adminRoutes.get('/survey/questions', async (c) => {
-  const rows = await c.env.survey_db
+  const db = c.env.survey_db;
+  const rows = await db
     .prepare(
       `SELECT q.*, sv.title as version_title, p.name as product_name,
               (SELECT COUNT(*) FROM survey_options WHERE question_id = q.id AND is_active = 1) as option_count
        FROM survey_questions q
        JOIN survey_versions sv ON q.survey_version_id = sv.id
        JOIN products p ON sv.product_id = p.id
-       ORDER BY q.display_order`
+       ORDER BY sv.created_at DESC, q.display_order`
     )
-    .all();
-  return success(c, rows.results || []);
+    .all<Record<string, unknown>>();
+  const result = rows.results || [];
+  if (!result.length) return success(c, []);
+
+  const placeholders = result.map(() => '?').join(',');
+  const ids = result.map((row) => String(row.id));
+  const [options, translations] = await Promise.all([
+    db
+      .prepare(
+        `SELECT o.*, ot.language AS translation_language, ot.option_text AS translated_text
+         FROM survey_options o
+         LEFT JOIN survey_option_translations ot ON ot.option_id = o.id
+         WHERE o.question_id IN (${placeholders}) AND o.is_active = 1
+         ORDER BY o.display_order`
+      )
+      .bind(...ids)
+      .all<Record<string, unknown>>(),
+    db
+      .prepare(
+        `SELECT * FROM survey_question_translations
+         WHERE question_id IN (${placeholders})`
+      )
+      .bind(...ids)
+      .all<Record<string, unknown>>(),
+  ]);
+  const optionsByQuestion = new Map<string, Record<string, unknown>[]>();
+  for (const option of options.results || []) {
+    const list = optionsByQuestion.get(String(option.question_id)) || [];
+    list.push(option);
+    optionsByQuestion.set(String(option.question_id), list);
+  }
+  const translationsByQuestion = new Map<string, Record<string, unknown>>();
+  for (const translation of translations.results || []) {
+    translationsByQuestion.set(`${translation.question_id}:${translation.language}`, translation);
+  }
+  return success(
+    c,
+    result.map((row) => ({
+      ...row,
+      options: optionsByQuestion.get(String(row.id)) || [],
+      translations: Object.fromEntries(
+        [...translationsByQuestion.entries()]
+          .filter(([key]) => key.startsWith(`${row.id}:`))
+          .map(([key, value]) => [key.slice(String(row.id).length + 1), value.question_text])
+      ),
+    }))
+  );
 });
 
 adminRoutes.post('/survey/questions', async (c) => {
@@ -208,54 +256,49 @@ adminRoutes.post('/survey/questions', async (c) => {
     order = (maxOrder?.m ?? -1) + 1;
   }
 
-  await db
-    .prepare(
-      `INSERT INTO survey_questions (id, survey_version_id, question_text, question_type, is_required, display_order, validation_rules, image_url, product_type)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-    .bind(
-      id,
-      body.surveyVersionId,
-      body.questionText,
-      body.questionType || 'single_choice',
-      body.isRequired === false ? 0 : 1,
-      order,
-      body.validationRules || null,
-      body.imageUrl || null,
-      body.productType || 'none'
-    )
-    .run();
-
-  if (body.translations) {
-    for (const [lang, text] of Object.entries(body.translations)) {
-      if (!text) continue;
-      await db
+  const statements = [
+    db
+      .prepare(
+        `INSERT INTO survey_questions (id, survey_version_id, question_text, question_type, is_required, display_order, validation_rules, image_url, product_type)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .bind(
+        id,
+        body.surveyVersionId,
+        body.questionText,
+        body.questionType,
+        body.isRequired === false ? 0 : 1,
+        order,
+        body.validationRules || null,
+        body.imageUrl || null,
+        body.productType || 'none'
+      ),
+  ];
+  for (const [lang, text] of Object.entries(body.translations || {})) {
+    if (!text) continue;
+    statements.push(
+      db
         .prepare('INSERT INTO survey_question_translations (id, question_id, language, question_text) VALUES (?, ?, ?, ?)')
         .bind(generateId(), id, lang, text)
-        .run();
-    }
+    );
   }
-
-  if (body.options) {
-    for (let i = 0; i < body.options.length; i += 1) {
-      const option = body.options[i];
-      const optionId = generateId();
-      await db
+  for (const [index, option] of (body.options || []).entries()) {
+    const optionId = generateId();
+    statements.push(
+      db
         .prepare('INSERT INTO survey_options (id, question_id, option_text, option_value, display_order) VALUES (?, ?, ?, ?, ?)')
-        .bind(optionId, id, option.text, option.value || option.text, option.displayOrder ?? i)
-        .run();
-      if (option.translations) {
-        for (const [lang, text] of Object.entries(option.translations)) {
-          if (!text) continue;
-          await db
-            .prepare('INSERT INTO survey_option_translations (id, option_id, language, option_text) VALUES (?, ?, ?, ?)')
-            .bind(generateId(), optionId, lang, text)
-            .run();
-        }
-      }
+        .bind(optionId, id, option.text, option.value || option.text, option.displayOrder ?? index)
+    );
+    for (const [lang, text] of Object.entries(option.translations || {})) {
+      if (!text) continue;
+      statements.push(
+        db
+          .prepare('INSERT INTO survey_option_translations (id, option_id, language, option_text) VALUES (?, ?, ?, ?)')
+          .bind(generateId(), optionId, lang, text)
+      );
     }
   }
-
+  await db.batch(statements);
   await logAudit(c, 'CREATE', 'question', id, { questionText: body.questionText });
   return success(c, { id, message: 'Question created' });
 });
@@ -266,8 +309,18 @@ adminRoutes.patch('/survey/questions/:id', async (c) => {
   const body = parsed.data;
   const id = c.req.param('id');
   const db = c.env.survey_db;
+  const current = await db
+    .prepare('SELECT question_type FROM survey_questions WHERE id = ?')
+    .bind(id)
+    .first<{ question_type: string }>();
+  if (!current) return failure(c, ErrorCode.NOT_FOUND, 'Question not found');
+  const effectiveType = body.questionType || current.question_type;
+  const choiceType = ['single_choice', 'multiple_choice', 'dropdown'].includes(effectiveType);
+  if (choiceType && !body.options) {
+    return failure(c, ErrorCode.VALIDATION_FAILED, 'Choice questions require options', 422);
+  }
 
-  await db
+  const result = await db
     .prepare(
       `UPDATE survey_questions SET
          question_text = COALESCE(?, question_text),
@@ -293,26 +346,64 @@ adminRoutes.patch('/survey/questions/:id', async (c) => {
       id
     )
     .run();
+  if (result.meta.changes !== 1) return failure(c, ErrorCode.NOT_FOUND, 'Question not found');
 
-  if (body.translations) {
-    for (const [lang, text] of Object.entries(body.translations)) {
-      if (!text) continue;
-      await db
-        .prepare('INSERT OR REPLACE INTO survey_question_translations (id, question_id, language, question_text) VALUES (?, ?, ?, ?)')
-        .bind(generateId(), id, lang, text)
-        .run();
+  const statements = [];
+  for (const [lang, text] of Object.entries(body.translations || {})) {
+    statements.push(
+      db
+        .prepare('DELETE FROM survey_question_translations WHERE question_id = ? AND language = ?')
+        .bind(id, lang)
+    );
+    if (text) {
+      statements.push(
+        db
+          .prepare('INSERT INTO survey_question_translations (id, question_id, language, question_text) VALUES (?, ?, ?, ?)')
+          .bind(generateId(), id, lang, text)
+      );
     }
   }
-
+  if (body.options) {
+    statements.push(
+      db.prepare('UPDATE survey_options SET is_active = 0 WHERE question_id = ?').bind(id)
+    );
+    for (const [index, option] of body.options.entries()) {
+      const optionId = generateId();
+      statements.push(
+        db
+          .prepare('INSERT INTO survey_options (id, question_id, option_text, option_value, display_order) VALUES (?, ?, ?, ?, ?)')
+          .bind(optionId, id, option.text, option.value || option.text, option.displayOrder ?? index)
+      );
+      for (const [lang, text] of Object.entries(option.translations || {})) {
+        statements.push(
+          db
+            .prepare('DELETE FROM survey_option_translations WHERE option_id = ? AND language = ?')
+            .bind(optionId, lang)
+        );
+        if (text) {
+          statements.push(
+            db
+              .prepare('INSERT INTO survey_option_translations (id, option_id, language, option_text) VALUES (?, ?, ?, ?)')
+              .bind(generateId(), optionId, lang, text)
+          );
+        }
+      }
+    }
+  }
+  if (statements.length) await db.batch(statements);
   await logAudit(c, 'UPDATE', 'question', id, { questionText: body.questionText, isActive: body.isActive });
   return success(c, { message: 'Question updated' });
 });
 
 adminRoutes.delete('/survey/questions/:id', async (c) => {
   const id = c.req.param('id');
-  await c.env.survey_db.prepare('DELETE FROM survey_questions WHERE id = ?').bind(id).run();
-  await logAudit(c, 'DELETE', 'question', id);
-  return success(c, { message: 'Question deleted' });
+  const result = await c.env.survey_db
+    .prepare('UPDATE survey_questions SET is_active = 0, updated_at = datetime(\'now\') WHERE id = ?')
+    .bind(id)
+    .run();
+  if (result.meta.changes !== 1) return failure(c, ErrorCode.NOT_FOUND, 'Question not found');
+  await logAudit(c, 'DEACTIVATE', 'question', id);
+  return success(c, { message: 'Question removed from the active survey' });
 });
 
 adminRoutes.get('/survey/versions', async (c) => {
@@ -341,25 +432,109 @@ adminRoutes.post('/survey/versions', async (c) => {
     .first<{ max_version: number | null }>();
   const versionNumber = (lastVersion?.max_version || 0) + 1;
   const id = generateId();
-
-  await db
-    .prepare('INSERT INTO survey_versions (id, product_id, version, title, description, is_active) VALUES (?, ?, ?, ?, ?, 1)')
-    .bind(id, body.productId, versionNumber, body.title, body.description || null)
-    .run();
-
-  if (body.translations) {
-    for (const [lang, data] of Object.entries(body.translations)) {
-      if (data?.title) {
-        await db
-          .prepare('INSERT INTO survey_version_translations (id, version_id, language, title, description) VALUES (?, ?, ?, ?, ?)')
-          .bind(generateId(), id, lang, data.title, data.description || null)
-          .run();
-      }
-    }
+  const sourceId = body.cloneFromVersionId || (
+    await db
+      .prepare('SELECT id FROM survey_versions WHERE product_id = ? ORDER BY version DESC LIMIT 1')
+      .bind(body.productId)
+      .first<{ id: string }>()
+  )?.id || null;
+  if (body.cloneFromVersionId && sourceId !== body.cloneFromVersionId) {
+    return failure(c, ErrorCode.VALIDATION_FAILED, 'Source version not found for this product', 422);
   }
 
-  await logAudit(c, 'CREATE', 'survey_version', id, { productId: body.productId, title: body.title, version: versionNumber });
-  return success(c, { id, version: versionNumber, message: 'Survey version created' });
+  const sourceQuestions = sourceId
+    ? await db
+        .prepare('SELECT * FROM survey_questions WHERE survey_version_id = ? AND is_active = 1 ORDER BY display_order')
+        .bind(sourceId)
+        .all<Record<string, unknown>>()
+    : { results: [] as Record<string, unknown>[] };
+  if (body.activate && sourceQuestions.results.length === 0) {
+    return failure(c, ErrorCode.VALIDATION_FAILED, 'Cannot activate an empty survey version', 422);
+  }
+
+  const statements = [
+    db
+      .prepare('INSERT INTO survey_versions (id, product_id, version, title, description, is_active) VALUES (?, ?, ?, ?, ?, 0)')
+      .bind(id, body.productId, versionNumber, body.title, body.description || null),
+  ];
+  for (const [lang, data] of Object.entries(body.translations || {})) {
+    if (!data?.title) continue;
+    statements.push(
+      db
+        .prepare('INSERT INTO survey_version_translations (id, version_id, language, title, description) VALUES (?, ?, ?, ?, ?)')
+        .bind(generateId(), id, lang, data.title, data.description || null)
+    );
+  }
+  for (const source of sourceQuestions.results) {
+    const questionId = generateId();
+    statements.push(
+      db
+        .prepare(
+          `INSERT INTO survey_questions
+             (id, survey_version_id, question_text, question_type, is_required, display_order, is_active, validation_rules, image_url, product_type)
+           VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`
+        )
+        .bind(
+          questionId,
+          id,
+          source.question_text,
+          source.question_type,
+          source.is_required,
+          source.display_order,
+          source.validation_rules,
+          source.image_url,
+          source.product_type
+        )
+    );
+    const optionRows = await db
+      .prepare('SELECT * FROM survey_options WHERE question_id = ? AND is_active = 1 ORDER BY display_order')
+      .bind(String(source.id))
+      .all<Record<string, unknown>>();
+    for (const option of optionRows.results || []) {
+      const optionId = generateId();
+      statements.push(
+        db
+          .prepare('INSERT INTO survey_options (id, question_id, option_text, option_value, display_order) VALUES (?, ?, ?, ?, ?)')
+          .bind(optionId, questionId, option.option_text, option.option_value, option.display_order)
+      );
+    }
+  }
+  await db.batch(statements);
+  if (body.activate) {
+    await db.batch([
+      db.prepare('UPDATE survey_versions SET is_active = 0 WHERE id != ?').bind(id),
+      db.prepare('UPDATE survey_versions SET is_active = 1, updated_at = datetime(\'now\') WHERE id = ?').bind(id),
+    ]);
+  }
+  await logAudit(c, 'CREATE', 'survey_version', id, { productId: body.productId, title: body.title, version: versionNumber, activate: body.activate });
+  return success(c, { id, version: versionNumber, active: body.activate, message: 'Survey version created' });
+});
+
+adminRoutes.patch('/survey/versions/:id/status', async (c) => {
+  const parsed = await readJson(c, surveyVersionStatusSchema);
+  if (!parsed.ok) return parsed.response;
+  const id = c.req.param('id');
+  const db = c.env.survey_db;
+  const version = await db
+    .prepare('SELECT id, product_id FROM survey_versions WHERE id = ?')
+    .bind(id)
+    .first<{ id: string; product_id: string }>();
+  if (!version) return failure(c, ErrorCode.NOT_FOUND, 'Survey version not found');
+  if (parsed.data.isActive) {
+    const count = await db
+      .prepare('SELECT COUNT(*) as count FROM survey_questions WHERE survey_version_id = ? AND is_active = 1')
+      .bind(id)
+      .first<{ count: number }>();
+    if (!count?.count) return failure(c, ErrorCode.VALIDATION_FAILED, 'Cannot activate an empty survey version', 422);
+    await db.batch([
+      db.prepare('UPDATE survey_versions SET is_active = 0 WHERE id != ?').bind(id),
+      db.prepare('UPDATE survey_versions SET is_active = 1, updated_at = datetime(\'now\') WHERE id = ?').bind(id),
+    ]);
+  } else {
+    await db.prepare('UPDATE survey_versions SET is_active = 0, updated_at = datetime(\'now\') WHERE id = ?').bind(id).run();
+  }
+  await logAudit(c, 'UPDATE', 'survey_version', id, { isActive: parsed.data.isActive });
+  return success(c, { message: 'Survey version status updated', isActive: parsed.data.isActive });
 });
 
 // ============================================================
@@ -412,7 +587,7 @@ adminRoutes.patch('/products/:id', async (c) => {
   const id = c.req.param('id');
   const db = c.env.survey_db;
 
-  await db
+  const result = await db
     .prepare(
       `UPDATE products SET
          name = COALESCE(?, name),
@@ -434,6 +609,7 @@ adminRoutes.patch('/products/:id', async (c) => {
       id
     )
     .run();
+  if (result.meta.changes !== 1) return failure(c, ErrorCode.NOT_FOUND, 'Product not found');
 
   if (body.translations) {
     for (const [lang, data] of Object.entries(body.translations)) {
@@ -476,8 +652,8 @@ adminRoutes.post('/rewards', async (c) => {
 
   await db
     .prepare(
-      `INSERT INTO rewards (id, name, description, image_url, total_quantity, remaining_quantity, weight, low_stock_threshold, campaign_id, winning_ratio, requires_delivery)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO rewards (id, name, description, image_url, total_quantity, remaining_quantity, weight, low_stock_threshold, campaign_id, winning_ratio, requires_delivery, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .bind(
       id,
@@ -490,7 +666,12 @@ adminRoutes.post('/rewards', async (c) => {
       body.lowStockThreshold ?? 10,
       body.campaignId || null,
       body.winningRatio ?? null,
-      body.requiresDelivery === false ? 0 : 1
+      body.requiresDelivery === false ? 0 : 1,
+      body.totalQuantity <= 0
+        ? 'EXHAUSTED'
+        : body.totalQuantity <= (body.lowStockThreshold ?? 10)
+          ? 'LOW_STOCK'
+          : 'AVAILABLE'
     )
     .run();
 
@@ -524,39 +705,56 @@ adminRoutes.patch('/rewards/:id', async (c) => {
   const id = c.req.param('id');
   const db = c.env.survey_db;
 
-  // Derive stock-dependent status from remaining_quantity instead of trusting
-  // a free-form value: EXHAUSTED/LOW_STOCK may never disagree with actual
-  // stock. PAUSED is the one manual override and stays sticky unless the
-  // client explicitly resumes (any other status value).
+  const hasTotal = Object.prototype.hasOwnProperty.call(body, 'totalQuantity');
+  const hasRatio = Object.prototype.hasOwnProperty.call(body, 'winningRatio');
+  const needsStock = hasTotal || body.status !== undefined || body.lowStockThreshold !== undefined;
+  const current = needsStock
+    ? await db
+        .prepare('SELECT total_quantity, remaining_quantity, low_stock_threshold, status FROM rewards WHERE id = ?')
+        .bind(id)
+        .first<{ total_quantity: number; remaining_quantity: number; low_stock_threshold: number; status: string }>()
+    : null;
+  if (needsStock && !current) return failure(c, ErrorCode.NOT_FOUND, 'Reward not found');
+
+  let totalToSave: number | null = null;
+  let remainingToSave: number | null = null;
   let statusToSave: string | null = null;
-  if (body.status !== undefined || body.lowStockThreshold !== undefined) {
-    const current = await db
-      .prepare('SELECT remaining_quantity, low_stock_threshold, status FROM rewards WHERE id = ?')
-      .bind(id)
-      .first<{ remaining_quantity: number; low_stock_threshold: number; status: string }>();
-    if (!current) return failure(c, ErrorCode.NOT_FOUND, 'Reward not found');
+  if (current) {
+    const awarded = Math.max(0, current.total_quantity - current.remaining_quantity);
+    if (hasTotal) {
+      totalToSave = body.totalQuantity!;
+      remainingToSave = totalToSave - awarded;
+      if (remainingToSave < 0) {
+        return failure(c, ErrorCode.INVALID_REQUEST, 'Total quantity cannot be lower than awarded quantity', 422);
+      }
+    } else {
+      remainingToSave = current.remaining_quantity;
+    }
     const threshold = body.lowStockThreshold ?? current.low_stock_threshold;
-    const derived =
-      current.remaining_quantity <= 0
-        ? 'EXHAUSTED'
-        : current.remaining_quantity <= threshold
-          ? 'LOW_STOCK'
-          : 'AVAILABLE';
-    statusToSave = (body.status ?? current.status) === 'PAUSED' ? 'PAUSED' : derived;
+    const derived = remainingToSave! <= 0
+      ? 'EXHAUSTED'
+      : remainingToSave! <= threshold
+        ? 'LOW_STOCK'
+        : 'AVAILABLE';
+    statusToSave = body.status === 'PAUSED' || (!body.status && current.status === 'PAUSED')
+      ? 'PAUSED'
+      : derived;
   }
 
-  await db
+  const updateResult = await db
     .prepare(
       `UPDATE rewards SET
          name = COALESCE(?, name),
          description = COALESCE(?, description),
          image_url = COALESCE(?, image_url),
+         total_quantity = CASE WHEN ? = 1 THEN ? ELSE total_quantity END,
+         remaining_quantity = CASE WHEN ? = 1 THEN ? ELSE remaining_quantity END,
          weight = COALESCE(?, weight),
          low_stock_threshold = COALESCE(?, low_stock_threshold),
          is_active = COALESCE(?, is_active),
-         status = COALESCE(?, status),
+         status = CASE WHEN ? = 1 THEN ? ELSE status END,
          campaign_id = COALESCE(?, campaign_id),
-         winning_ratio = COALESCE(?, winning_ratio),
+         winning_ratio = CASE WHEN ? = 1 THEN ? ELSE winning_ratio END,
          requires_delivery = COALESCE(?, requires_delivery),
          updated_at = datetime('now')
        WHERE id = ?`
@@ -565,16 +763,23 @@ adminRoutes.patch('/rewards/:id', async (c) => {
       body.name ?? null,
       body.description ?? null,
       body.imageUrl ?? null,
+      hasTotal ? 1 : 0,
+      totalToSave,
+      hasTotal ? 1 : 0,
+      remainingToSave,
       body.weight ?? null,
       body.lowStockThreshold ?? null,
       body.isActive ?? null,
+      needsStock ? 1 : 0,
       statusToSave,
       body.campaignId ?? null,
-      body.winningRatio ?? null,
+      hasRatio ? 1 : 0,
+      hasRatio ? body.winningRatio : null,
       body.requiresDelivery ?? null,
       id
     )
     .run();
+  if (updateResult.meta.changes !== 1) return failure(c, ErrorCode.NOT_FOUND, 'Reward not found');
 
   if (body.translations) {
     for (const [lang, data] of Object.entries(body.translations)) {
@@ -585,6 +790,16 @@ adminRoutes.patch('/rewards/:id', async (c) => {
           .run();
       }
     }
+  }
+
+  if (hasTotal && current && remainingToSave !== current.remaining_quantity) {
+    await db
+      .prepare(
+        `INSERT INTO reward_inventory_transactions (id, reward_id, type, quantity, notes, created_by)
+         VALUES (?, ?, 'MANUAL_ADJUSTMENT', ?, 'Total quantity updated', ?)`
+      )
+      .bind(generateId(), id, remainingToSave! - current.remaining_quantity, c.get('userId'))
+      .run();
   }
 
   await logAudit(c, 'UPDATE', 'reward', id, { name: body.name, status: body.status, isActive: body.isActive });
@@ -639,6 +854,7 @@ adminRoutes.patch('/rewards/:id/stock', async (c) => {
   const result = await db
     .prepare(
       `UPDATE rewards SET
+         total_quantity = total_quantity + ?,
          remaining_quantity = remaining_quantity + ?,
          status = CASE
            WHEN status = 'PAUSED' THEN 'PAUSED'
@@ -647,9 +863,11 @@ adminRoutes.patch('/rewards/:id/stock', async (c) => {
            ELSE 'AVAILABLE'
          END,
          updated_at = datetime('now')
-       WHERE id = ? AND remaining_quantity + ? >= 0`
+       WHERE id = ?
+         AND total_quantity + ? >= (total_quantity - remaining_quantity)
+         AND remaining_quantity + ? >= 0`
     )
-    .bind(adjustment, adjustment, adjustment, id, adjustment)
+    .bind(adjustment, adjustment, adjustment, adjustment, id, adjustment, adjustment)
     .run();
   if (result.meta.changes !== 1) {
     return failure(c, ErrorCode.INVALID_REQUEST, 'Cannot reduce below zero');
@@ -702,7 +920,7 @@ adminRoutes.get('/rewards/history', async (c) => {
 // ============================================================
 
 adminRoutes.get('/surveys/export', async (c) => {
-  const parsed = readQuery(c, paginationSchema);
+  const parsed = readQuery(c, exportPaginationSchema);
   if (!parsed.ok) return parsed.response;
   const { limit, offset } = parsed.data;
 
@@ -710,7 +928,7 @@ adminRoutes.get('/surveys/export', async (c) => {
     .prepare(
       `SELECT ur.id, u.full_name, u.email, u.phone,
               r.name as reward_name, r.image_url as reward_image_url,
-              rs.won_at, ur.delivery_status, ur.delivered_at,
+              ur.won_at, ur.delivery_status, ur.delivered_at,
               sr.id as survey_response_id, sr.language, sr.completed_at,
               sq.question_text, sa.answer_text, sa.answer_choice, sa.answer_number, sa.answer_rating
        FROM user_rewards ur
@@ -737,7 +955,7 @@ adminRoutes.get('/users/export', async (c) => {
 
   const since = new Date();
   since.setDate(since.getDate() - days);
-  const sinceStr = since.toISOString();
+  const sinceStr = isoTimestamp(since);
 
   // sortBy is a validated enum; never interpolated from raw user input.
   const orderColumn = sortBy === 'completed_at' ? 'sr.completed_at' : 'u.created_at';
@@ -823,54 +1041,78 @@ adminRoutes.patch('/deliveries/:id/status', async (c) => {
   const { status } = parsed.data;
   const id = c.req.param('id');
   const db = c.env.survey_db;
-
-  await db
+  const current = await db
     .prepare(
-      `UPDATE user_rewards SET
-         delivery_status = ?,
-         delivered_at = COALESCE(?, delivered_at),
-         updated_at = datetime('now')
-       WHERE id = ?`
+      `SELECT ur.id, ur.reward_id, ur.delivery_status, ur.reward_spin_id, r.requires_delivery
+       FROM user_rewards ur JOIN rewards r ON r.id = ur.reward_id WHERE ur.id = ?`
     )
-    .bind(status, status === 'DELIVERED' ? new Date().toISOString() : null, id)
-    .run();
-
-  await db
-    .prepare(
-      `UPDATE reward_spins SET status = ?, updated_at = datetime('now')
-       WHERE id = (SELECT reward_spin_id FROM user_rewards WHERE id = ?)`
-    )
-    .bind(status, id)
-    .run();
-
-  if (status === 'CANCELLED') {
-    const userReward = await db
-      .prepare('SELECT reward_id FROM user_rewards WHERE id = ?')
-      .bind(id)
-      .first<{ reward_id: string }>();
-    if (userReward) {
-      // Return the unit to stock and clear the EXHAUSTED flag if needed.
-      await db
-        .prepare(
-          `UPDATE rewards SET remaining_quantity = remaining_quantity + 1,
-             status = CASE WHEN status = 'EXHAUSTED' THEN 'AVAILABLE' ELSE status END,
-             updated_at = datetime('now')
-           WHERE id = ?`
-        )
-        .bind(userReward.reward_id)
-        .run();
-      await db
-        .prepare(
-          `INSERT INTO reward_inventory_transactions (id, reward_id, type, quantity, reference_type, reference_id, notes, created_by)
-           VALUES (?, ?, 'CANCELLATION_RETURN', 1, 'user_reward', ?, 'Delivery cancelled', ?)`
-        )
-        .bind(generateId(), userReward.reward_id, id, c.get('userId'))
-        .run();
-    }
+    .bind(id)
+    .first<{ id: string; reward_id: string; delivery_status: string; reward_spin_id: string; requires_delivery: number }>();
+  if (!current) return failure(c, ErrorCode.NOT_FOUND, 'Delivery reward not found');
+  if (current.delivery_status === status) {
+    return success(c, { message: 'Delivery status already set', status });
+  }
+  const transitions: Record<string, string[]> = {
+    DELIVERY_PENDING: ['CANCELLED'],
+    DELIVERY_SUBMITTED: ['PROCESSING', 'CANCELLED'],
+    PROCESSING: ['SHIPPED', 'CANCELLED'],
+    SHIPPED: ['DELIVERED'],
+    DELIVERED: [],
+    CANCELLED: [],
+  };
+  if (!transitions[current.delivery_status]?.includes(status)) {
+    return failure(c, ErrorCode.INVALID_STATE_TRANSITION, `Cannot transition delivery from ${current.delivery_status} to ${status}`, 409);
   }
 
-  await logAudit(c, 'DELIVERY_STATUS_CHANGED', 'user_reward', id, { newStatus: status });
-  return success(c, { message: 'Delivery status updated' });
+  const now = new Date().toISOString();
+  const statements = [
+    db
+      .prepare(
+        `UPDATE user_rewards
+         SET delivery_status = ?, delivered_at = CASE WHEN ? = 'DELIVERED' THEN ? ELSE delivered_at END,
+             updated_at = ?
+         WHERE id = ? AND delivery_status = ?`
+      )
+      .bind(status, status, now, now, id, current.delivery_status),
+    db
+      .prepare(
+        `UPDATE reward_spins SET status = ?, updated_at = ?
+         WHERE id = ? AND status NOT IN ('CANCELLED', 'DELIVERED')`
+      )
+      .bind(status, now, current.reward_spin_id),
+  ];
+  if (status === 'CANCELLED') {
+    statements.push(
+      db
+        .prepare(
+          `UPDATE rewards
+           SET remaining_quantity = remaining_quantity + 1,
+               total_quantity = total_quantity + 1,
+               status = CASE
+                 WHEN status = 'PAUSED' THEN 'PAUSED'
+                 WHEN remaining_quantity + 1 <= 0 THEN 'EXHAUSTED'
+                 WHEN remaining_quantity + 1 <= low_stock_threshold THEN 'LOW_STOCK'
+                 ELSE 'AVAILABLE'
+               END,
+               updated_at = ?
+           WHERE id = ? AND remaining_quantity < total_quantity`
+        )
+        .bind(now, current.reward_id),
+      db
+        .prepare(
+          `INSERT INTO reward_inventory_transactions
+             (id, reward_id, type, quantity, reference_type, reference_id, notes, created_by)
+           VALUES (?, ?, 'CANCELLATION_RETURN', 1, 'user_reward', ?, 'Delivery cancelled', ?)`
+        )
+        .bind(generateId(), current.reward_id, id, c.get('userId'))
+    );
+  }
+  const results = await db.batch(statements);
+  if (results[0]?.meta.changes !== 1) {
+    return failure(c, ErrorCode.INVALID_STATE_TRANSITION, 'Delivery status changed concurrently', 409);
+  }
+  await logAudit(c, 'DELIVERY_STATUS_CHANGED', 'user_reward', id, { from: current.delivery_status, newStatus: status });
+  return success(c, { message: 'Delivery status updated', status });
 });
 
 // ============================================================
@@ -949,6 +1191,34 @@ adminRoutes.get('/users/:id', async (c) => {
   ]);
 
   return success(c, { user, surveys: surveys.results || [], rewards: rewards.results || [] });
+});
+
+adminRoutes.post('/users/:id/resume-token', async (c) => {
+  const id = c.req.param('id');
+  const db = c.env.survey_db;
+  const user = await db
+    .prepare('SELECT id, is_admin, is_active FROM users WHERE id = ?')
+    .bind(id)
+    .first<{ id: string; is_admin: number; is_active: number }>();
+  if (!user) return failure(c, ErrorCode.NOT_FOUND, 'User not found');
+  if (user.is_admin || !user.is_active) {
+    return failure(c, ErrorCode.INVALID_REQUEST, 'Resume tokens can only be reset for active participant accounts', 422);
+  }
+
+  const resumeToken = createGuestResumeToken();
+  const resumeHash = await hashGuestResumeToken(resumeToken);
+  const result = await db
+    .prepare(
+      `UPDATE users SET guest_resume_token_hash = ?, token_version = token_version + 1, updated_at = datetime('now')
+       WHERE id = ? AND is_active = 1`
+    )
+    .bind(resumeHash, id)
+    .run();
+  if (result.meta.changes !== 1) return failure(c, ErrorCode.NOT_FOUND, 'User not found');
+
+  await logAudit(c, 'RESET_RESUME_TOKEN', 'user', id);
+  // Returned exactly once so support can hand it to the verified participant.
+  return success(c, { userId: id, resumeToken });
 });
 
 // ============================================================
@@ -1139,9 +1409,9 @@ adminRoutes.post('/upload', async (c) => {
   const arrayBuffer = await file.arrayBuffer();
 
   // Prefer the optional R2 bucket; fall back to a D1 data-URL so uploads keep
-  // working in dev or when the MEDIA_BUCKET binding is not configured. The media URL
-  // is relative so it resolves against whichever origin (survey or admin)
-  // serves the API; both mount the media route at /api/media/:key.
+  // working in dev or when the MEDIA_BUCKET binding is not configured. The
+  // entity is intentionally not updated here: the admin form commits the URL
+  // in its normal Save request, so Cancel remains a true cancel.
   let url: string;
   if (c.env.MEDIA_BUCKET) {
     const key = `${type}_${generateId()}${fileExtension(file.type)}`;
@@ -1151,7 +1421,8 @@ adminRoutes.post('/upload', async (c) => {
         cacheControl: 'public, max-age=31536000, immutable',
       },
     });
-    url = `/api/media/${key}`;
+    const publicBase = c.env.PUBLIC_SITE_ORIGIN?.replace(/\/$/, '');
+    url = publicBase ? `${publicBase}/media/${key}` : `/api/media/${key}`;
   } else {
     const buffer = new Uint8Array(arrayBuffer);
     let binary = '';
@@ -1159,25 +1430,7 @@ adminRoutes.post('/upload', async (c) => {
     url = `data:${file.type};base64,${btoa(binary)}`;
   }
 
-  if (entityId) {
-    const db = c.env.survey_db;
-    let result;
-    if (type === 'reward') {
-      result = await db.prepare("UPDATE rewards SET image_url = ?, updated_at = datetime('now') WHERE id = ?").bind(url, entityId).run();
-    } else if (type === 'survey_question') {
-      result = await db.prepare("UPDATE survey_questions SET image_url = ?, updated_at = datetime('now') WHERE id = ?").bind(url, entityId).run();
-    } else {
-      result = await db.prepare("UPDATE products SET image_url = ?, updated_at = datetime('now') WHERE id = ?").bind(url, entityId).run();
-    }
-    if (!result.meta.changes) {
-      return failure(c, ErrorCode.NOT_FOUND, 'Entity not found');
-    }
-  }
-
   await logAudit(c, 'UPLOAD', type, entityId || 'new', { fileName: file.name, fileSize: file.size });
-
-  // `url` is duplicated at the top level for admin clients that read
-  // `data.url` instead of `data.data.url`.
   return c.json({ success: true, data: { url, message: 'File uploaded successfully' }, url });
 });
 

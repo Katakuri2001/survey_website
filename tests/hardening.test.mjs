@@ -17,7 +17,18 @@
  * re-run: it creates unique guest users each time.
  */
 
+import { assertDestructiveTarget, assertSafeLiveTarget } from '../scripts/production-env-guard.mjs'
+
 const API_BASE = (process.env.API_BASE || 'http://localhost:8787').replace(/\/$/, '')
+
+try {
+  // The regular smoke test is still mutating (users, responses, and spins), so
+  // it must never be pointed at an arbitrary production hostname.
+  assertSafeLiveTarget(API_BASE)
+} catch (error) {
+  console.error(`[safety] ${error.message}`)
+  process.exit(2)
+}
 
 // A unique simulated client IP per run so repeated runs do not share the
 // in-isolate rate-limit budget. The API trusts CF-Connecting-IP (as Cloudflare
@@ -76,7 +87,7 @@ async function createGuest(ip) {
     body: { fullName: 'Hardening Test', phone, dob: '1990-01-01' },
   })
   if (!res.body?.success) throw new Error(`guest create failed: ${JSON.stringify(res.body)}`)
-  return { token: res.body.data.token, userId: res.body.data.userId, phone }
+  return { token: res.body.data.token, userId: res.body.data.userId, resumeToken: res.body.data.resumeToken, phone }
 }
 
 function buildAnswers(questions) {
@@ -135,6 +146,22 @@ async function testAuthAndEnvelope() {
 
   const admin = await api('/admin/dashboard', { token: guest.token })
   check('non-admin cannot reach admin API', admin.status === 403 && admin.body?.error?.code === 'FORBIDDEN')
+
+  const noResume = await api('/users/guest', {
+    method: 'POST',
+    body: { fullName: 'Hardening Test', phone: guest.phone, dob: '1990-01-01' },
+  })
+  check('existing guest phone requires a resume token', noResume.status === 409 && noResume.body?.error?.code === 'RESUME_TOKEN_REQUIRED')
+
+  const resumed = await api('/users/guest', {
+    method: 'POST',
+    body: { fullName: 'Hardening Test', phone: guest.phone, dob: '1990-01-01', resumeToken: guest.resumeToken },
+  })
+  check(
+    'valid resume token returns the original profile',
+    resumed.body?.success === true && resumed.body?.data?.userId === guest.userId,
+    JSON.stringify(resumed.body)
+  )
 
   const health = await api('/health')
   check('health check reports database ok', health.body?.data?.database === 'ok')
@@ -218,7 +245,8 @@ async function testSpinConcurrency() {
   check('exactly one reward owned by the user', Array.isArray(mine.body?.data) && mine.body.data.length === 1, `count=${mine.body?.data?.length}`)
 
   if (mine.body?.data?.[0]) {
-    const userRewardId = mine.body.data[0].id
+    const reward = mine.body.data[0]
+    const userRewardId = reward.id
     const delivery = {
       userRewardId,
       fullName: 'Hardening Test',
@@ -228,13 +256,21 @@ async function testSpinConcurrency() {
     }
     const firstDelivery = await api('/rewards/delivery', { method: 'POST', token: guest.token, body: delivery })
     const secondDelivery = await api('/rewards/delivery', { method: 'POST', token: guest.token, body: delivery })
-    check('delivery submission succeeds', firstDelivery.body?.success === true, JSON.stringify(firstDelivery.body))
-    check('delivery replay is idempotent', secondDelivery.body?.success === true && secondDelivery.body.data?.idempotent === true)
+    if (reward.requires_delivery === 1 || reward.requires_delivery === true) {
+      check('delivery submission succeeds', firstDelivery.body?.success === true, JSON.stringify(firstDelivery.body))
+      check('delivery replay is idempotent', secondDelivery.body?.success === true && secondDelivery.body.data?.idempotent === true)
+    } else {
+      check(
+        'non-physical rewards reject delivery submission',
+        firstDelivery.body?.success === false && firstDelivery.body?.error?.code === 'INVALID_REQUEST',
+        JSON.stringify(firstDelivery.body)
+      )
+    }
   }
 }
 
 async function testGuestConcurrencySamePhone() {
-  console.log('\nGuest creation concurrency (same phone -> same user)')
+  console.log('\nGuest creation concurrency (same phone requires a resume token)')
   const phone = uniquePhone()
   const results = await Promise.all(
     Array.from({ length: 10 }, () =>
@@ -244,9 +280,10 @@ async function testGuestConcurrencySamePhone() {
       })
     )
   )
-  const ids = new Set(results.filter((r) => r.body?.success).map((r) => r.body.data.userId))
-  check('all concurrent guest requests succeed', results.every((r) => r.body?.success === true))
-  check('all resolve to a single user id', ids.size === 1, `distinct ids=${ids.size}`)
+  const successes = results.filter((r) => r.body?.success)
+  const rejected = results.filter((r) => r.body?.error?.code === 'RESUME_TOKEN_REQUIRED')
+  check('only one concurrent guest creation succeeds', successes.length === 1, `successes=${successes.length}`)
+  check('all other concurrent requests require the resume token', rejected.length === results.length - 1, `resume-required=${rejected.length}`)
 }
 
 // ============================================================
@@ -254,12 +291,13 @@ async function testGuestConcurrencySamePhone() {
 // every other reward, then fire many concurrent valid spins from distinct users.
 // Only one user may win the last unit; stock must never go negative.
 //
-// Enable with: TEST_STOCK_CONTENTION=1 API_BASE=... node tests/hardening.test.mjs
+// Enable with: TEST_STOCK_CONTENTION=1 ALLOW_DESTRUCTIVE_TESTS=1 API_BASE=... node tests/hardening.test.mjs
 // ============================================================
 
 async function adminLogin() {
   const email = process.env.ADMIN_EMAIL || 'admin@myanmarbeer.com'
-  const password = process.env.ADMIN_PASSWORD || 'admin'
+  const password = process.env.ADMIN_PASSWORD
+  if (!password) throw new Error('ADMIN_PASSWORD is required for destructive stock tests')
   const res = await api('/auth/admin/login', { method: 'POST', body: { email, password } })
   if (!res.body?.success) throw new Error(`admin login failed: ${JSON.stringify(res.body)}`)
   return res.body.data.token
@@ -282,6 +320,9 @@ async function fetchRewards(adminToken) {
 
 async function testStockContention() {
   console.log('\nReward stock contention (stock=1, many concurrent valid spins)')
+  // This branch deliberately drains and restores inventory. Keep it behind a
+  // second explicit acknowledgement even when the target is local/staging.
+  assertDestructiveTarget(API_BASE)
   const admin = await adminLogin()
   const rewards = (await fetchRewards(admin)).filter((r) => r.is_active === 1 || r.is_active === true)
   if (rewards.length === 0) {

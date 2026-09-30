@@ -36,7 +36,7 @@ export type Bindings = {
 
 export type Variables = {
   userId: string;
-  role: string;
+  role: 'user' | 'admin';
   isAdmin: boolean;
   requestId: string;
   clientIp: string;

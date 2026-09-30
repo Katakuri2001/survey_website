@@ -5,9 +5,17 @@ import { useRouter } from 'next/navigation'
 import { useLanguage } from '../context/LanguageContext'
 import Header from '../components/Header'
 import NrcInput from '../components/NrcInput'
-import { API_BASE } from '../lib/api'
+import {
+  API_BASE,
+  clearIdentitySession,
+  consumeResumeTokenRecovery,
+  getResumeToken,
+  markResumeTokenRecovery,
+  storeGuestProfile,
+  storeGuestSession,
+} from '../lib/api'
 import { useHydrated } from '../lib/useHydrated'
-import type { NrcData } from '../lib/nrc'
+import { normalizeMyanmarNumerals, validateNrc, type NrcData } from '../lib/nrc'
 
 const DRAFT_KEY = 'survey_info_draft'
 
@@ -30,14 +38,26 @@ const emptyDraft = {
 function loadDraft() {
   if (typeof window === 'undefined') return emptyDraft
   try {
-    const raw = localStorage.getItem(DRAFT_KEY)
+    const raw = window.localStorage.getItem(DRAFT_KEY)
     if (!raw) return emptyDraft
     const parsed = JSON.parse(raw)
     if (parsed && typeof parsed === 'object') {
-      return { ...emptyDraft, ...parsed }
+      // Older drafts may predate the township field — keep all four NRC keys.
+      const nrc = parsed.nrc && typeof parsed.nrc === 'object' ? parsed.nrc as Partial<NrcData> : {}
+      return {
+        ...emptyDraft,
+        ...parsed,
+        nrc: {
+          ...emptyNrc,
+          ...nrc,
+          townshipCode: typeof nrc.townshipCode === 'string' ? nrc.townshipCode.trim().toUpperCase() : emptyNrc.townshipCode,
+          type: typeof nrc.type === 'string' ? nrc.type.trim().toUpperCase() : emptyNrc.type,
+          serial: typeof nrc.serial === 'string' ? normalizeMyanmarNumerals(nrc.serial).replace(/[^0-9]/g, '') : emptyNrc.serial,
+        },
+      }
     }
   } catch {
-    // ignore corrupted draft
+    // ignore corrupted or unavailable draft storage
   }
   return emptyDraft
 }
@@ -60,24 +80,56 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
 export default function InfoPage() {
   const router = useRouter()
   const { t, language } = useLanguage()
-  const [formData, setFormData] = useState(loadDraft)
+  const [formData, setFormData] = useState(emptyDraft)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [draftReady, setDraftReady] = useState(false)
   const hydrated = useHydrated()
 
   useEffect(() => {
+    if (!hydrated) return
+    // Restore only after the static page has hydrated, so the server and first
+    // client render always agree. The guard prevents the save effect from
+    // overwriting a valid draft with the empty initial state.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setFormData(loadDraft())
+    setDraftReady(true)
+  }, [hydrated])
+
+  useEffect(() => {
+    if (!hydrated) return
+    if (consumeResumeTokenRecovery()) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setError(t('resumeRecoveryRequired'))
+    }
+    // This is a one-time client-side recovery notice, not a server effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated])
+
+  useEffect(() => {
+    if (!hydrated || !draftReady) return
     try {
-      localStorage.setItem(DRAFT_KEY, JSON.stringify(formData))
+      window.localStorage.setItem(DRAFT_KEY, JSON.stringify(formData))
     } catch {
       // storage full or unavailable; form still works in-memory
     }
-  }, [formData])
+  }, [formData, hydrated, draftReady])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-    setLoading(true)
 
+    const nrcValidation = validateNrc(formData.nrc)
+    if (!nrcValidation.valid) {
+      setError(nrcValidation.errors.join(' '))
+      return
+    }
+    const canonicalNrc: NrcData = {
+      ...formData.nrc,
+      serial: normalizeMyanmarNumerals(formData.nrc.serial).replace(/[^0-9]/g, ''),
+    }
+
+    setLoading(true)
     const dob = `${formData.dobYear}-${formData.dobMonth.padStart(2, '0')}-${formData.dobDay.padStart(2, '0')}`
 
     try {
@@ -88,34 +140,47 @@ export default function InfoPage() {
           fullName: formData.fullName,
           phone: formData.phone,
           dob,
-          stateCode: formData.nrc.stateCode,
-          nrcType: formData.nrc.type,
-          nrcNumber: formData.nrc.serial,
+          stateCode: canonicalNrc.stateCode,
+          nrcTownship: canonicalNrc.townshipCode,
+          nrcType: canonicalNrc.type,
+          nrcNumber: canonicalNrc.serial,
+          // A new guest submission may be resuming an existing browser session.
+          resumeToken: getResumeToken() || undefined,
         })
       })
-      const data = await res.json()
+      const data = await res.json().catch(() => null)
 
-      if (!res.ok) {
-        setError(data.error?.message || `Server error: ${res.status}`)
+      if (data?.error?.code === 'RESUME_TOKEN_REQUIRED') {
+        markResumeTokenRecovery()
+        clearIdentitySession()
+        setError(t('resumeRecoveryRequired'))
         return
       }
 
-      if (data.success) {
-        localStorage.setItem('survey_token', data.data.token)
-        localStorage.setItem('survey_user', JSON.stringify(data.data.user))
-        // Store full profile so token can be refreshed if it expires mid-session
-        localStorage.setItem('survey_profile', JSON.stringify({
+      if (!res.ok) {
+        setError(data?.error?.message || `Server error: ${res.status}`)
+        return
+      }
+
+      if (data?.success && storeGuestSession(data.data)) {
+        // Store the full profile so a later forced token refresh can replay it.
+        storeGuestProfile({
           fullName: formData.fullName,
           phone: formData.phone,
           dob,
-          stateCode: formData.nrc.stateCode,
-          nrcType: formData.nrc.type,
-          nrcNumber: formData.nrc.serial,
-        }))
-        localStorage.removeItem(DRAFT_KEY)
+          stateCode: canonicalNrc.stateCode,
+          nrcTownship: canonicalNrc.townshipCode,
+          nrcType: canonicalNrc.type,
+          nrcNumber: canonicalNrc.serial,
+        })
+        try {
+          window.localStorage.removeItem(DRAFT_KEY)
+        } catch {
+          // The draft is only a convenience cache.
+        }
         router.push('/survey')
       } else {
-        setError(data.error?.message || t('error'))
+        setError(data?.error?.message || t('error'))
       }
     } catch (err) {
       console.error('Connection error:', err)

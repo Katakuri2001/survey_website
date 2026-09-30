@@ -11,7 +11,15 @@ const JWT_ISSUER = 'myanmarbeer-api';
 const JWT_AUDIENCE = 'myanmarbeer-web';
 const TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
 
-export type TokenClaims = { sub: string; role: string; iat: number; exp: number; iss?: string; aud?: string };
+export type TokenClaims = {
+  sub: string;
+  role: 'user' | 'admin';
+  iat: number;
+  exp: number;
+  iss?: string;
+  aud?: string;
+  ver?: number;
+};
 
 function toBase64Url(bytes: Uint8Array): string {
   let binary = '';
@@ -64,8 +72,9 @@ export function resolveJwtSecret(env: Bindings): string | null {
 
 export async function createToken(
   userId: string,
-  role: string,
+  role: 'user' | 'admin',
   secret: string,
+  tokenVersion = 0,
   ttlSeconds = TOKEN_TTL_SECONDS
 ): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
@@ -78,6 +87,7 @@ export async function createToken(
       exp: now + ttlSeconds,
       iss: JWT_ISSUER,
       aud: JWT_AUDIENCE,
+      ver: tokenVersion,
     })
   );
   const signingInput = `${header}.${payload}`;
@@ -105,7 +115,9 @@ export async function decodeToken(token: string, secret: string): Promise<TokenC
     if (payload.iat && payload.iat > now + 60) return null;
     if (payload.iss && payload.iss !== JWT_ISSUER) return null;
     if (payload.aud && payload.aud !== JWT_AUDIENCE) return null;
-    return { ...payload, role: payload.role || 'user' };
+    if (payload.role !== 'user' && payload.role !== 'admin') return null;
+    if (payload.ver !== undefined && (!Number.isInteger(payload.ver) || payload.ver < 0)) return null;
+    return { ...payload, role: payload.role };
   } catch {
     return null;
   }
@@ -123,6 +135,22 @@ function bytesToHex(bytes: Uint8Array): string {
   let out = '';
   for (let i = 0; i < bytes.length; i++) out += bytes[i].toString(16).padStart(2, '0');
   return out;
+}
+
+/** High-entropy guest credential returned once and stored only as a digest. */
+export function createGuestResumeToken(): string {
+  return `gst_${toBase64Url(crypto.getRandomValues(new Uint8Array(32)))}`;
+}
+
+export async function hashGuestResumeToken(token: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
+  return bytesToHex(new Uint8Array(digest));
+}
+
+export async function verifyGuestResumeToken(token: string, expectedHash: string | null): Promise<boolean> {
+  if (!expectedHash || !/^[a-f0-9]{64}$/.test(expectedHash) || !/^gst_[A-Za-z0-9_-]{43}$/.test(token)) return false;
+  const actual = await hashGuestResumeToken(token);
+  return timingSafeEqual(hexToBytes(actual), hexToBytes(expectedHash));
 }
 
 function hexToBytes(hex: string): Uint8Array {
@@ -203,26 +231,32 @@ export const authMiddleware: MiddlewareHandler<AppContext> = createMiddleware<Ap
   if (!claims) {
     return failure(c, ErrorCode.UNAUTHORIZED, 'Invalid or expired token');
   }
+
+  const account = await c.env.survey_db
+    .prepare('SELECT is_admin, is_active, token_version FROM users WHERE id = ?')
+    .bind(claims.sub)
+    .first<{ is_admin: number; is_active: number; token_version: number }>();
+  if (!account || !account.is_active) {
+    return failure(c, ErrorCode.UNAUTHORIZED, 'Account is unavailable');
+  }
+  if ((claims.ver ?? 0) !== account.token_version) {
+    return failure(c, ErrorCode.UNAUTHORIZED, 'Session has been revoked');
+  }
+
+  const role = account.is_admin ? 'admin' : 'user';
+  if (claims.role !== role) {
+    return failure(c, ErrorCode.FORBIDDEN, 'Session role does not match account state');
+  }
   c.set('userId', claims.sub);
-  c.set('role', claims.role);
-  c.set('isAdmin', claims.role === 'admin');
+  c.set('role', role);
+  c.set('isAdmin', role === 'admin');
   await next();
 });
 
-/**
- * Admin access is re-checked against the database. A forged role claim in the
- * JWT alone is never sufficient.
- */
+/** Admin access requires both an admin token and a live admin database row. */
 export const adminMiddleware: MiddlewareHandler<AppContext> = createMiddleware<AppContext>(async (c, next) => {
-  const userId = c.get('userId');
-  const row = await c.env.survey_db
-    .prepare('SELECT is_admin, is_active FROM users WHERE id = ?')
-    .bind(userId)
-    .first<{ is_admin: number; is_active: number }>();
-
-  if (!row || !row.is_admin || !row.is_active) {
+  if (c.get('role') !== 'admin' || !c.get('isAdmin')) {
     return failure(c, ErrorCode.FORBIDDEN, 'Administrator access required');
   }
-  c.set('isAdmin', true);
   await next();
 });

@@ -11,8 +11,25 @@
  *   API_BASE=http://localhost:8787 node tests/api-tests.mjs
  */
 
-const API = (process.env.API_BASE || 'http://localhost:8787').replace(/\/+$/, '');
+import { assertSafeLiveTarget } from '../scripts/production-env-guard.mjs'
+
+const API = (process.env.API_BASE || 'http://localhost:8787').replace(/\/+$/, '')
+
+try {
+  // This suite creates users, submissions, and a test reward. Never let an
+  // omitted API_BASE turn a typo into a production write.
+  assertSafeLiveTarget(API)
+} catch (error) {
+  console.error(`[safety] ${error.message}`)
+  process.exit(2)
+}
 const RUN = Date.now().toString(36);
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'admin@myanmarbeer.com').trim().toLowerCase();
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
+if (!ADMIN_PASSWORD) {
+  console.error('[safety] ADMIN_PASSWORD is required for the admin API checks');
+  process.exit(2);
+}
 
 let pass = 0;
 let fail = 0;
@@ -97,7 +114,7 @@ async function main() {
   const loginBad = await call('POST', '/auth/login', { body: { email, password: 'wrong-password' } });
   check(!ok(loginBad) && loginBad.status >= 400, 'API-04 login wrong password → success:false', `status ${loginBad.status}`);
 
-  const admin = await call('POST', '/auth/admin/login', { body: { email: 'admin@myanmarbeer.com', password: 'admin' } });
+  const admin = await call('POST', '/auth/admin/login', { body: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } });
   const adminToken = data(admin)?.token;
   check(ok(admin) && Boolean(adminToken), 'API-05a admin login → token', JSON.stringify(admin.json));
 
