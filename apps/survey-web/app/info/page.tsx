@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { useLanguage } from '../context/LanguageContext'
+import { useLanguage } from '../context/I18nProvider'
 import Header from '../components/Header'
 import NrcInput from '../components/NrcInput'
 import {
@@ -100,7 +100,7 @@ export default function InfoPage() {
     if (!hydrated) return
     if (consumeResumeTokenRecovery()) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setError(t('resumeRecoveryRequired'))
+      setError(t('validation.resumeRecoveryRequired'))
     }
     // This is a one-time client-side recovery notice, not a server effect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -153,7 +153,7 @@ export default function InfoPage() {
       if (data?.error?.code === 'RESUME_TOKEN_REQUIRED') {
         markResumeTokenRecovery()
         clearIdentitySession()
-        setError(t('resumeRecoveryRequired'))
+        setError(t('validation.resumeRecoveryRequired'))
         return
       }
 
@@ -180,11 +180,11 @@ export default function InfoPage() {
         }
         router.push('/survey')
       } else {
-        setError(data?.error?.message || t('error'))
+        setError(data?.error?.message || t('common.error'))
       }
     } catch (err) {
       console.error('Connection error:', err)
-      setError(`${t('connectionFailed')}: ${err instanceof Error ? err.message : 'Unknown error'}`)
+      setError(`${t('validation.connectionFailed')}: ${err instanceof Error ? err.message : 'Unknown error'}`)
     } finally {
       setLoading(false)
     }
@@ -201,7 +201,7 @@ export default function InfoPage() {
 
   return (
     <div className="min-h-screen bg-navy text-fg-bright">
-      <Header title={t('infoTitle')} backHref="/" />
+      <Header title={t('personalInfo.infoTitle')} backHref="/" />
 
       <div className="relative min-h-screen overflow-hidden">
         <div className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 w-[420px] h-[300px] rounded-full bg-gold/[0.07] blur-[110px]" />
@@ -236,9 +236,9 @@ export default function InfoPage() {
 
           {/* -------- Intro -------- */}
           <div className="text-center mb-8">
-            <h2 className={`font-display text-2xl md:text-3xl font-bold text-white ${language === 'my' ? 'font-myanmar leading-snug' : ''}`}>{t('infoTitle')}</h2>
+            <h2 className={`font-display text-2xl md:text-3xl font-bold text-white ${language === 'my' ? 'font-myanmar leading-snug' : ''}`}>{t('personalInfo.infoTitle')}</h2>
             <div className="mx-auto my-4 h-px w-20 bg-gradient-to-r from-transparent via-gold to-transparent" />
-            <p className="text-fg-secondary">{t('infoDesc')}</p>
+            <p className="text-fg-secondary">{t('personalInfo.infoDesc')}</p>
           </div>
 
           {/* -------- Form -------- */}
@@ -256,20 +256,20 @@ export default function InfoPage() {
 
             {/* Full name */}
             <div className="mb-6">
-              <FieldLabel>{t('fullName')}</FieldLabel>
+              <FieldLabel>{t('login.fullName')}</FieldLabel>
               <input
                 type="text"
                 value={formData.fullName}
                 onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
                 className={`survey-input ${language === 'my' ? 'font-myanmar leading-relaxed' : ''}`}
-                placeholder={t('fullNamePlaceholder')}
+                placeholder={t('login.fullNamePlaceholder')}
                 required
               />
             </div>
 
             {/* Phone */}
             <div className="mb-6">
-              <FieldLabel>{t('phone')}</FieldLabel>
+              <FieldLabel>{t('login.phone')}</FieldLabel>
               <input
                 type="tel"
                 value={formData.phone}
@@ -282,7 +282,7 @@ export default function InfoPage() {
 
             {/* DOB */}
             <div className="mb-6">
-              <FieldLabel>{t('dob')}</FieldLabel>
+              <FieldLabel>{t('personalInfo.dob')}</FieldLabel>
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <select
@@ -291,7 +291,7 @@ export default function InfoPage() {
                     className={selectClass}
                     required
                   >
-                    <option value="" className="bg-surface-deep">{t('day')}</option>
+                    <option value="" className="bg-surface-deep">{t('personalInfo.day')}</option>
                     {days.map(d => <Option key={d} value={d} label={d} />)}
                   </select>
                 </div>
@@ -302,7 +302,7 @@ export default function InfoPage() {
                     className={selectClass}
                     required
                   >
-                    <option value="" className="bg-surface-deep">{t('month')}</option>
+                    <option value="" className="bg-surface-deep">{t('personalInfo.month')}</option>
                     {months.map(m => <Option key={m} value={m} label={m} />)}
                   </select>
                 </div>
@@ -313,7 +313,7 @@ export default function InfoPage() {
                     className={selectClass}
                     required
                   >
-                    <option value="" className="bg-surface-deep">{t('year')}</option>
+                    <option value="" className="bg-surface-deep">{t('personalInfo.year')}</option>
                     {years.map(y => <Option key={y} value={y} label={y} />)}
                   </select>
                 </div>
@@ -335,7 +335,7 @@ export default function InfoPage() {
               disabled={loading}
               className="group w-full py-4 bg-lager-gradient text-white rounded-2xl font-bold text-lg shadow-lager hover:shadow-lager-lg hover:scale-[1.01] transition-all inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? t('loading') : t('next')}
+              {loading ? t('common.loading') : t('common.next')}
               {!loading && (
                 <svg className="w-5 h-5 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5-5 5M6 12h12" />

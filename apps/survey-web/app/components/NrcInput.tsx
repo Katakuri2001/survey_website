@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { useLanguage } from '../context/LanguageContext'
+import { useLanguage } from '../context/I18nProvider'
 import {
   NRC_TYPES,
   normalizeMyanmarNumerals,
@@ -87,7 +87,7 @@ export default function NrcInput({ value, onChange, disabled = false, required =
 
   return (
     <div className="space-y-4">
-      <FieldLabel required={required}>{t('nrc')}</FieldLabel>
+      <FieldLabel required={required}>{t('personalInfo.nrc')}</FieldLabel>
 
       {/* Region & Township */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -100,7 +100,7 @@ export default function NrcInput({ value, onChange, disabled = false, required =
             className={`${selectClass} ${hasError('stateCode', 'Region') ? 'border-error' : ''}`}
             aria-invalid={hasError('stateCode', 'Region')}
           >
-            <option value="" className="bg-surface-deep">{t('region')}</option>
+            <option value="" className="bg-surface-deep">{t('personalInfo.region')}</option>
             {MYANMAR_NRC_DATA.map(state => (
               <option key={state.code} value={state.code} className={`bg-surface-deep ${myanmarFont}`}>
                 {language === 'my'
@@ -120,7 +120,7 @@ export default function NrcInput({ value, onChange, disabled = false, required =
             className={`${selectClass} ${hasError('townshipCode', 'Township') ? 'border-error' : ''}`}
             aria-invalid={hasError('townshipCode', 'Township')}
           >
-            <option value="" className="bg-surface-deep">{t('townshipLabel')}</option>
+            <option value="" className="bg-surface-deep">{t('delivery.townshipLabel')}</option>
             {townships.map(tw => (
               <option key={tw.id} value={tw.code} className={`bg-surface-deep ${myanmarFont}`}>
                 {language === 'my' ? tw.nameMy : tw.nameEn}
@@ -141,7 +141,7 @@ export default function NrcInput({ value, onChange, disabled = false, required =
             className={`${selectClass} ${hasError('type', 'Type') ? 'border-error' : ''}`}
             aria-invalid={hasError('type', 'Type')}
           >
-            <option value="" className="bg-surface-deep">{t('nrcType')}</option>
+            <option value="" className="bg-surface-deep">{t('personalInfo.nrcType')}</option>
             {NRC_TYPES.map(type => (
               <option key={type.code} value={type.code} className={`bg-surface-deep ${myanmarFont}`}>
                 {type.code} — {language === 'my' ? type.labelMy : type.labelEn}
@@ -186,19 +186,19 @@ export default function NrcInput({ value, onChange, disabled = false, required =
       {showPreview && (
         <div className={`pt-2 border-t border-white/10 ${isValid ? 'text-gold' : 'text-fg-muted'}`}>
           <div className="flex items-center justify-between text-xs mb-1">
-            <span className="font-medium">{t('nrcPreview')}</span>
+            <span className="font-medium">{t('personalInfo.nrcPreview')}</span>
           </div>
           <div className="font-mono text-base tracking-wide bg-surface-deep/50 rounded-lg px-3 py-2 text-center select-all">
             {formatNrcDisplay(value)}
           </div>
           {!isValid && value.serial && (
-            <p className="text-xs text-fg-muted mt-1 text-center">{t('completeAllFields')}</p>
+            <p className="text-xs text-fg-muted mt-1 text-center">{t('personalInfo.completeAllFields')}</p>
           )}
         </div>
       )}
 
       {!isValid && (
-        <p className="text-xs text-fg-muted text-center">{t('nrcExample')}</p>
+        <p className="text-xs text-fg-muted text-center">{t('personalInfo.nrcExample')}</p>
       )}
     </div>
   )

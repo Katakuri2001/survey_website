@@ -62,9 +62,9 @@ const config = {
         ring: '#E2C97F',
       },
       fontFamily: {
-        sans: ['var(--font-inter)', 'system-ui', 'sans-serif'],
+        sans: ['var(--font-inter)', 'var(--font-noto-myanmar)', 'system-ui', 'sans-serif'],
         serif: ['Georgia', 'serif'],
-        display: ['var(--font-poppins)', 'sans-serif'],
+        display: ['var(--font-poppins)', 'var(--font-noto-myanmar)', 'sans-serif'],
         myanmar: ['var(--font-noto-myanmar)', 'system-ui', 'sans-serif'],
       },
       borderRadius: {

@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { useLanguage } from '../context/LanguageContext'
+import { useLanguage } from '../context/I18nProvider'
 import Header from '../components/Header'
 import {
   API_BASE,
@@ -382,7 +382,7 @@ export default function SurveyPage() {
           // was removed. Keep the last good definition and show a recoverable
           // error instead of erasing progress.
           if (ordered.length === 0) {
-            if (!silent) setError(t('failedToLoad'))
+            if (!silent) setError(t('validation.failedToLoad'))
             return
           }
 
@@ -418,7 +418,7 @@ export default function SurveyPage() {
           if (cancelled || controller.signal.aborted || sequence !== requestSequence) return
           // Never replace a good question list with an error/empty list.
           if (!silent || questionsRef.current.length === 0) {
-            setError(t('failedToLoad'))
+            setError(t('validation.failedToLoad'))
           }
         })
         .finally(() => {
@@ -566,7 +566,7 @@ export default function SurveyPage() {
 
     const failAndRecover = () => {
       clearIdentitySession()
-      setError(t('sessionExpired'))
+      setError(t('validation.sessionExpired'))
       router.replace('/info')
     }
 
@@ -655,7 +655,7 @@ export default function SurveyPage() {
       if (result.body?.error?.code === 'RESUME_TOKEN_REQUIRED') {
         markResumeTokenRecovery()
         clearIdentitySession()
-        setError(t('resumeRecoveryRequired'))
+        setError(t('validation.resumeRecoveryRequired'))
         router.replace('/info')
         return
       }
@@ -669,10 +669,10 @@ export default function SurveyPage() {
         clearSurveyProgress()
         router.push('/spin')
       } else {
-        setError(result.body?.error?.message || t('failedToSubmit'))
+        setError(result.body?.error?.message || t('validation.failedToSubmit'))
       }
     } catch {
-      setError(t('connectionFailed'))
+      setError(t('validation.connectionFailed'))
     } finally {
       clearSubmittingLease()
       submittingRef.current = false
@@ -721,7 +721,7 @@ export default function SurveyPage() {
           </div>
         </div>
         <div className="h-2 w-40 rounded-full shimmer-bg" />
-        <p className="text-sm text-fg-muted mt-4">{t('loading')}</p>
+        <p className="text-sm text-fg-muted mt-4">{t('common.loading')}</p>
       </div>
     )
   }
@@ -729,13 +729,13 @@ export default function SurveyPage() {
   if (questions.length === 0 && !loading) {
     return (
       <div className="min-h-screen bg-navy text-fg-bright flex flex-col items-center justify-center p-6 text-center">
-        <h2 className="font-display text-xl font-bold text-white mb-2">{t('surveyTitle')}</h2>
-        <p className="text-fg-muted mb-6">{error || t('failedToLoad')}</p>
+        <h2 className="font-display text-xl font-bold text-white mb-2">{t('survey.surveyTitle')}</h2>
+        <p className="text-fg-muted mb-6">{error || t('validation.failedToLoad')}</p>
         <button
           onClick={() => router.push('/info')}
           className="px-6 py-3 rounded-2xl bg-gold-gradient text-brand-emerald font-bold shadow-gold"
         >
-          {t('back')}
+          {t('common.back')}
         </button>
       </div>
     )
@@ -745,7 +745,7 @@ export default function SurveyPage() {
   if (inReview) {
     return (
       <div className="min-h-screen bg-navy text-fg-bright overflow-hidden">
-        <Header title={t('surveyTitle')} backHref="/survey" showBack={idx > 0} />
+        <Header title={t('survey.surveyTitle')} backHref="/survey" showBack={idx > 0} />
 
         {notice && (
           <div className="absolute top-20 inset-x-0 z-40 flex justify-center px-4">
@@ -753,7 +753,7 @@ export default function SurveyPage() {
               <svg className="w-4 h-4 text-gold shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
-              <span className={`text-xs text-fg-bright ${language === 'my' ? 'font-myanmar' : ''}`}>{t('surveyUpdated')}</span>
+              <span className={`text-xs text-fg-bright ${language === 'my' ? 'font-myanmar' : ''}`}>{t('survey.surveyUpdated')}</span>
             </div>
           </div>
         )}
@@ -763,9 +763,9 @@ export default function SurveyPage() {
 
           <div className="relative text-center mb-8">
             <span className="inline-block px-3 py-1 rounded-full border border-gold/30 bg-gold/10 text-[10px] tracking-[0.3em] uppercase text-gold mb-3">03 · Review</span>
-            <h2 className="font-display text-2xl md:text-3xl font-bold text-white">{t('reviewAnswers')}</h2>
+            <h2 className="font-display text-2xl md:text-3xl font-bold text-white">{t('survey.reviewAnswers')}</h2>
             <div className="mx-auto my-4 h-px w-20 bg-gradient-to-r from-transparent via-gold to-transparent" />
-            <p className="text-sm text-fg-muted">{answeredCount} / {visibleQuestions.length} {t('answered')}</p>
+            <p className="text-sm text-fg-muted">{answeredCount} / {visibleQuestions.length} {t('survey.answered')}</p>
           </div>
 
           {error && (
@@ -806,7 +806,7 @@ export default function SurveyPage() {
                   <div className="flex-1 min-w-0">
                     <p className={`font-medium mb-1 text-fg-bright ${language === 'my' ? 'font-myanmar' : ''}`}>{q.question_text}</p>
                     <p className={`text-sm ${valueText ? 'text-fg-secondary' : 'text-fg-muted italic'}`}>
-                      {valueText || t('notAnswered')}
+                      {valueText || t('survey.notAnswered')}
                     </p>
                     {q.question_type === 'multiple_choice' && Array.isArray(a?.value) && (a!.value as string[]).length > 0 && (
                       <div className="mt-1 flex flex-wrap gap-1">
@@ -831,14 +831,14 @@ export default function SurveyPage() {
               onClick={handlePrev}
               className="px-6 py-4 rounded-2xl border border-white/10 bg-white/[0.04] text-fg-secondary font-semibold hover:bg-white/10 hover:text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {t('back')}
+              {t('common.back')}
             </button>
             <button
               onClick={handleSubmit}
               disabled={submitting || !canProceed}
               className="flex-1 py-4 bg-gold-gradient text-brand-emerald rounded-2xl font-bold text-lg shadow-gold hover:shadow-gold-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {submitting ? t('loading') : t('submit')}
+              {submitting ? t('common.loading') : t('common.submit')}
             </button>
           </div>
         </div>
@@ -849,7 +849,7 @@ export default function SurveyPage() {
   // ================================ QUESTION ================================
   return (
     <div className={`min-h-screen bg-navy text-fg-bright transition-opacity duration-300 overflow-hidden ${ready ? 'opacity-100' : 'opacity-0'}`}>
-      <Header title={t('surveyTitle')} backHref="/info" showBack={idx > 0} />
+      <Header title={t('survey.surveyTitle')} backHref="/info" showBack={idx > 0} />
 
       {notice && (
         <div className="absolute top-20 inset-x-0 z-40 flex justify-center px-4">
@@ -857,7 +857,7 @@ export default function SurveyPage() {
             <svg className="w-4 h-4 text-gold shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
-            <span className={`text-xs text-fg-bright ${language === 'my' ? 'font-myanmar' : ''}`}>{t('surveyUpdated')}</span>
+            <span className={`text-xs text-fg-bright ${language === 'my' ? 'font-myanmar' : ''}`}>{t('survey.surveyUpdated')}</span>
           </div>
         </div>
       )}
@@ -871,7 +871,7 @@ export default function SurveyPage() {
             <div className="flex items-center justify-between mb-3">
               <span className="flex items-center gap-3 text-sm text-fg-secondary">
                 <span className="w-7 h-7 rounded-lg bg-gold/15 border border-gold/30 flex items-center justify-center text-[10px] font-bold text-gold">02</span>
-                {t('question')} {visibleStep} <span className="text-fg-muted">{t('of')} {total}</span>
+                {t('survey.question')} {visibleStep} <span className="text-fg-muted">{t('survey.of')} {total}</span>
               </span>
               <span className="text-xs font-bold text-gold px-2.5 py-1 rounded-full bg-gold/10 border border-gold/20">
                 {Math.round(progress)}%
@@ -896,7 +896,7 @@ export default function SurveyPage() {
                 </span>
                 {current.is_required && (
                   <span className="text-[10px] font-semibold uppercase tracking-widest text-warning px-2.5 py-1 rounded-full bg-warning/10 border border-warning/30">
-                    {t('required')}
+                    {t('survey.required')}
                   </span>
                 )}
               </div>
@@ -1006,7 +1006,7 @@ export default function SurveyPage() {
                     onChange={(e) => handleTextChange(current.id, e.target.value)}
                     maxLength={currentTextMaxLength}
                     className={`survey-input resize-none min-h-[120px] leading-relaxed ${language === 'my' ? 'font-myanmar' : ''}`}
-                    placeholder={t('textPlaceholder')}
+                    placeholder={t('survey.textPlaceholder')}
                     rows={current.question_type === 'long_text' ? 7 : 4}
                     aria-invalid={Boolean(currentTextError)}
                   />
@@ -1020,7 +1020,7 @@ export default function SurveyPage() {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                         </svg>
                       )}
-                      {complete ? t('answered') : t('notAnswered')}
+                      {complete ? t('survey.answered') : t('survey.notAnswered')}
                     </span>
                     <span className="text-fg-muted">
                       {currentTextValue.length} / {currentTextMaxLength}
@@ -1041,7 +1041,7 @@ export default function SurveyPage() {
                     step={currentRules.min !== undefined || currentRules.max !== undefined ? 1 : 'any'}
                     onChange={(e) => handleNumberChange(current.id, e.target.value)}
                     className="survey-input"
-                    placeholder={t('textPlaceholder')}
+                    placeholder={t('survey.textPlaceholder')}
                     aria-invalid={Boolean(currentNumberError)}
                   />
                   {currentNumberError && (
@@ -1054,7 +1054,7 @@ export default function SurveyPage() {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                         </svg>
                       )}
-                      {complete ? t('answered') : t('notAnswered')}
+                      {complete ? t('survey.answered') : t('survey.notAnswered')}
                     </span>
                   </div>
                 </div>
@@ -1069,7 +1069,7 @@ export default function SurveyPage() {
                     className="survey-input"
                     aria-label={current.question_text}
                   >
-                    <option value="">{t('selectOne')}</option>
+                    <option value="">{t('survey.selectOne')}</option>
                     {(current.options || []).map(opt => (
                       <option key={opt.id} value={opt.option_value}>
                         {opt.option_text}
@@ -1109,7 +1109,7 @@ export default function SurveyPage() {
             <button
               onClick={handlePrev}
               disabled={!inReview && !hasPrevVisible}
-              aria-label={t('back')}
+              aria-label={t('common.back')}
               className="w-14 h-14 rounded-2xl border border-white/10 bg-white/[0.04] text-fg-secondary hover:bg-white/10 hover:text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0 flex items-center justify-center"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1121,7 +1121,7 @@ export default function SurveyPage() {
               disabled={!complete}
               className="group flex-1 py-4 bg-lager-gradient text-white rounded-2xl font-bold text-lg shadow-lager hover:shadow-lager-lg hover:scale-[1.01] transition-all inline-flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
             >
-              {hasNextVisible ? t('next') : t('review')}
+              {hasNextVisible ? t('common.next') : t('survey.review')}
               <svg className="w-5 h-5 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5-5 5M6 12h12" />
               </svg>

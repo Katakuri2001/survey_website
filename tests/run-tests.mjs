@@ -23,3 +23,11 @@ if (process.env.RUN_LIVE_API_TESTS === '1') {
 } else {
   console.log('[test] live API/hardening suites skipped; set RUN_LIVE_API_TESTS=1 with a local/staging API to run them');
 }
+
+if (process.env.RUN_I18N_TESTS === '1') {
+  console.log('[test] RUN_I18N_TESTS=1: running the browser i18n suite (needs a running app server)');
+  const i18nStatus = run(process.execPath, ['tests/i18n.test.mjs']);
+  if (i18nStatus !== 0) process.exit(i18nStatus);
+} else {
+  console.log('[test] browser i18n suite skipped; set RUN_I18N_TESTS=1 with a dev/preview server to run it');
+}
