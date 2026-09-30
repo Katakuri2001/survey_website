@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { useLanguage } from '../context/LanguageContext'
+import { useLanguage } from '../context/I18nProvider'
 import Header from '../components/Header'
 import { API_BASE, clearIdentitySession, getValidToken, markResumeTokenRecovery } from '../lib/api'
 import { useToast } from '../components/Toast'
@@ -175,7 +175,7 @@ export default function SpinPage() {
         rewardsLoadedRef.current = true
       }
     } catch {
-      setError(t('connectionFailed'))
+      setError(t('validation.connectionFailed'))
       if (rewardsRef.current.length === 0) {
         setRewards([])
         rewardsLoadedRef.current = true
@@ -550,13 +550,13 @@ export default function SpinPage() {
           stopContinuousSpin()
           setSpinning(false)
           setHasSpun(Boolean(prior))
-          if (!prior) setError(t('spinFailed'))
+          if (!prior) setError(t('spinWheel.spinFailed'))
           return
         }
 
         const rewardId = String(serverReward.rewardId || serverReward.reward_id)
         const userRewardId = String(serverReward.userRewardId || serverReward.user_reward_id)
-        const rewardName = String(serverReward.rewardName || serverReward.reward_name || 'Reward')
+        const rewardName = String(serverReward.rewardName || serverReward.reward_name || t('spinWheel.rewardFallback'))
         const deliveryFlag = serverReward.requiresDelivery ?? serverReward.requires_delivery
         const requiresDelivery = deliveryFlag !== false && deliveryFlag !== 0
         let targetIndex = rewardsRef.current.findIndex(reward => reward.id === rewardId)
@@ -583,13 +583,18 @@ export default function SpinPage() {
           sessionSet('user_reward_id', userRewardId)
           sessionSet('reward_name', fallbackReward.name)
           spawnConfetti()
-          showToast(`${t('congratulations')} ${t('youWon')}: ${fallbackReward.name}!`, 'success', 5000)
+          showToast(`${t('spinWheel.congratulations')} ${t('spinWheel.youWon')}: ${fallbackReward.name}!`, 'success', 5000)
           return
         }
 
         const displayReward: Reward = {
           ...catalogue[targetIndex],
-          name: rewardName || catalogue[targetIndex].name,
+          // The catalogue was fetched with `?lang=`, so its name is already in
+          // the active language. `/rewards/spin` only echoes the untranslated
+          // `rewards.name` column, so it is used as the fallback — never the
+          // primary display string. Only the rendered label changes; rewardId,
+          // stock, weight and userRewardId are untouched.
+          name: catalogue[targetIndex].name || rewardName,
           requiresDelivery,
         }
         await landOnReward(targetIndex, catalogue.length)
@@ -602,28 +607,28 @@ export default function SpinPage() {
         sessionSet('user_reward_id', userRewardId)
         sessionSet('reward_name', displayReward.name)
         spawnConfetti()
-        showToast(`${t('congratulations')} ${t('youWon')}: ${displayReward.name}!`, 'success', 5000)
+        showToast(`${t('spinWheel.congratulations')} ${t('spinWheel.youWon')}: ${displayReward.name}!`, 'success', 5000)
       } else {
         stopContinuousSpin()
         setSpinning(false)
         const errorCode = response.body?.error?.code
         if (errorCode === 'NO_REWARDS_AVAILABLE' || errorCode === 'REWARD_UNAVAILABLE' || errorCode === 'CANCELLED' || errorCode === 'CANCELED') {
           resetIdempotencyKey()
-          setError(t('noRewardsDesc'))
+          setError(t('spinWheel.noRewardsDesc'))
         } else if (errorCode === 'SPIN_IN_PROGRESS') {
-          setError(t('spinProcessing'))
+          setError(t('spinWheel.spinProcessing'))
         } else if (errorCode === 'ALREADY_SPUN') {
-          setError(t('alreadySpun'))
+          setError(t('spinWheel.alreadySpun'))
           const prior = await checkExistingSpin(token)
           if (!prior) setHasSpun(false)
         } else {
-          setError(response.body?.error?.message || t('spinFailed'))
+          setError(response.body?.error?.message || t('spinWheel.spinFailed'))
         }
       }
     } catch {
       stopContinuousSpin()
       setSpinning(false)
-      setError(t('connectionFailed'))
+      setError(t('validation.connectionFailed'))
     }
   }
 
@@ -639,7 +644,7 @@ export default function SpinPage() {
           </div>
         </div>
         <div className="h-2 w-40 rounded-full shimmer-bg" />
-        <p className="text-sm text-fg-muted mt-4">{t('loading')}</p>
+        <p className="text-sm text-fg-muted mt-4">{t('common.loading')}</p>
       </div>
     )
   }
@@ -649,17 +654,17 @@ export default function SpinPage() {
       <div className="min-h-screen bg-navy text-fg-bright relative overflow-hidden flex items-center justify-center p-4">
         <div className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 w-[520px] h-[400px] rounded-full bg-gold/[0.08] blur-[120px]" />
         <div className="pointer-events-none absolute bottom-0 right-0 w-[360px] h-[360px] rounded-full bg-brand-emeraldLight/50 blur-[110px]" />
-        <Header title={t('spinTitle')} backHref="/survey" />
+        <Header title={t('spinWheel.spinTitle')} backHref="/survey" />
         <div className="relative mx-auto max-w-xl px-4 py-8 pb-20 text-center">
           <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-surface/50 border border-gold/30 flex items-center justify-center">
             <svg className="w-10 h-10 text-gold/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <h2 className="font-display text-2xl font-bold gold-text mb-3">{t('noRewardsTitle')}</h2>
-          <p className="text-fg-secondary mb-6 max-w-md mx-auto">{t('noRewardsDesc')}</p>
+          <h2 className="font-display text-2xl font-bold gold-text mb-3">{t('spinWheel.noRewardsTitle')}</h2>
+          <p className="text-fg-secondary mb-6 max-w-md mx-auto">{t('spinWheel.noRewardsDesc')}</p>
           <button onClick={fetchRewards} className="px-6 py-3 bg-gold-gradient text-brand-emerald rounded-2xl font-bold shadow-gold hover:shadow-gold-lg transition-all">
-            {t('tryAgain')}
+            {t('spinWheel.tryAgain')}
           </button>
         </div>
       </div>
@@ -673,14 +678,14 @@ export default function SpinPage() {
       <div className="pointer-events-none absolute bottom-0 right-0 w-[360px] h-[360px] rounded-full bg-brand-emeraldLight/50 blur-[110px] animate-orb-drift" style={{ animationDelay: '-4s' }} />
       <div className="pointer-events-none absolute top-1/2 left-0 w-[300px] h-[300px] rounded-full bg-gold/[0.04] blur-[100px] animate-orb-drift" style={{ animationDelay: '-2s' }} />
 
-      <Header title={t('spinTitle')} backHref="/survey" />
+      <Header title={t('spinWheel.spinTitle')} backHref="/survey" />
 
       <div className="relative mx-auto max-w-xl px-4 py-8 pb-20">
         {/* Title section */}
         <div className="text-center mb-7 animate-fade-up" style={{ animationDelay: '0.1s' }}>
           <span className="inline-block px-3 py-1 rounded-full border border-gold/30 bg-gold/10 text-[10px] tracking-[0.3em] uppercase text-gold mb-3">04 · Lucky Spin</span>
-          <h2 className="font-display text-3xl font-bold gold-text">{t('spinTitle')}</h2>
-          <p className="text-fg-secondary mt-2">{t('spinDesc')}</p>
+          <h2 className="font-display text-3xl font-bold gold-text">{t('spinWheel.spinTitle')}</h2>
+          <p className="text-fg-secondary mt-2">{t('spinWheel.spinDesc')}</p>
         </div>
 
         {/* Error display */}
@@ -823,8 +828,8 @@ export default function SpinPage() {
             <div className="absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-gold to-transparent" />
 
             <span className="inline-block px-3 py-1 rounded-full border border-gold/30 bg-gold/10 text-[10px] tracking-[0.3em] uppercase text-gold mb-4">05 · Reward</span>
-            <h3 className="font-display text-3xl font-bold gold-text mb-2 animate-pop">{t('congratulations')}</h3>
-            <p className="text-fg-secondary mb-5">{t('youWon')}</p>
+            <h3 className="font-display text-3xl font-bold gold-text mb-2 animate-pop">{t('spinWheel.congratulations')}</h3>
+            <p className="text-fg-secondary mb-5">{t('spinWheel.youWon')}</p>
 
             {/* Reward image with celebration glow */}
             <div className="relative mx-auto mb-5 w-28 h-28 sm:w-32 sm:h-32">
@@ -841,11 +846,11 @@ export default function SpinPage() {
             </div>
 
             <p className="font-display text-xl sm:text-2xl font-bold text-white mb-1">{result.reward.name}</p>
-            <p className="text-xs text-fg-muted mb-6">{result.reward.requiresDelivery ? t('rewardAdded') : t('noDeliveryNeeded')}</p>
+            <p className="text-xs text-fg-muted mb-6">{result.reward.requiresDelivery ? t('spinWheel.rewardAdded') : t('spinWheel.noDeliveryNeeded')}</p>
 
             {result.reward.requiresDelivery && result.userRewardId && (
               <button onClick={() => router.push(`/delivery?reward=${encodeURIComponent(result.userRewardId)}`)} className="w-full mb-3 py-4 bg-gold-gradient text-brand-emerald rounded-2xl font-bold text-lg shadow-gold hover:shadow-gold-lg hover:scale-[1.01] transition-all inline-flex items-center justify-center gap-2">
-                {t('claimReward')}
+                {t('spinWheel.claimReward')}
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                 </svg>
@@ -853,7 +858,7 @@ export default function SpinPage() {
             )}
 
             <button onClick={handleDone} className={`w-full py-4 rounded-2xl font-bold text-lg transition-all inline-flex items-center justify-center gap-2 ${result.reward.requiresDelivery && result.userRewardId ? 'border border-white/15 bg-white/[0.04] text-fg-bright hover:bg-white/[0.08]' : 'bg-gold-gradient text-brand-emerald shadow-gold hover:shadow-gold-lg hover:scale-[1.01]'}`}>
-              {t('done')}
+              {t('common.done')}
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5-5 5M6 12h12" />
               </svg>
@@ -866,13 +871,13 @@ export default function SpinPage() {
                 <svg className="w-6 h-6 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
-                {t('spinning')}
+                {t('spinWheel.spinning')}
               </>
             ) : hasSpun ? (
-              t('alreadySpun')
+              t('spinWheel.alreadySpun')
             ) : (
               <>
-                {t('spinButton')}
+                {t('spinWheel.spinButton')}
                 <svg className="w-6 h-6 group-hover:rotate-180 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
                 </svg>

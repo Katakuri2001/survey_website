@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Image from 'next/image'
-import { useLanguage } from '../context/LanguageContext'
+import { useLanguage } from '../context/I18nProvider'
 import { useHydrated } from '../lib/useHydrated'
 
 export default function Splash() {
@@ -63,7 +63,7 @@ export default function Splash() {
         onClick={skip}
         className="absolute top-5 right-5 z-10 px-4 py-2 rounded-full text-xs tracking-widest uppercase text-fg-secondary/70 border border-white/10 bg-white/5 hover:bg-gold/20 hover:text-gold transition-all"
       >
-        {t('skip')}
+        {t('common.skip')}
       </button>
 
       {/* Center content */}
@@ -82,14 +82,14 @@ export default function Splash() {
         </div>
 
         <h1 className={`font-display font-bold gold-text mb-3 animate-fade-up ${language === 'my' ? 'font-myanmar leading-snug tracking-normal text-3xl md:text-5xl' : 'text-4xl md:text-5xl'}`} style={{ animationDelay: '0.15s' }}>
-          {t('brandName')}
+          {t('common.brandName')}
         </h1>
 
         {/* Gold divider */}
         <div className="w-24 h-px bg-gradient-to-r from-transparent via-gold to-transparent my-4 animate-grow-x" style={{ animationDelay: '0.3s' }} />
 
         <p className="font-myanmar text-base md:text-lg text-fg-secondary max-w-xs animate-fade-up" style={{ animationDelay: '0.35s' }}>
-          {t('brandSubtitle')}
+          {t('common.brandSubtitle')}
         </p>
 
         <p className="text-xs text-fg-muted mt-10 animate-fade-in" style={{ animationDelay: '0.7s' }}>

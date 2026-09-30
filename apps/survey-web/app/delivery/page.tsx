@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useLanguage } from '../context/LanguageContext'
+import { useLanguage } from '../context/I18nProvider'
 import Header from '../components/Header'
 import { API_BASE, clearIdentitySession, getValidToken, markResumeTokenRecovery, surveyHeaders } from '../lib/api'
 import { useHydrated } from '../lib/useHydrated'
@@ -104,7 +104,7 @@ export default function DeliveryPage() {
     try {
       let token = await getValidToken()
       if (!token) {
-        setError(t('sessionExpired'))
+        setError(t('validation.sessionExpired'))
         router.replace('/info')
         return
       }
@@ -143,12 +143,12 @@ export default function DeliveryPage() {
         }
         setSubmitted(true)
       } else if (data.error?.code === 'NOT_FOUND') {
-        setError(t('rewardNotFound'))
+        setError(t('delivery.rewardNotFound'))
       } else {
-        setError(data.error?.message || t('failedToSubmit'))
+        setError(data.error?.message || t('validation.failedToSubmit'))
       }
     } catch {
-      setError(t('connectionFailed'))
+      setError(t('validation.connectionFailed'))
     } finally {
       setLoading(false)
     }
@@ -165,20 +165,20 @@ export default function DeliveryPage() {
   if (submitted) {
     return (
       <div className="min-h-screen bg-navy text-fg-bright">
-        <Header title={t('deliveryTitle')} backHref="/" />
+        <Header title={t('delivery.deliveryTitle')} backHref="/" />
         <div className="relative mx-auto max-w-xl px-4 py-16 text-center">
           <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gold/15 border border-gold/40 flex items-center justify-center animate-pop">
             <svg className="w-9 h-9 text-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h2 className="font-display text-2xl font-bold gold-text mb-3">{t('deliverySuccess')}</h2>
-          <p className="text-fg-secondary mb-8">{t('deliverySuccessDesc')}</p>
+          <h2 className="font-display text-2xl font-bold gold-text mb-3">{t('delivery.deliverySuccess')}</h2>
+          <p className="text-fg-secondary mb-8">{t('delivery.deliverySuccessDesc')}</p>
           <button
             onClick={() => router.push('/')}
             className="px-6 py-4 bg-gold-gradient text-brand-emerald rounded-2xl font-bold shadow-gold hover:shadow-gold-lg hover:scale-[1.01] transition-all"
           >
-            {t('done')}
+            {t('common.done')}
           </button>
         </div>
       </div>
@@ -189,7 +189,7 @@ export default function DeliveryPage() {
 
   return (
     <div className="min-h-screen bg-navy text-fg-bright">
-      <Header title={t('deliveryTitle')} backHref="/spin" />
+      <Header title={t('delivery.deliveryTitle')} backHref="/spin" />
 
       <div className="relative min-h-screen overflow-hidden">
         <div className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 w-[420px] h-[300px] rounded-full bg-gold/[0.07] blur-[110px]" />
@@ -197,10 +197,10 @@ export default function DeliveryPage() {
         <div className="relative mx-auto max-w-xl px-4 py-8 md:py-12">
           <div className="text-center mb-8">
             <h2 className={`font-display text-2xl md:text-3xl font-bold text-white ${language === 'my' ? 'font-myanmar leading-snug' : ''}`}>
-              {t('deliveryTitle')}
+              {t('delivery.deliveryTitle')}
             </h2>
             <div className="mx-auto my-4 h-px w-20 bg-gradient-to-r from-transparent via-gold to-transparent" />
-            <p className="text-fg-secondary">{t('deliveryDesc')}</p>
+            <p className="text-fg-secondary">{t('delivery.deliveryDesc')}</p>
           </div>
 
           <form
@@ -219,19 +219,19 @@ export default function DeliveryPage() {
             )}
 
             <div className="mb-6">
-              <label className="block text-sm font-medium text-fg-secondary mb-2">{t('fullName')}</label>
+              <label className="block text-sm font-medium text-fg-secondary mb-2">{t('login.fullName')}</label>
               <input
                 type="text"
                 value={form.fullName}
                 onChange={(e) => setForm({ ...form, fullName: e.target.value })}
                 className={inputClass}
-                placeholder={t('fullNamePlaceholder')}
+                placeholder={t('login.fullNamePlaceholder')}
                 required
               />
             </div>
 
             <div className="mb-6">
-              <label className="block text-sm font-medium text-fg-secondary mb-2">{t('phone')}</label>
+              <label className="block text-sm font-medium text-fg-secondary mb-2">{t('login.phone')}</label>
               <input
                 type="tel"
                 value={form.phone}
@@ -243,58 +243,58 @@ export default function DeliveryPage() {
             </div>
 
             <div className="mb-6">
-              <label className="block text-sm font-medium text-fg-secondary mb-2">{t('address')}</label>
+              <label className="block text-sm font-medium text-fg-secondary mb-2">{t('delivery.address')}</label>
               <textarea
                 value={form.address}
                 onChange={(e) => setForm({ ...form, address: e.target.value })}
                 className={`${inputClass} min-h-[88px] resize-y`}
-                placeholder={t('addressPlaceholder')}
+                placeholder={t('delivery.addressPlaceholder')}
                 required
               />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
               <div>
-                <label className="block text-sm font-medium text-fg-secondary mb-2">{t('city')}</label>
+                <label className="block text-sm font-medium text-fg-secondary mb-2">{t('personalInfo.city')}</label>
                 <input
                   type="text"
                   value={form.city}
                   onChange={(e) => setForm({ ...form, city: e.target.value })}
                   className={inputClass}
-                  placeholder={t('cityPlaceholder')}
+                  placeholder={t('personalInfo.cityPlaceholder')}
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-fg-secondary mb-2">{t('townshipLabel')}</label>
+                <label className="block text-sm font-medium text-fg-secondary mb-2">{t('delivery.townshipLabel')}</label>
                 <input
                   type="text"
                   value={form.township}
                   onChange={(e) => setForm({ ...form, township: e.target.value })}
                   className={inputClass}
-                  placeholder={t('townshipPlaceholder')}
+                  placeholder={t('delivery.townshipPlaceholder')}
                 />
               </div>
             </div>
 
             <div className="mb-6">
-              <label className="block text-sm font-medium text-fg-secondary mb-2">{t('postalCode')}</label>
+              <label className="block text-sm font-medium text-fg-secondary mb-2">{t('delivery.postalCode')}</label>
               <input
                 type="text"
                 value={form.postalCode}
                 onChange={(e) => setForm({ ...form, postalCode: e.target.value })}
                 className={inputClass}
-                placeholder={t('postalCodePlaceholder')}
+                placeholder={t('delivery.postalCodePlaceholder')}
               />
             </div>
 
             <div className="mb-8">
-              <label className="block text-sm font-medium text-fg-secondary mb-2">{t('deliveryNotes')}</label>
+              <label className="block text-sm font-medium text-fg-secondary mb-2">{t('delivery.deliveryNotes')}</label>
               <textarea
                 value={form.notes}
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
                 className={`${inputClass} min-h-[72px] resize-y`}
-                placeholder={t('deliveryNotesPlaceholder')}
+                placeholder={t('delivery.deliveryNotesPlaceholder')}
               />
             </div>
 
@@ -303,7 +303,7 @@ export default function DeliveryPage() {
               disabled={loading}
               className="group w-full py-4 bg-gold-gradient text-brand-emerald rounded-2xl font-bold text-lg shadow-gold hover:shadow-gold-lg hover:scale-[1.01] transition-all inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? t('loading') : t('confirmDelivery')}
+              {loading ? t('common.loading') : t('delivery.confirmDelivery')}
               {!loading && (
                 <svg className="w-5 h-5 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5-5 5M6 12h12" />

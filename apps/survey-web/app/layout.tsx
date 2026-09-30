@@ -1,7 +1,8 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import { Poppins, Inter, Noto_Sans_Myanmar } from 'next/font/google'
-import { LanguageProvider } from './context/LanguageContext'
+import { I18nProvider } from './context/I18nProvider'
+import { DEFAULT_LOCALE } from './i18n_translation/translation'
 import Splash from './components/Splash'
 import { ToastProvider } from './components/Toast'
 
@@ -24,14 +25,18 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={`${inter.variable} ${poppins.variable} ${notoMyanmar.variable} min-h-screen`}>
+    <html
+      lang={DEFAULT_LOCALE}
+      suppressHydrationWarning
+      className={`${inter.variable} ${poppins.variable} ${notoMyanmar.variable} min-h-screen`}
+    >
       <body className="min-h-screen bg-navy text-fg-bright">
-        <LanguageProvider>
+        <I18nProvider>
           <ToastProvider>
             <Splash />
             {children}
           </ToastProvider>
-        </LanguageProvider>
+        </I18nProvider>
       </body>
     </html>
   )
