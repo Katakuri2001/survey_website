@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect } from 'react'
 import { useLanguage } from './context/I18nProvider'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -7,6 +8,30 @@ import LanguageSwitcher from './components/LanguageSwitcher'
 
 export default function Home() {
   const { t, language } = useLanguage()
+
+  // Scroll-reveal: .reveal elements slide up + fade in once, the first time
+  // they enter the viewport. Reduced-motion / no-JS users see them immediately
+  // (handled in globals.css).
+  useEffect(() => {
+    const els = document.querySelectorAll<HTMLElement>('.reveal')
+    if (!('IntersectionObserver' in window)) {
+      els.forEach((el) => el.classList.add('is-visible'))
+      return
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-visible')
+            observer.unobserve(entry.target)
+          }
+        })
+      },
+      { threshold: 0.15, rootMargin: '0px 0px -48px 0px' }
+    )
+    els.forEach((el) => observer.observe(el))
+    return () => observer.disconnect()
+  }, [])
 
   const steps = [
     { n: '01', title: t('home.stepSurvey'), desc: t('home.stepSurveyDesc'), icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
@@ -106,15 +131,18 @@ export default function Home() {
 
       {/* ============================ HOW IT WORKS ============================ */}
       <section id="how-it-works" className="relative mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 pb-16 sm:pb-20 md:pb-28">
-        <div className="text-center mb-10 sm:mb-14">
+        <div className="reveal text-center mb-10 sm:mb-14">
           <span className="text-[10px] sm:text-[11px] tracking-[0.3em] uppercase text-gold">{t('home.howItWorks').toUpperCase()}</span>
           <h2 className="font-display text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mt-2 sm:mt-3 text-white">{t('home.howItWorks')}</h2>
           <div className="mx-auto mt-3 h-px w-20 sm:w-24 bg-gradient-to-r from-transparent via-gold to-transparent" />
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-          {steps.map((s) => (
-            <div key={s.n} className="relative rounded-2xl sm:rounded-3xl bg-brand-emerald/40 border border-white/[0.07] p-6 sm:p-8 text-center overflow-hidden">
+          {steps.map((s, i) => (
+            <div
+              key={s.n}
+              className={`reveal ${i === 1 ? 'reveal-delay-1' : i === 2 ? 'reveal-delay-2' : ''} relative rounded-2xl sm:rounded-3xl bg-brand-emerald/40 border border-white/[0.07] p-6 sm:p-8 text-center overflow-hidden`}
+            >
               <div className="mx-auto mb-4 sm:mb-5 w-12 sm:w-14 h-12 sm:h-14 rounded-xl sm:rounded-2xl bg-gold/15 border border-gold/30 flex items-center justify-center gold-border">
                 <svg className="w-6 h-6 sm:w-7 sm:h-7 text-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d={s.icon} />
@@ -133,7 +161,7 @@ export default function Home() {
         <div className="absolute inset-0 bg-emerald-gradient" />
         <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-gold/70 to-transparent" />
         <div className="absolute -bottom-16 sm:-bottom-24 left-1/2 -translate-x-1/2 w-[400px] sm:w-[520px] h-[200px] sm:h-[260px] bg-gold/10 blur-[110px] rounded-full" />
-        <div className="relative mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-12 sm:py-16 md:py-20 text-center">
+        <div className="reveal relative mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-12 sm:py-16 md:py-20 text-center">
           <h2 className="font-display text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-white">{t('home.voiceTitle')}</h2>
           <div className="mx-auto my-4 h-px w-20 sm:w-24 bg-gradient-to-r from-transparent via-gold to-transparent" />
           <p className="text-fg-secondary mb-6 sm:mb-9 max-w-lg mx-auto whitespace-pre-line leading-relaxed">{t('home.voiceDesc')}</p>
@@ -151,7 +179,7 @@ export default function Home() {
 
       {/* ============================ FOOTER ============================ */}
       <footer className="border-t border-white/[0.06]">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-8 sm:py-10 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
+        <div className="reveal mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-8 sm:py-10 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
           <div className="flex items-center gap-2 sm:gap-3">
             <span className="w-8 h-8 sm:w-9 sm:h-9 rounded-full gold-border bg-brand-emerald overflow-hidden p-0.5 shrink-0">
               <Image src="/myanmarbeerstout.png" alt="MB" width={36} height={36} className="w-full h-full object-cover rounded-full" />

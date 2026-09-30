@@ -276,6 +276,38 @@
   animation: goldSweep 3s ease-in-out infinite;
 }
 
+/* --------------------------- scroll reveal --------------------------- */
+/* Elements start slightly below + transparent; .is-visible (added once by the
+   IntersectionObserver in page.tsx when the element enters the viewport)
+   transitions them up into place. One-shot: stays revealed while scrolling. */
+.reveal {
+  opacity: 0;
+  transform: translate3d(0, 28px, 0);
+  transition:
+    opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+}
+.reveal-delay-1 { transition-delay: 0.1s; }
+.reveal-delay-2 { transition-delay: 0.2s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+@media (scripting: none) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 /* ------------------------------ utilities ------------------------------ */
 .animate-fade-up {
   animation: fadeUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
