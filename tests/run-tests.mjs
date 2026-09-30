@@ -31,3 +31,11 @@ if (process.env.RUN_I18N_TESTS === '1') {
 } else {
   console.log('[test] browser i18n suite skipped; set RUN_I18N_TESTS=1 with a dev/preview server to run it');
 }
+
+if (process.env.RUN_CARD_TESTS === '1') {
+  console.log('[test] RUN_CARD_TESTS=1: running the card-draw browser suite (needs a running app + local API)');
+  const cardStatus = run(process.execPath, ['tests/card-draw.test.mjs']);
+  if (cardStatus !== 0) process.exit(cardStatus);
+} else {
+  console.log('[test] card-draw suite skipped; set RUN_CARD_TESTS=1 with a dev/preview server and local API to run it');
+}

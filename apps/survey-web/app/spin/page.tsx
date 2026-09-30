@@ -8,7 +8,7 @@ import Header from '../components/Header'
 import { API_BASE, clearIdentitySession, getValidToken, markResumeTokenRecovery } from '../lib/api'
 import { useToast } from '../components/Toast'
 import { useHydrated } from '../lib/useHydrated'
-import './spin-enhancements.css'
+import './cards.css'
 
 interface Reward {
   id: string
@@ -65,6 +65,32 @@ const SEGMENT_COLORS = [
 ] as const
 
 const CONFETTI_COLORS = ['#F7E7BC', '#E2C97F', '#F5E7B8', '#E01B2C', '#F59E0B', '#F04450', '#3B1F1D', '#B8121F'] as const
+
+// Card-draw timing. The shuffle must run at least MIN_SHUFFLE_MS so the draw
+// never feels instant even when the API answers quickly; SHUFFLE_BEAT_MS is
+// how often the face-down cards hop to a new shuffled arrangement.
+const MIN_SHUFFLE_MS = 1400
+const SHUFFLE_BEAT_MS = 230
+
+/** Grid columns for a given number of active reward types. */
+function columnsFor(count: number): number {
+  if (count <= 1) return 1
+  if (count === 2 || count === 4) return 2
+  return 3
+}
+
+/**
+ * Deterministic per-beat displacement for the shuffle, so every card hops to a
+ * new arrangement on each beat without needing per-card state.
+ */
+function shuffleOffset(tick: number, index: number): { x: number; y: number; rot: number } {
+  const seed = tick + 1
+  const a = Math.sin(seed * 12.9898 + index * 78.233) * 43758.5453
+  const b = Math.sin(seed * 39.3468 + index * 11.135) * 24634.6345
+  const r1 = a - Math.floor(a)
+  const r2 = b - Math.floor(b)
+  return { x: (r1 - 0.5) * 24, y: (r2 - 0.5) * 16, rot: (r1 - 0.5) * 11 }
+}
 
 function sessionGet(key: string): string | null {
   if (typeof window === 'undefined') return null
@@ -130,7 +156,11 @@ export default function SpinPage() {
   const hydrated = useHydrated()
   const [spinning, setSpinning] = useState(false)
   const [result, setResult] = useState<{ reward: Reward; userRewardId: string } | null>(null)
-  const [rotation, setRotation] = useState(0)
+  // The tapped card. Everything else stays face-down: unselected cards never
+  // reveal a reward, so no reward is assigned to them in the first place.
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
+  // Bumped on every shuffle beat so the face-down cards visibly reorder.
+  const [shuffleTick, setShuffleTick] = useState(0)
   const [rewards, setRewards] = useState<Reward[]>([])
   const [loading, setLoading] = useState(true)
   const [authReady, setAuthReady] = useState(false)
@@ -140,15 +170,17 @@ export default function SpinPage() {
   const [confettiParticles, setConfettiParticles] = useState<Array<{ id: number; x: string; y: string; color: string; delay: number; duration: number; rotation: number }>>([])
   const [showCelebration, setShowCelebration] = useState(false)
   const prefersReducedMotion = useRef(false)
-  const animationRef = useRef<Animation | null>(null)
-  const spinAnimationRef = useRef<Animation | null>(null)
-  const wheelRef = useRef<HTMLDivElement>(null)
-  const mediaQueryRef = useRef<MediaQueryList | null>(null)
-  const rotationRef = useRef(0)
+  const shuffleTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const shuffleStartedRef = useRef(0)
   const rewardsLoadedRef = useRef(false)
   const rewardsRef = useRef<Reward[]>([])
   const priorAwardRef = useRef<PriorAward | null>(null)
   const celebrationRef = useRef<HTMLDivElement>(null)
+
+  // Keep the grid visible after a successful draw so the tapped card can flip
+  // over in place. A prior award from an earlier visit has no tapped card, so
+  // the grid is hidden and only the result card is shown.
+  const showCards = selectedIndex !== null || result === null
 
   const getRewardColor = useCallback((index: number) => SEGMENT_COLORS[index % SEGMENT_COLORS.length], [])
 
@@ -196,16 +228,6 @@ export default function SpinPage() {
       : award.reward
     setResult({ reward: displayReward, userRewardId: award.userRewardId })
     setHasSpun(true)
-    if (index >= 0 && catalogue.length > 0) {
-      const segmentAngle = 360 / catalogue.length
-      const targetAngle = -(index * segmentAngle + segmentAngle / 2) - 90
-      const finalRotation = 5 * 360 + targetAngle
-      setRotation(finalRotation)
-      rotationRef.current = finalRotation
-    } else {
-      setRotation(0)
-      rotationRef.current = 0
-    }
   }, [])
 
   const checkExistingSpin = useCallback(async (initialToken?: string): Promise<PriorAward | null> => {
@@ -250,7 +272,6 @@ export default function SpinPage() {
   useEffect(() => {
     if (!hydrated) return
     const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
-    mediaQueryRef.current = mediaQuery
     prefersReducedMotion.current = mediaQuery.matches
     const handler = (e: MediaQueryListEvent) => { prefersReducedMotion.current = e.matches }
     mediaQuery.addEventListener('change', handler)
@@ -287,11 +308,6 @@ export default function SpinPage() {
       requiresDelivery: award.reward.requiresDelivery,
     }
     setResult({ reward: displayReward, userRewardId: award.userRewardId })
-    const segmentAngle = 360 / rewards.length
-    const targetAngle = -(index * segmentAngle + segmentAngle / 2) - 90
-    const finalRotation = 5 * 360 + targetAngle
-    setRotation(finalRotation)
-    rotationRef.current = finalRotation
   }, [authReady, rewards])
 
   const [idempotencyKey, setIdempotencyKey] = useState(() => {
@@ -334,152 +350,63 @@ export default function SpinPage() {
     return () => clearTimeout(timer)
   }, [showCelebration])
 
-  // Premium spin animation using Web Animations API with spring physics
-  const animateWheel = useCallback((
-    targetRotation: number,
-    duration: number = 4500
-  ): Promise<void> => {
-    return new Promise((resolve) => {
-      const wheel = wheelRef.current
-      if (!wheel) { resolve(); return }
+  // -----------------------------------------------------------------
+  // Card draw: shuffle the face-down cards, then reveal the one tapped.
+  //
+  // The winner is still chosen server-side by the existing weighted
+  // algorithm (buildWeightedPool / pickWeightedIndex), so the odds are
+  // untouched — only the presentation changes. The API result is rendered on
+  // the tapped card and no other card is ever turned over, so unselected
+  // cards never display a reward.
+  // -----------------------------------------------------------------
 
-      wheel.getAnimations().forEach(anim => anim.cancel())
-      spinAnimationRef.current = null
-      animationRef.current = null
-
-      const startRotation = rotationRef.current
-      const totalRotation = targetRotation
-
-      if (prefersReducedMotion.current) {
-        wheel.style.transform = `rotate(${startRotation + totalRotation}deg)`
-        setRotation(startRotation + totalRotation)
-        rotationRef.current = startRotation + totalRotation
-        setTimeout(resolve, 300)
-        return
-      }
-
-      // Spring physics easing: fast entry, gentle deceleration with overshoot
-      const keyframes = [
-        { transform: `rotate(${startRotation}deg)`, offset: 0, easing: 'cubic-bezier(0.22, 0.61, 0.36, 1)' },
-        { transform: `rotate(${startRotation + totalRotation * 0.12}deg)`, offset: 0.08, easing: 'cubic-bezier(0.22, 0.61, 0.36, 1)' },
-        { transform: `rotate(${startRotation + totalRotation * 0.35}deg)`, offset: 0.25, easing: 'cubic-bezier(0.55, 0.06, 0.68, 0.19)' },
-        { transform: `rotate(${startRotation + totalRotation * 0.55}deg)`, offset: 0.4, easing: 'cubic-bezier(0.55, 0.06, 0.68, 0.19)' },
-        { transform: `rotate(${startRotation + totalRotation * 0.72}deg)`, offset: 0.58, easing: 'cubic-bezier(0.55, 0.06, 0.68, 0.19)' },
-        { transform: `rotate(${startRotation + totalRotation * 0.85}deg)`, offset: 0.75, easing: 'cubic-bezier(0.55, 0.06, 0.68, 0.19)' },
-        { transform: `rotate(${startRotation + totalRotation * 0.93}deg)`, offset: 0.88, easing: 'cubic-bezier(0.55, 0.06, 0.68, 0.19)' },
-        { transform: `rotate(${startRotation + totalRotation * 0.98}deg)`, offset: 0.95, easing: 'cubic-bezier(0.55, 0.06, 0.68, 0.19)' },
-        { transform: `rotate(${startRotation + totalRotation}deg)`, offset: 1, easing: 'cubic-bezier(0.22, 0.61, 0.36, 1)' },
-      ]
-
-      const animation = wheel.animate(keyframes, {
-        duration,
-        fill: 'forwards',
-        easing: 'linear',
-      })
-
-      animationRef.current = animation
-
-      animation.onfinish = () => {
-        const finalRotation = startRotation + totalRotation
-        setRotation(finalRotation)
-        rotationRef.current = finalRotation
-        animationRef.current = null
-        resolve()
-      }
-
-      animation.oncancel = () => {
-        animationRef.current = null
-        resolve()
-      }
-    })
-  }, [])
-
-  // Gentle pointer bounce with spring physics
-  const triggerPointerBounce = useCallback(() => {
+  const beginShuffle = useCallback(() => {
+    shuffleStartedRef.current = Date.now()
     if (prefersReducedMotion.current) return
-    const pointer = document.querySelector('.spin-pointer')
-    if (pointer) {
-      pointer.animate(
-        [
-          { transform: 'translateX(-50%) rotate(0deg) scale(1)', offset: 0 },
-          { transform: 'translateX(-50%) rotate(-5deg) scale(1.12)', offset: 0.12 },
-          { transform: 'translateX(-50%) rotate(3deg) scale(0.94)', offset: 0.28 },
-          { transform: 'translateX(-50%) rotate(-2deg) scale(1.06)', offset: 0.42 },
-          { transform: 'translateX(-50%) rotate(1deg) scale(1)', offset: 0.58 },
-          { transform: 'translateX(-50%) rotate(-0.5deg) scale(1.02)', offset: 0.74 },
-          { transform: 'translateX(-50%) rotate(0deg) scale(1)', offset: 1 },
-        ],
-        { duration: 700, easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)' }
-      )
+    if (shuffleTimerRef.current) clearInterval(shuffleTimerRef.current)
+    setShuffleTick(0)
+    shuffleTimerRef.current = setInterval(() => {
+      setShuffleTick(tick => tick + 1)
+    }, SHUFFLE_BEAT_MS)
+  }, [])
+
+  const endShuffle = useCallback(() => {
+    if (shuffleTimerRef.current) {
+      clearInterval(shuffleTimerRef.current)
+      shuffleTimerRef.current = null
     }
+    setShuffleTick(0)
   }, [])
 
-  // Starts an indefinite wheel spin the instant the user presses Spin
-  const startContinuousSpin = useCallback(() => {
-    const wheel = wheelRef.current
-    if (!wheel || prefersReducedMotion.current) return
-    wheel.getAnimations().forEach(anim => anim.cancel())
-    const base = rotationRef.current
-    const animation = wheel.animate(
-      [
-        { transform: `rotate(${base}deg)` },
-        { transform: `rotate(${base + 360}deg)` },
-      ],
-      { duration: 800, iterations: Infinity, easing: 'linear' }
-    )
-    spinAnimationRef.current = animation
+  // Holds the shuffle for its full length so a fast API response never makes
+  // the draw feel instant.
+  const settleShuffle = useCallback(async (): Promise<void> => {
+    const elapsed = Date.now() - shuffleStartedRef.current
+    const budget = prefersReducedMotion.current ? 0 : MIN_SHUFFLE_MS
+    const remaining = budget - elapsed
+    if (remaining > 0) await new Promise(resolve => setTimeout(resolve, remaining))
+    endShuffle()
+  }, [endShuffle])
+
+  // Never leave the shuffle interval running after unmount.
+  useEffect(() => () => {
+    if (shuffleTimerRef.current) clearInterval(shuffleTimerRef.current)
   }, [])
-
-  const currentWheelRotation = useCallback((): number => {
-    const animation = spinAnimationRef.current
-    if (!animation) return rotationRef.current
-    const timing = animation.effect?.getTiming()
-    const rawDuration = timing?.duration
-    const duration = typeof rawDuration === 'number' && rawDuration > 0 ? rawDuration : 800
-    const currentTime = typeof animation.currentTime === 'number' ? animation.currentTime : 0
-    const progress = (currentTime % duration) / duration
-    return rotationRef.current + progress * 360
-  }, [])
-
-  const stopContinuousSpin = useCallback((): number => {
-    const current = currentWheelRotation()
-    const animation = spinAnimationRef.current
-    spinAnimationRef.current = null
-    if (animation) animation.cancel()
-    rotationRef.current = current
-    setRotation(current)
-    return current
-  }, [currentWheelRotation])
-
-  const landOnReward = useCallback(async (targetIndex: number, count: number): Promise<void> => {
-    const from = stopContinuousSpin()
-    const segmentAngle = 360 / count
-    const targetAngle = -(targetIndex * segmentAngle + segmentAngle / 2) - 90
-
-    const desiredMod = ((targetAngle % 360) + 360) % 360
-    const fromMod = ((from % 360) + 360) % 360
-    let delta = desiredMod - fromMod
-    if (delta < 0) delta += 360
-
-    const extraRotations = prefersReducedMotion.current ? 0 : 4 * 360
-    await animateWheel(delta + extraRotations, prefersReducedMotion.current ? 300 : 5000)
-    triggerPointerBounce()
-  }, [stopContinuousSpin, animateWheel, triggerPointerBounce])
 
   const spin = async () => {
     if (spinning || hasSpun || rewards.length === 0) return
     if (!surveyCompleted) {
-      setError('Please complete the survey first')
+      setError(t('spinWheel.surveyRequired'))
       router.push('/survey')
       return
     }
 
     setSpinning(true)
     setError('')
-    startContinuousSpin()
+    beginShuffle()
 
     const recoverAuth = () => {
-      stopContinuousSpin()
+      endShuffle()
       setSpinning(false)
       clearIdentitySession()
       router.replace('/info')
@@ -536,7 +463,7 @@ export default function SpinPage() {
       if (response.body?.error?.code === 'RESUME_TOKEN_REQUIRED') {
         markResumeTokenRecovery()
         clearIdentitySession()
-        stopContinuousSpin()
+        endShuffle()
         setSpinning(false)
         router.replace('/info')
         return
@@ -547,8 +474,9 @@ export default function SpinPage() {
         if (!isValidSpinAward(serverReward)) {
           resetIdempotencyKey()
           const prior = await checkExistingSpin(token)
-          stopContinuousSpin()
+          endShuffle()
           setSpinning(false)
+          setSelectedIndex(null)
           setHasSpun(Boolean(prior))
           if (!prior) setError(t('spinWheel.spinFailed'))
           return
@@ -575,7 +503,7 @@ export default function SpinPage() {
             color: getRewardColor(0), remainingQuantity: 0,
             status: 'AWARDED', requiresDelivery,
           }
-          stopContinuousSpin()
+          await settleShuffle()
           setSpinning(false)
           setResult({ reward: fallbackReward, userRewardId })
           setHasSpun(true)
@@ -597,8 +525,7 @@ export default function SpinPage() {
           name: catalogue[targetIndex].name || rewardName,
           requiresDelivery,
         }
-        await landOnReward(targetIndex, catalogue.length)
-        await new Promise(resolve => setTimeout(resolve, 250))
+        await settleShuffle()
 
         setSpinning(false)
         setResult({ reward: displayReward, userRewardId })
@@ -609,8 +536,9 @@ export default function SpinPage() {
         spawnConfetti()
         showToast(`${t('spinWheel.congratulations')} ${t('spinWheel.youWon')}: ${displayReward.name}!`, 'success', 5000)
       } else {
-        stopContinuousSpin()
+        endShuffle()
         setSpinning(false)
+        setSelectedIndex(null)
         const errorCode = response.body?.error?.code
         if (errorCode === 'NO_REWARDS_AVAILABLE' || errorCode === 'REWARD_UNAVAILABLE' || errorCode === 'CANCELLED' || errorCode === 'CANCELED') {
           resetIdempotencyKey()
@@ -626,10 +554,27 @@ export default function SpinPage() {
         }
       }
     } catch {
-      stopContinuousSpin()
+      endShuffle()
       setSpinning(false)
+      setSelectedIndex(null)
       setError(t('validation.connectionFailed'))
     }
+  }
+
+  /**
+   * Tapping a card starts the draw. The card is marked selected first so the
+   * shuffle runs on that card, and the API response is rendered on the very
+   * same card once it flips over.
+   */
+  const handleCardTap = (index: number) => {
+    if (spinning || hasSpun || result !== null) return
+    if (!surveyCompleted) {
+      setError(t('spinWheel.surveyRequired'))
+      router.push('/survey')
+      return
+    }
+    setSelectedIndex(index)
+    void spin()
   }
 
   const handleDone = () => { router.push('/') }
@@ -683,7 +628,7 @@ export default function SpinPage() {
       <div className="relative mx-auto max-w-xl px-4 py-8 pb-20">
         {/* Title section */}
         <div className="text-center mb-7 animate-fade-up" style={{ animationDelay: '0.1s' }}>
-          <span className="inline-block px-3 py-1 rounded-full border border-gold/30 bg-gold/10 text-[10px] tracking-[0.3em] uppercase text-gold mb-3">04 · Lucky Spin</span>
+          <span className="inline-block px-3 py-1 rounded-full border border-gold/30 bg-gold/10 text-[10px] tracking-[0.3em] uppercase text-gold mb-3">04 · Lucky Draw</span>
           <h2 className="font-display text-3xl font-bold gold-text">{t('spinWheel.spinTitle')}</h2>
           <p className="text-fg-secondary mt-2">{t('spinWheel.spinDesc')}</p>
         </div>
@@ -698,94 +643,76 @@ export default function SpinPage() {
           </div>
         )}
 
-        {/* Reward legend */}
-        <div className="flex flex-wrap items-center justify-center gap-2 mb-8">
-          {rewards.map((reward) => (
-            <span key={reward.id} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-white/10 bg-white/[0.04] text-xs text-fg-secondary transition-all hover:bg-white/[0.08]" style={{ borderColor: `${reward.color}80` }}>
-              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: reward.color }} />
-              {reward.name}
-            </span>
-          ))}
-        </div>
+        {/* Card draw — every card is face-down and shows only the brand logo.
+            No reward is rendered until the user taps a card, and then only on
+            that card: the others are never turned over. */}
+        {showCards && (
+          <div
+            className="grid gap-3 sm:gap-4 mb-6 mx-auto w-full max-w-md"
+            style={{ gridTemplateColumns: `repeat(${columnsFor(rewards.length)}, minmax(0, 1fr))` }}
+            role="group"
+            aria-label={t('spinWheel.pickCardHint')}
+          >
+            {rewards.map((reward, index) => {
+              const isRevealed = result !== null && selectedIndex === index
+              const isSelected = selectedIndex === index
+              const isDealing = spinning && result === null
+              const shuffle = isDealing ? shuffleOffset(shuffleTick, index) : null
 
-        {/* Wheel Container */}
-        <div className="relative w-72 h-72 sm:w-80 sm:h-80 md:w-96 md:h-96 mx-auto mb-9">
-          {/* Outer glow ring with wheel glow */}
-          <div className={`absolute -inset-4 rounded-full bg-gold/25 blur-2xl animate-wheel-glow ${spinning || result ? 'opacity-100' : 'opacity-70'}`} />
+              return (
+                <button
+                  key={reward.id}
+                  type="button"
+                  onClick={() => handleCardTap(index)}
+                  disabled={spinning || hasSpun || result !== null}
+                  aria-pressed={isSelected}
+                  aria-label={isRevealed && result ? result.reward.name : t('spinWheel.cardBackAlt')}
+                  className={[
+                    'card-draw',
+                    isRevealed ? 'is-revealed' : '',
+                    isSelected ? 'is-selected' : '',
+                    isDealing ? 'is-dealing' : '',
+                  ].filter(Boolean).join(' ')}
+                  style={shuffle
+                    ? { transform: `translate(${shuffle.x}px, ${shuffle.y}px) rotate(${shuffle.rot}deg)` }
+                    : undefined}
+                >
+                  <span className="card-inner">
+                    {/* Back of the card — the only thing visible before a tap. */}
+                    <span className="card-face card-back">
+                      <Image src="/myanmarbeerstout.png" alt="" width={160} height={160} className="card-logo" />
+                      <span className="card-back-ring" aria-hidden="true" />
+                    </span>
 
-          {/* Expanding ring on win */}
-          {result && (
-            <div className="absolute -inset-2 rounded-full border-2 border-gold/40 animate-ring-expand" style={{ animationDuration: '0.6s' }} />
-          )}
-
-          {/* Pointer/Indicator - Fixed at top */}
-          <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center spin-pointer">
-            <div className="relative">
-              <div className="w-0 h-0 border-l-[18px] border-r-[18px] border-b-[30px] border-l-transparent border-r-transparent border-b-gold drop-shadow-lg" />
-              <div className="absolute bottom-[-8px] left-1/2 -translate-x-1/2 w-5 h-5 rounded-full bg-gold-gradient border-2 border-navy-deep shadow-gold" />
-            </div>
+                    {/* Front of the card — populated only once revealed. */}
+                    <span className="card-face card-front">
+                      {isRevealed && result && (
+                        result.reward.imageUrl ? (
+                          <Image
+                            src={result.reward.imageUrl}
+                            alt=""
+                            width={160}
+                            height={160}
+                            className="card-reward-img"
+                            onError={(e) => { e.currentTarget.style.display = 'none' }}
+                          />
+                        ) : (
+                          <span className="card-initial" style={{ color: result.reward.color }}>
+                            {result.reward.name.charAt(0)}
+                          </span>
+                        )
+                      )}
+                      {isRevealed && result && (
+                        <span className="card-reward-name">{result.reward.name}</span>
+                      )}
+                    </span>
+                  </span>
+                </button>
+              )
+            })}
           </div>
+        )}
 
-          {/* Wheel Rim & Face */}
-          <div className="absolute inset-0 rounded-full bg-gradient-to-br from-warm via-gold to-[#997C3E] p-[5px] shadow-gold-lg animate-wheel-glow">
-            <div className="w-full h-full rounded-full bg-navy-deep relative overflow-hidden">
-              {/* Gold sweep overlay */}
-              <div className="absolute inset-0 animate-gold-sweep opacity-30 pointer-events-none" />
-
-              {/* Rotating wheel face */}
-              <div ref={wheelRef} className="absolute inset-0" style={{ transform: `rotate(${rotation}deg)` }}>
-                {rewards.map((reward, i) => {
-                  const segmentAngle = 360 / rewards.length
-                  const startAngle = i * segmentAngle
-                  const midAngle = startAngle + segmentAngle / 2
-
-                  return (
-                    <div key={reward.id} className="absolute inset-0 flex items-center justify-center" style={{ clipPath: `polygon(50% 50%, ${50 + 50 * Math.cos((startAngle - 90) * Math.PI / 180)}% ${50 + 50 * Math.sin((startAngle - 90) * Math.PI / 180)}%, ${50 + 50 * Math.cos((startAngle + segmentAngle - 90) * Math.PI / 180)}% ${50 + 50 * Math.sin((startAngle + segmentAngle - 90) * Math.PI / 180)}%)`, backgroundColor: reward.color }}>
-                      <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 50% 0%, transparent 40%, currentColor 40%)', backgroundSize: '20px 20px' }} />
-
-                      {/* Segment label - counter-rotated for readability */}
-                      <div className="relative z-10 flex items-center justify-center pointer-events-none" style={{ transform: `rotate(${-rotation - 90 + midAngle}deg) translateY(-112px)` }}>
-                        <span className="inline-block max-w-[80px] sm:max-w-[92px] px-2 py-1.5 rounded-lg text-center text-[10px] sm:text-xs font-bold leading-snug text-white bg-navy/85 border border-white/15 shadow-lg backdrop-blur-[2px] whitespace-nowrap truncate">
-                          {reward.name}
-                        </span>
-                      </div>
-                    </div>
-                  )
-                })}
-
-                {/* Wedge boundary spokes */}
-                {rewards.map((_, index) => {
-                  const segmentAngle = 360 / rewards.length
-                  return (
-                    <div key={`spoke-${index}`} className="absolute left-1/2 top-1/2 h-1/2 w-[2px] origin-top bg-white/25 pointer-events-none" style={{ transform: `rotate(${index * segmentAngle - 90}deg)` }} />
-                  )
-                })}
-
-                {/* Inner decorative rings */}
-                <div className="absolute inset-3 rounded-full border border-white/15 pointer-events-none" />
-                <div className="absolute inset-14 rounded-full border border-white/10 pointer-events-none" />
-                {/* Extra decorative ring for depth */}
-                <div className="absolute inset-24 rounded-full border border-white/5 pointer-events-none" />
-              </div>
-
-              {/* Center hub */}
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-                <div className={`w-[74px] h-[74px] rounded-full p-[3px] bg-gradient-to-br from-warm via-gold to-[#997C3E] shadow-gold-lg animate-pulse-gold ${result ? 'animate-celebration' : ''}`}>
-                  <div className="w-full h-full rounded-full bg-brand-emerald overflow-hidden flex items-center justify-center">
-                    <Image src="/myanmarbeerstout.png" alt="MB" width={74} height={74} className="w-full h-full object-cover rounded-full" />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Winner highlight overlay */}
-          {result && (
-            <div className="absolute inset-0 rounded-full pointer-events-none z-20 animate-pop" style={{ transform: `rotate(${rotation}deg)` }}>
-              <div className="absolute left-1/2 top-4 w-[2px] h-1/4 origin-top bg-gold/60" style={{ transform: `rotate(${180 - rotation}deg)`, boxShadow: '0 0 12px 2px rgba(245, 197, 66, 0.8)' }} />
-            </div>
-          )}
-        </div>
 
         {/* Confetti Explosion Layer */}
         {confettiParticles.length > 0 && (
@@ -865,25 +792,24 @@ export default function SpinPage() {
             </button>
           </div>
         ) : (
-          <button onClick={spin} disabled={spinning || hasSpun} className={`group w-full py-5 rounded-2xl font-display font-bold text-xl transition-all ${spinning || hasSpun ? 'bg-white/[0.05] text-fg-muted cursor-not-allowed border border-white/10' : 'bg-gold-gradient text-brand-emerald shadow-gold-lg hover:scale-[1.02] hover:shadow-gold inline-flex items-center justify-center gap-3'}`}>
+          <div className="flex justify-center">
             {spinning ? (
-              <>
-                <svg className="w-6 h-6 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <span className="inline-flex items-center gap-2.5 px-5 py-3 rounded-2xl border border-gold/30 bg-gold/10 text-gold text-sm font-semibold">
+                <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
-                {t('spinWheel.spinning')}
-              </>
+                {t('spinWheel.dealing')}
+              </span>
             ) : hasSpun ? (
-              t('spinWheel.alreadySpun')
+              <span className="px-5 py-3 rounded-2xl border border-white/10 bg-white/[0.04] text-fg-muted text-sm font-semibold">
+                {t('spinWheel.alreadySpun')}
+              </span>
             ) : (
-              <>
-                {t('spinWheel.spinButton')}
-                <svg className="w-6 h-6 group-hover:rotate-180 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
-                </svg>
-              </>
+              <span className="px-5 py-3 rounded-2xl border border-white/10 bg-white/[0.04] text-fg-secondary text-sm">
+                {t('spinWheel.pickCardHint')}
+              </span>
             )}
-          </button>
+          </div>
         )}
       </div>
     </div>

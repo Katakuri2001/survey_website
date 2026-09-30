@@ -1,0 +1,169 @@
+/**
+ * Card-draw presentation for the /spin route.
+ *
+ * Replaces the wheel. Cards start face-down showing only the Myanmar Beer
+ * Stout logo; a reward is rendered on the front of a card only after that card
+ * has been tapped and flipped, so an unselected card never displays a reward.
+ */
+
+.card-draw {
+  position: relative;
+  display: block;
+  width: 100%;
+  max-width: 11rem;
+  margin-inline: auto;
+  aspect-ratio: 3 / 4;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  border-radius: 1rem;
+  cursor: pointer;
+  perspective: 900px;
+  animation: cardEnter 520ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  transition: transform 220ms cubic-bezier(0.22, 0.61, 0.36, 1), box-shadow 240ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.card-draw:focus-visible {
+  outline: 2px solid #e2c97f;
+  outline-offset: 3px;
+}
+
+.card-draw:disabled {
+  cursor: default;
+}
+
+/* Staggered entrance so the deck appears to be dealt in. */
+.card-draw:nth-child(1) { animation-delay: 40ms; }
+.card-draw:nth-child(2) { animation-delay: 130ms; }
+.card-draw:nth-child(3) { animation-delay: 220ms; }
+.card-draw:nth-child(4) { animation-delay: 310ms; }
+.card-draw:nth-child(5) { animation-delay: 400ms; }
+.card-draw:nth-child(6) { animation-delay: 490ms; }
+
+@keyframes cardEnter {
+  from { opacity: 0; transform: translateY(26px) rotate(-6deg) scale(0.86); }
+  to   { opacity: 1; transform: translateY(0) rotate(0deg) scale(1); }
+}
+
+/* The card the user tapped stays highlighted while the deck shuffles. */
+.card-draw.is-selected.is-dealing {
+  z-index: 2;
+  box-shadow:
+    0 0 0 2px rgba(226, 201, 127, 0.9),
+    0 16px 34px rgba(0, 0, 0, 0.5);
+}
+
+.card-draw.is-revealed {
+  z-index: 2;
+  box-shadow:
+    0 0 0 2px rgba(226, 201, 127, 0.75),
+    0 18px 38px rgba(0, 0, 0, 0.55);
+}
+
+@media (hover: hover) {
+  .card-draw:not(:disabled):not(.is-revealed):hover {
+    transform: translateY(-6px);
+  }
+}
+
+.card-draw:not(:disabled):active {
+  transform: scale(0.97);
+}
+
+/* ---- Flip rig ---- */
+
+.card-inner {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 720ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.card-draw.is-revealed .card-inner {
+  transform: rotateY(180deg);
+}
+
+.card-face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border-radius: 1rem;
+  overflow: hidden;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* Back of the card — the only face visible before the draw. */
+.card-back {
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgba(226, 201, 127, 0.18), transparent 62%),
+    linear-gradient(160deg, #4a2b28 0%, #3b211f 55%, #2a1615 100%);
+  border: 1px solid rgba(226, 201, 127, 0.35);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 10px 24px rgba(0, 0, 0, 0.35);
+}
+
+.card-back-ring {
+  position: absolute;
+  inset: 0.5rem;
+  border-radius: 0.7rem;
+  border: 1px dashed rgba(226, 201, 127, 0.28);
+  pointer-events: none;
+}
+
+.card-logo {
+  width: 58%;
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.45));
+}
+
+/* Front of the card — only ever populated for the tapped card. */
+.card-front {
+  transform: rotateY(180deg);
+  background: linear-gradient(160deg, #f7e7bc 0%, #e2c97f 100%);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  padding: 0.6rem;
+  text-align: center;
+}
+
+.card-reward-img {
+  width: 54%;
+  height: auto;
+  object-fit: contain;
+  border-radius: 0.5rem;
+}
+
+.card-initial {
+  font-size: clamp(2rem, 9vw, 2.75rem);
+  font-weight: 800;
+  line-height: 1;
+}
+
+.card-reward-name {
+  font-size: clamp(0.68rem, 3vw, 0.85rem);
+  font-weight: 700;
+  line-height: 1.25;
+  color: #2a1615;
+  padding: 0 0.25rem;
+  overflow-wrap: anywhere;
+}
+
+/* ---- Reduced motion ---- */
+
+@media (prefers-reduced-motion: reduce) {
+  .card-draw {
+    animation: none;
+    transition: none;
+  }
+
+  .card-inner {
+    transition: none;
+  }
+}
