@@ -6,3 +6,4 @@
 - When committing, stage files **explicitly by path** — never `git add -A` or `git add .`, so these files can't slip in.
 - If a change genuinely *requires* updating them (adding a dependency, changing a script), **ask the owner first** — do not decide independently.
 - **Fetch and pull before every commit/push.** Run `git fetch origin`, then fast-forward with `git pull origin main` *before* staging — the owner merges PR branches into `main` frequently, so pulling first avoids conflicts and stale pushes. (Owner instruction, recorded 2026-10-01.)
+- **Never push code changes directly to `main`.** For every change: (1) fetch + pull the latest `main` (the deployed branch) first, (2) create a new branch off it, (3) commit and push that branch, (4) open a Pull Request from it to `main` so the owner can review the code changes before they merge. (Owner instruction, recorded 2026-10-01.)
