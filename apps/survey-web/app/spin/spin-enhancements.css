@@ -130,7 +130,8 @@
   .animate-pulse-gold,
   .animate-orb-drift,
   .animate-gold-sweep,
-  .animate-spring-bounce {
+  .animate-spring-bounce,
+  .animate-spring-pop {
     animation: none !important;
   }
 

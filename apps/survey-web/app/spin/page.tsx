@@ -834,7 +834,7 @@ export default function SpinPage() {
             {/* Reward image with celebration glow */}
             <div className="relative mx-auto mb-5 w-28 h-28 sm:w-32 sm:h-32">
               <div className="absolute inset-0 rounded-3xl bg-gold/20 blur-lg animate-celebration" />
-              <div className="relative w-full h-full rounded-3xl border border-gold/40 bg-gradient-to-br from-gold/25 to-transparent flex items-center justify-center animate-spring-bounce">
+              <div className="relative w-full h-full rounded-3xl border border-gold/40 bg-gradient-to-br from-gold/25 to-transparent flex items-center justify-center animate-spring-pop">
                 {result.reward.imageUrl ? (
                   <Image src={result.reward.imageUrl} alt={result.reward.name} width={224} height={224} className="w-full h-full object-cover rounded-3xl" onError={(e) => { e.currentTarget.style.display = 'none' }} />
                 ) : (
