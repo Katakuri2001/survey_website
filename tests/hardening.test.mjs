@@ -11,7 +11,7 @@
  *   - delivery submission is idempotent
  *
  * Usage:
- *   API_BASE=http://localhost:8787 node tests/hardening.test.mjs
+ *   API_BASE=http://localhost:8788 node tests/hardening.test.mjs
  *
  * The script exits 0 when every assertion passes, 1 otherwise. It is safe to
  * re-run: it creates unique guest users each time.
@@ -19,7 +19,7 @@
 
 import { assertDestructiveTarget, assertSafeLiveTarget } from '../scripts/production-env-guard.mjs'
 
-const API_BASE = (process.env.API_BASE || 'http://localhost:8787').replace(/\/$/, '')
+const API_BASE = (process.env.API_BASE || 'http://localhost:8788').replace(/\/$/, '')
 
 try {
   // The regular smoke test is still mutating (users, responses, and spins), so

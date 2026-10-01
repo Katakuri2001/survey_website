@@ -8,12 +8,12 @@
  * analytics reads, and the P5b reward-status derivation rules.
  *
  * Usage (API must be running locally):
- *   API_BASE=http://localhost:8787 node tests/api-tests.mjs
+ *   API_BASE=http://localhost:8788 node tests/api-tests.mjs
  */
 
 import { assertSafeLiveTarget } from '../scripts/production-env-guard.mjs'
 
-const API = (process.env.API_BASE || 'http://localhost:8787').replace(/\/+$/, '')
+const API = (process.env.API_BASE || 'http://localhost:8788').replace(/\/+$/, '')
 
 try {
   // This suite creates users, submissions, and a test reward. Never let an

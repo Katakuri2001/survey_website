@@ -167,7 +167,7 @@ try {
   // ------------------------------------------------ H. survey state safety
   // Requires the local API: questions are DB-driven and localised server-side
   // via `?lang=`, so this exercises the real re-fetch-on-language-change path.
-  const API = process.env.API_URL || 'http://localhost:8787'
+  const API = process.env.API_URL || 'http://localhost:8788'
   let apiUp = false
   try {
     const probe = await fetch(`${API}/survey/questions?lang=en`, { signal: AbortSignal.timeout(4000) })
