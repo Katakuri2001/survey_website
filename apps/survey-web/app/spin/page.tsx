@@ -18,7 +18,6 @@ interface Reward {
   imageUrl?: string
   remainingQuantity: number
   status: string
-  requiresDelivery: boolean
 }
 
 interface RewardApiItem {
@@ -30,7 +29,6 @@ interface RewardApiItem {
   status: string
   image_url?: string
   low_stock_threshold: number
-  requires_delivery?: number
 }
 
 interface MyRewardApiItem {
@@ -44,8 +42,6 @@ interface MyRewardApiItem {
   name?: string | null
   image_url?: string | null
   imageUrl?: string | null
-  requires_delivery?: number | boolean | null
-  requiresDelivery?: number | boolean | null
   delivery_status?: string | null
   status?: string | null
 }
@@ -116,8 +112,6 @@ function mapMyReward(item: MyRewardApiItem, color: string): PriorAward | null {
   const userRewardId = typeof userRewardIdValue === 'string' ? userRewardIdValue.trim() : ''
   const status = String(item.delivery_status || item.status || '').toUpperCase()
   if (!rewardId || !userRewardId || status === 'CANCELLED' || status === 'CANCELED') return null
-  const deliveryValue = item.requires_delivery ?? item.requiresDelivery
-  const requiresDelivery = deliveryValue !== false && deliveryValue !== 0
   const imageValue = item.image_url || item.imageUrl
   const nameValue = item.reward_name || item.rewardName || item.name
   return {
@@ -130,7 +124,6 @@ function mapMyReward(item: MyRewardApiItem, color: string): PriorAward | null {
       imageUrl: typeof imageValue === 'string' ? imageValue : undefined,
       remainingQuantity: 0,
       status: 'AWARDED',
-      requiresDelivery,
     },
   }
 }
@@ -197,7 +190,6 @@ export default function SpinPage() {
           imageUrl: r.image_url,
           remainingQuantity: r.remaining_quantity,
           status: r.status,
-          requiresDelivery: r.requires_delivery !== 0,
         }))
         setRewards(mappedRewards)
         rewardsRef.current = mappedRewards
@@ -224,7 +216,7 @@ export default function SpinPage() {
     const catalogue = rewardsRef.current
     const index = catalogue.findIndex(reward => reward.id === award.reward.id)
     const displayReward = index >= 0
-      ? { ...catalogue[index], name: award.reward.name || catalogue[index].name, imageUrl: award.reward.imageUrl || catalogue[index].imageUrl, requiresDelivery: award.reward.requiresDelivery }
+      ? { ...catalogue[index], name: award.reward.name || catalogue[index].name, imageUrl: award.reward.imageUrl || catalogue[index].imageUrl }
       : award.reward
     setResult({ reward: displayReward, userRewardId: award.userRewardId })
     setHasSpun(true)
@@ -305,7 +297,6 @@ export default function SpinPage() {
       ...rewards[index],
       name: award.reward.name || rewards[index].name,
       imageUrl: award.reward.imageUrl || rewards[index].imageUrl,
-      requiresDelivery: award.reward.requiresDelivery,
     }
     setResult({ reward: displayReward, userRewardId: award.userRewardId })
   }, [authReady, rewards])
@@ -485,8 +476,6 @@ export default function SpinPage() {
         const rewardId = String(serverReward.rewardId || serverReward.reward_id)
         const userRewardId = String(serverReward.userRewardId || serverReward.user_reward_id)
         const rewardName = String(serverReward.rewardName || serverReward.reward_name || t('spinWheel.rewardFallback'))
-        const deliveryFlag = serverReward.requiresDelivery ?? serverReward.requires_delivery
-        const requiresDelivery = deliveryFlag !== false && deliveryFlag !== 0
         let targetIndex = rewardsRef.current.findIndex(reward => reward.id === rewardId)
 
         if (targetIndex === -1) {
@@ -501,7 +490,7 @@ export default function SpinPage() {
           const fallbackReward: Reward = prior?.reward || {
             id: rewardId, name: rewardName, weight: 0,
             color: getRewardColor(0), remainingQuantity: 0,
-            status: 'AWARDED', requiresDelivery,
+            status: 'AWARDED',
           }
           await settleShuffle()
           setSpinning(false)
@@ -523,7 +512,6 @@ export default function SpinPage() {
           // primary display string. Only the rendered label changes; rewardId,
           // stock, weight and userRewardId are untouched.
           name: catalogue[targetIndex].name || rewardName,
-          requiresDelivery,
         }
         await settleShuffle()
 
@@ -773,18 +761,9 @@ export default function SpinPage() {
             </div>
 
             <p className="font-display text-xl sm:text-2xl font-bold text-white mb-1">{result.reward.name}</p>
-            <p className="text-xs text-fg-muted mb-6">{result.reward.requiresDelivery ? t('spinWheel.rewardAdded') : t('spinWheel.noDeliveryNeeded')}</p>
+            <p className="text-xs text-fg-muted mb-6">{t('spinWheel.rewardAdded')}</p>
 
-            {result.reward.requiresDelivery && result.userRewardId && (
-              <button onClick={() => router.push(`/delivery?reward=${encodeURIComponent(result.userRewardId)}`)} className="w-full mb-3 py-4 bg-gold-gradient text-brand-emerald rounded-2xl font-bold text-lg shadow-gold hover:shadow-gold-lg hover:scale-[1.01] transition-all inline-flex items-center justify-center gap-2">
-                {t('spinWheel.claimReward')}
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                </svg>
-              </button>
-            )}
-
-            <button onClick={handleDone} className={`w-full py-4 rounded-2xl font-bold text-lg transition-all inline-flex items-center justify-center gap-2 ${result.reward.requiresDelivery && result.userRewardId ? 'border border-white/15 bg-white/[0.04] text-fg-bright hover:bg-white/[0.08]' : 'bg-gold-gradient text-brand-emerald shadow-gold hover:shadow-gold-lg hover:scale-[1.01]'}`}>
+            <button onClick={handleDone} className="w-full py-4 bg-gold-gradient text-brand-emerald rounded-2xl font-bold text-lg shadow-gold hover:shadow-gold-lg hover:scale-[1.01] transition-all inline-flex items-center justify-center gap-2">
               {t('common.done')}
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5-5 5M6 12h12" />

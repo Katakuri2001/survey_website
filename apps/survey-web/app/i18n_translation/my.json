@@ -98,7 +98,8 @@
     "occupation": "အလုပ်အကိုင်",
     "occupationPlaceholder": "သင့်အလုပ်အကိုင် ထည့်ပါ",
     "city": "မြို့",
-    "cityPlaceholder": "မြို့ထည့်ပါ"
+    "cityPlaceholder": "မြို့ထည့်ပါ",
+    "townshipLabel": "မြို့နယ်"
   },
   "survey": {
     "surveyTitle": "ထုတ်ကုန်စစ်တမ်း",
@@ -181,8 +182,6 @@
     "youWon": "သင်ရရှိပါပြီ",
     "alreadySpun": "ရွေးပြီးပါပြီ",
     "rewardAdded": "သင့်ဆုကို သင့်အကောင့်တွင် ထည့်သွင်းပြီးပါပြီ",
-    "claimReward": "သင့်ဆုကို ရယူပါ",
-    "noDeliveryNeeded": "ပို့ဆောင်ရန် မလိုအပ်ပါ — သင့်ဆုကို ခံစားလိုက်ပါ!",
     "spinProcessing": "သင့်ရွေးချယ်မှုကို ဆောင်ရွက်နေဆဲဖြစ်ပါသည်။ ခဏစောင့်ပြီး ထပ်မံကြိုးစားပါ။",
     "spinFailed": "ရွေးယူရန် မအောင်မြင်ပါ",
     "rewardFallback": "ဆုလက်ဆောင်",
@@ -190,22 +189,6 @@
     "dealing": "ကတ်များ ဖြန့်နေပါတယ်…",
     "cardBackAlt": "ဆုကတ် — မဖွင့်ရသေးပါ",
     "surveyRequired": "စစ်တမ်းကို အရင် ဖြေဆိုပါ"
-  },
-  "delivery": {
-    "deliveryTitle": "ပို့ဆောင်ရန် အချက်အလက်",
-    "deliveryDesc": "သင့်ဆုကို ပို့ဆောင်ရမည့်နေရာကို ဖော်ပြပါ။",
-    "address": "နေရပ်လိပ်စာ",
-    "addressPlaceholder": "အိမ်အမှတ်၊ လမ်း၊ ရပ်ကွက်",
-    "townshipLabel": "မြို့နယ်",
-    "townshipPlaceholder": "မြို့နယ် ထည့်ပါ",
-    "postalCode": "စာပို့သင်္ကေတ",
-    "postalCodePlaceholder": "မလိုအပ်ပါ",
-    "deliveryNotes": "မှတ်ချက်",
-    "deliveryNotesPlaceholder": "ပို့ဆောင်ရေးအတွက် မှတ်ချက် (မလိုအပ်ပါ)",
-    "confirmDelivery": "ပို့ဆောင်ရန် အတည်ပြုပါ",
-    "deliverySuccess": "ပို့ဆောင်ရန် အချက်အလက် ရရှိပါပြီ",
-    "deliverySuccessDesc": "သင့်ဆုကို ပို့ဆောင်ရန် သင့်ကို ဆက်သွယ်ပါမည်။",
-    "rewardNotFound": "ဆုမတွေ့ပါ။ ဦးစွာ ဘီးလှည့်ပါ။"
   },
   "validation": {
     "requiredField": "ဒီအကွက်ကို ဖြည့်သွင်းရမည်",

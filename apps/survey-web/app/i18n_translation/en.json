@@ -98,7 +98,8 @@
     "occupation": "Occupation",
     "occupationPlaceholder": "Enter your occupation",
     "city": "City",
-    "cityPlaceholder": "Enter city"
+    "cityPlaceholder": "Enter city",
+    "townshipLabel": "Township"
   },
   "survey": {
     "surveyTitle": "Product Survey",
@@ -181,8 +182,6 @@
     "youWon": "You won",
     "alreadySpun": "Already drawn",
     "rewardAdded": "Your reward has been added to your account!",
-    "claimReward": "Claim your reward",
-    "noDeliveryNeeded": "No delivery needed — enjoy your reward!",
     "spinProcessing": "Your draw is still being processed. Please wait a moment and try again.",
     "spinFailed": "Draw failed",
     "rewardFallback": "Reward",
@@ -190,22 +189,6 @@
     "dealing": "Shuffling your cards…",
     "cardBackAlt": "Reward card, face down",
     "surveyRequired": "Please complete the survey first"
-  },
-  "delivery": {
-    "deliveryTitle": "Delivery Information",
-    "deliveryDesc": "Tell us where to deliver your reward.",
-    "address": "Address",
-    "addressPlaceholder": "House number, street, quarter",
-    "townshipLabel": "Township",
-    "townshipPlaceholder": "Enter township",
-    "postalCode": "Postal Code",
-    "postalCodePlaceholder": "Optional",
-    "deliveryNotes": "Notes",
-    "deliveryNotesPlaceholder": "Optional delivery notes",
-    "confirmDelivery": "Confirm Delivery",
-    "deliverySuccess": "Delivery information received",
-    "deliverySuccessDesc": "We will contact you to arrange delivery of your reward.",
-    "rewardNotFound": "Reward not found. Please spin the wheel first."
   },
   "validation": {
     "requiredField": "This field is required",

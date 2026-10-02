@@ -120,7 +120,7 @@ export default function NrcInput({ value, onChange, disabled = false, required =
             className={`${selectClass} ${hasError('townshipCode', 'Township') ? 'border-error' : ''}`}
             aria-invalid={hasError('townshipCode', 'Township')}
           >
-            <option value="" className="bg-surface-deep">{t('delivery.townshipLabel')}</option>
+            <option value="" className="bg-surface-deep">{t('personalInfo.townshipLabel')}</option>
             {townships.map(tw => (
               <option key={tw.id} value={tw.code} className={`bg-surface-deep ${myanmarFont}`}>
                 {language === 'my' ? tw.nameMy : tw.nameEn}
