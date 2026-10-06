@@ -14,6 +14,7 @@
  */
 
 import myBundle from './my.json'
+import enBundle from './en.json'
 
 // ---------------------------------------------------------------------------
 // Locale contract
@@ -111,11 +112,14 @@ export function lookupTranslation(
 /**
  * Loaded resources, keyed by locale.
  *
- * The default bundle ships statically so the very first paint is already in
- * Myanmar; every other locale is imported on demand and then reused for the
- * rest of the session (MY → EN → MY → EN performs exactly one request).
+ * Both locales are bundled statically. The default ships with the first paint;
+ * English is only ~7.5 KB, so splitting it into a lazy chunk bought nothing and
+ * cost a network round-trip — plus a silent failure mode — on every switch.
  */
-const cache = new Map<Locale, Translations>([[DEFAULT_LOCALE, myBundle]])
+const cache = new Map<Locale, Translations>([
+  [DEFAULT_LOCALE, myBundle],
+  ['en', enBundle],
+])
 
 /** Non-throwing cache peek for synchronous, zero-latency switching. */
 export function getCachedTranslations(locale: Locale): Translations | undefined {
@@ -128,44 +132,21 @@ export function isTranslationsCached(locale: Locale): boolean {
 }
 
 /**
- * Load a translation resource, returning a cached copy when one exists.
+ * Resolve a locale to its resource.
  *
- * Non-default locales are fetched with a dynamic import so they become their
- * own chunk and are only paid for when the user actually switches.
+ * Both locales are in the bundle, so this is a synchronous map lookup — there is
+ * no request to fail and no wrong-language window while a chunk is in flight.
  */
-export async function loadTranslations(locale: Locale): Promise<Translations> {
-  const target = normalizeLocale(locale)
-  const cached = cache.get(target)
-  if (cached) return cached
-
-  const loaded = await importLocale(target)
-  cache.set(target, loaded)
-  return loaded
-}
-
-async function importLocale(locale: Locale): Promise<Translations> {
-  switch (locale) {
-    case 'en': {
-      const mod = await import('./en.json')
-      return (mod.default ?? mod) as Translations
-    }
-    case 'my':
-      // Already held statically — reachable only if the cache was cleared.
-      return myBundle
-    default:
-      return myBundle
-  }
+export function loadTranslations(locale: Locale): Translations {
+  return cache.get(normalizeLocale(locale)) ?? myBundle
 }
 
 /**
- * Warm the cache for a locale ahead of time.
- *
- * Called at module scope on the client so an English user's stored preference
- * is already in memory by the time React paints, rather than being discovered
- * as a network wait.
+ * Kept for call-site compatibility. There is nothing to preload any more: both
+ * locales are already in memory by the time this module is evaluated.
  */
-export function preloadTranslations(locale: Locale): Promise<Translations> {
-  return loadTranslations(locale).catch(() => cache.get(DEFAULT_LOCALE) as Translations)
+export function preloadTranslations(locale: Locale): Translations {
+  return loadTranslations(locale)
 }
 
 // ---------------------------------------------------------------------------
