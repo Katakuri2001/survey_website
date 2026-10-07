@@ -98,7 +98,8 @@
     "occupation": "အလုပ်အကိုင်",
     "occupationPlaceholder": "သင့်အလုပ်အကိုင် ထည့်ပါ",
     "city": "မြို့",
-    "cityPlaceholder": "မြို့ထည့်ပါ"
+    "cityPlaceholder": "မြို့ထည့်ပါ",
+    "townshipLabel": "မြို့နယ်"
   },
   "survey": {
     "surveyTitle": "ထုတ်ကုန်စစ်တမ်း",
@@ -170,38 +171,24 @@
     "q9": "နောက်ထပ် ဘာများ ပြောချင်ပါသလဲ?"
   },
   "spinWheel": {
-    "spinTitle": "ကံစမ်းဘီး",
-    "spinDesc": "ဘီးလှည့်ပြီး ဆုရယူပါ!",
-    "spinButton": "အခုလှည့်ပါ",
-    "spinning": "လှည့်နေပါတယ်...",
+    "spinTitle": "ကံစမ်းကတ်",
+    "spinDesc": "ဆုကို ပြသရန် ကတ်တစ်ကတ် ရွေးပါ!",
+    "spinButton": "ကတ်ရွေးပါ",
+    "spinning": "ရွေးနေပါတယ်…",
     "noRewardsTitle": "ဆုများမရှိသေးပါ",
     "noRewardsDesc": "အချိန်အခ်ိနာတွင် ဤကမ်ပိန်းအတွက် ဆုများ ရရှိနိုင်ပါသည်။ နောက်အချိန်တွင် ပြန်စစ်ဆေးပါ။",
     "tryAgain": "နောက်တစ်ကြိမ်ကြိုးစားပါ",
     "congratulations": "ဂုဏ်ယူပါတယ်!",
     "youWon": "သင်ရရှိပါပြီ",
-    "alreadySpun": "လှည့်ပြီးပါပြီ",
+    "alreadySpun": "ရွေးပြီးပါပြီ",
     "rewardAdded": "သင့်ဆုကို သင့်အကောင့်တွင် ထည့်သွင်းပြီးပါပြီ",
-    "claimReward": "သင့်ဆုကို ရယူပါ",
-    "noDeliveryNeeded": "ပို့ဆောင်ရန် မလိုအပ်ပါ — သင့်ဆုကို ခံစားလိုက်ပါ!",
-    "spinProcessing": "သင့်လှည့်မှုကို ဆောင်ရွက်နေဆဲဖြစ်ပါသည်။ ခဏစောင့်ပြီး ထပ်မံကြိုးစားပါ။",
-    "spinFailed": "လှည့်ရန် မအောင်မြင်ပါ",
-    "rewardFallback": "ဆုလက်ဆောင်"
-  },
-  "delivery": {
-    "deliveryTitle": "ပို့ဆောင်ရန် အချက်အလက်",
-    "deliveryDesc": "သင့်ဆုကို ပို့ဆောင်ရမည့်နေရာကို ဖော်ပြပါ။",
-    "address": "နေရပ်လိပ်စာ",
-    "addressPlaceholder": "အိမ်အမှတ်၊ လမ်း၊ ရပ်ကွက်",
-    "townshipLabel": "မြို့နယ်",
-    "townshipPlaceholder": "မြို့နယ် ထည့်ပါ",
-    "postalCode": "စာပို့သင်္ကေတ",
-    "postalCodePlaceholder": "မလိုအပ်ပါ",
-    "deliveryNotes": "မှတ်ချက်",
-    "deliveryNotesPlaceholder": "ပို့ဆောင်ရေးအတွက် မှတ်ချက် (မလိုအပ်ပါ)",
-    "confirmDelivery": "ပို့ဆောင်ရန် အတည်ပြုပါ",
-    "deliverySuccess": "ပို့ဆောင်ရန် အချက်အလက် ရရှိပါပြီ",
-    "deliverySuccessDesc": "သင့်ဆုကို ပို့ဆောင်ရန် သင့်ကို ဆက်သွယ်ပါမည်။",
-    "rewardNotFound": "ဆုမတွေ့ပါ။ ဦးစွာ ဘီးလှည့်ပါ။"
+    "spinProcessing": "သင့်ရွေးချယ်မှုကို ဆောင်ရွက်နေဆဲဖြစ်ပါသည်။ ခဏစောင့်ပြီး ထပ်မံကြိုးစားပါ။",
+    "spinFailed": "ရွေးယူရန် မအောင်မြင်ပါ",
+    "rewardFallback": "ဆုလက်ဆောင်",
+    "pickCardHint": "ဆုရရှိရန် ကတ်ကို နှိပ်ပါ",
+    "dealing": "ကတ်များ ဖြန့်နေပါတယ်…",
+    "cardBackAlt": "ဆုကတ် — မဖွင့်ရသေးပါ",
+    "surveyRequired": "စစ်တမ်းကို အရင် ဖြေဆိုပါ"
   },
   "validation": {
     "requiredField": "ဒီအကွက်ကို ဖြည့်သွင်းရမည်",

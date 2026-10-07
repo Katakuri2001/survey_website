@@ -27,11 +27,9 @@ import {
 
 import {
   DEFAULT_LOCALE,
-  getCachedTranslations,
   loadTranslations,
   lookupTranslation,
   normalizeLocale,
-  preloadTranslations,
   readStoredLocale,
   writeStoredLocale,
   type Locale,
@@ -49,13 +47,7 @@ import defaultBundle from '../i18n_translation/my.json'
 const useIsomorphicLayoutEffect =
   typeof window !== 'undefined' ? useLayoutEffect : useEffect
 
-// A first-time visitor's stored preference is unknown until the client runs,
-// so the module warms that locale as soon as it is evaluated — well before
-// React commits its first client render.
-if (typeof window !== 'undefined') {
-  const stored = readStoredLocale()
-  if (stored !== DEFAULT_LOCALE) void preloadTranslations(stored)
-}
+// Both locales are bundled statically, so there is nothing to warm up front.
 
 interface I18nContextValue {
   locale: Locale
@@ -77,25 +69,11 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 
   const applyLocale = useCallback((next: Locale) => {
     const target = normalizeLocale(next)
-    const cached = getCachedTranslations(target)
-    if (cached) {
-      // Warm path: both state updates batch into a single synchronous commit.
-      setBundle(cached)
-      setLocale(target)
-      writeStoredLocale(target)
-      return
-    }
-    // Cold path: only swap once the resource exists, so the UI is never
-    // rendered with the wrong language while the chunk is in flight.
-    void loadTranslations(target)
-      .then(loaded => {
-        setBundle(loaded)
-        setLocale(target)
-        writeStoredLocale(target)
-      })
-      .catch(() => {
-        // Keep the current language rather than showing missing text.
-      })
+    // Both locales are already in the bundle, so switching is a synchronous
+    // state update — no request, no wrong-language window, nothing to fail.
+    setBundle(loadTranslations(target))
+    setLocale(target)
+    writeStoredLocale(target)
   }, [])
 
   // Restore the saved preference. Runs before paint when the cache is warm.
