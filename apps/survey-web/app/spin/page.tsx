@@ -315,6 +315,43 @@ export default function SpinPage() {
     setIdempotencyKey(key)
   }
 
+  /**
+   * Attempt to recover a previously assigned reward when the spin response
+   * may have been lost (network drop, app switch, browser crash).
+   *
+   * If the server has already awarded a reward for this session, it will be
+   * returned and the frontend will display it — no re-spin needed.
+   *
+   * If no reward is found, the user can proceed with a new spin.
+   */
+  const recoverReward = async () => {
+    const sessionId = sessionStorage.getItem('survey_response_id')
+    if (!sessionId) return null
+
+    try {
+      const res = await fetch(`${API_BASE}/rewards/result/${sessionId}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('survey_token')}` },
+        credentials: 'same-origin',
+      })
+      const data = await res.json().catch(() => null)
+
+      if (res.ok && data?.success && data?.data && data.data.rewardId) {
+        const r = data.data
+        return {
+          rewardId: r.rewardId,
+          userRewardId: r.userRewardId,
+          rewardName: r.rewardName,
+          requiresDelivery: r.requiresDelivery === true,
+          imageUrl: r.imageUrl,
+        }
+      }
+      return null
+    } catch (e) {
+      console.warn('Recovery fetch failed', e)
+      return null
+    }
+  }
+
   // Spawn confetti particles for celebration
   const spawnConfetti = useCallback(() => {
     if (prefersReducedMotion.current) return
@@ -389,6 +426,44 @@ export default function SpinPage() {
     if (!surveyCompleted) {
       setError(t('spinWheel.surveyRequired'))
       router.push('/survey')
+      return
+    }
+
+    // ── FIRST: Try to recover a previously assigned reward (network-resilience)
+    // This handles the case where the spin response was dropped (connection lost,
+    // app switched, browser crashed). If the server already awarded a reward, we
+    // recover it immediately instead of spinning again.
+    const recovered = await recoverReward()
+    if (recovered) {
+      setSpinning(false)
+      setResult({
+        reward: {
+          id: recovered.rewardId,
+          name: recovered.rewardName,
+          weight: 0,
+          color: getRewardColor(0),
+          imageUrl: recovered.imageUrl,
+          remainingQuantity: 0,
+          status: 'AWARDED',
+        },
+        userRewardId: recovered.userRewardId,
+      })
+      setHasSpun(true)
+      priorAwardRef.current = {
+        reward: {
+          id: recovered.rewardId,
+          name: recovered.rewardName,
+          weight: 0,
+          color: getRewardColor(0),
+          imageUrl: recovered.imageUrl,
+          remainingQuantity: 0,
+          status: 'AWARDED',
+        },
+        userRewardId: recovered.userRewardId,
+      }
+      sessionSet('user_reward_id', recovered.userRewardId)
+      sessionSet('reward_name', recovered.rewardName)
+      showToast(`${t('spinWheel.congratulations')} ${t('spinWheel.youWon')}: ${recovered.rewardName}!`, 'success', 5000)
       return
     }
 

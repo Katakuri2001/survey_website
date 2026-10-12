@@ -6,12 +6,20 @@ import { DEFAULT_LOCALE } from './i18n_translation/translation'
 import Splash from './components/Splash'
 import { ToastProvider } from './components/Toast'
 
-export const metadata: Metadata = {
+export const metadata = {
   title: 'Myanmar Beer Survey & Rewards',
   description: 'Share your opinion about Myanmar Beer products and win rewards. Good Beer, Better Moments.',
   icons: {
     icon: '/icon.png',
     apple: '/apple-icon.png',
+  },
+  // Control viewport for mobile: set width to device-width and enable
+  // safe-area-inset support so fixed/sticky elements never become hidden
+  // behind the iOS notch, Dynamic Island, or Android home indicator.
+  viewport: {
+    width: 'device-width',
+    initialScale: 1.0,
+    viewportFit: 'cover',
   },
 }
 

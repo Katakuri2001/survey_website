@@ -167,3 +167,25 @@
     transition: none;
   }
 }
+
+/* Safe-area support: ensure fixed/sticky elements (nav, buttons, modals)
+   are never hidden behind iOS notch, Dynamic Island, or Android home indicator.
+   The padding prevents elements from being rendered underneath the cutouts. */
+@supports (padding: env(safe-area-inset-top)) {
+  .fixed-safe,
+  .sticky-safe {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+/* Fallback for browsers that don't support @supports( padding: env(...) )
+   but support the env() function in individual properties */
+.safe-area-padding {
+  padding-top: constant(safe-area-inset-top);
+  padding-bottom: constant(safe-area-inset-bottom);
+  padding-left: constant(safe-area-inset-left);
+  padding-right: constant(safe-area-inset-right);
+}

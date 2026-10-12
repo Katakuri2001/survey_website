@@ -472,4 +472,83 @@ rewardRoutes.get('/rewards/my', authMiddleware, async (c) => {
     .bind(c.get('userId'))
     .all();
   return success(c, rewards.results || []);
-});
+})
+
+/**
+ * GET /rewards/result/:sessionId
+ *
+ * Mobile network-resilience: when a spin response is lost (user flips to another
+ * app, connection drops, browser crash), this endpoint recovers the already-
+ * assigned reward so the frontend never needs to re-spin.
+ *
+ * Response on success (reward already assigned):
+ *   { success: true, data: { rewardId, rewardName, userRewardId, requiresDelivery, imageUrl } }
+ *
+ * Response when no reward assigned (session not spun, or already cleared):
+ *   { success: true, data: null }
+ *
+ * Authentication: Bearer token from valid session.
+ */
+rewardRoutes.get(
+  '/rewards/result/:sessionId',
+  authMiddleware,
+  async (c) => {
+    const db = c.env.survey_db
+    const userId = c.get('userId')
+    const sessionId = c.req.param('sessionId')
+
+    // Verify the session belongs to this user
+    const sessionRow = await db
+      .prepare('SELECT id, status, campaign_id, product_id FROM survey_sessions WHERE id = ? AND user_id = ?')
+      .bind(sessionId, userId)
+      .first()
+
+    if (!sessionRow) {
+      return failure(c, ErrorCode.NOT_FOUND, 'Session not found', 404)
+    }
+
+    // If survey not completed, no reward can be assigned
+    if (!['SURVEY_COMPLETED', 'REWARD_ASSIGNED', 'COMPLETED'].includes(sessionRow.status as string)) {
+      return failure(c, ErrorCode.INVALID_STATE_TRANSITION, 'Survey not completed', 409)
+    }
+
+    // Check if a reward has already been assigned to this session
+    const userRewardRow = await db
+      .prepare(
+        `SELECT ur.id, ur.reward_id, ur.delivery_status, r.name as reward_name, r.image_url, r.requires_delivery
+         FROM user_rewards ur
+         JOIN rewards r ON ur.reward_id = r.id
+         WHERE ur.reward_spin_id IN (
+           SELECT rs.id FROM reward_spins rs WHERE rs.user_id = ? AND rs.campaign_id = ?
+         )
+         AND ur.user_id = ?
+         ORDER BY ur.won_at DESC
+         LIMIT 1`
+      )
+      .bind(userId, sessionRow.campaign_id, userId)
+      .first()
+
+    if (!userRewardRow) {
+      return success(c, { success: true, data: null })
+    }
+
+    // Build the response with the already-assigned reward
+    const reward = {
+      id: userRewardRow.reward_id,
+      name: userRewardRow.reward_name || 'Unknown',
+      requiresDelivery: userRewardRow.requires_delivery === 1,
+      imageUrl: userRewardRow.image_url,
+    }
+
+    return success(c, {
+      success: true,
+      data: {
+        rewardId: userRewardRow.id,
+        rewardName: reward.name,
+        userRewardId: userRewardRow.id,
+        requiresDelivery: reward.requiresDelivery,
+        imageUrl: reward.imageUrl,
+      },
+    })
+  },
+)
