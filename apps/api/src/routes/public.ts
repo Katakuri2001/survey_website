@@ -269,3 +269,177 @@ publicRoutes.get('/survey/questions/:productId', async (c) => {
     throw error;
   });
 });
+
+// ============================================================
+// Multi-shop public APIs (v1)
+// ============================================================
+
+/** GET /v1/campaign/active — active campaign + public configuration */
+publicRoutes.get('/v1/campaign/active', async (c) => {
+  const language = resolveLang(c.req.query('lang'));
+  const db = c.env.survey_db;
+
+  const campaign = await db
+    .prepare(
+      `SELECT c.id, c.name, c.description, c.slug, c.status, c.start_date, c.end_date,
+              COALESCE(ct.name, c.name) AS name,
+              COALESCE(ct.description, c.description) AS description
+       FROM campaigns c
+       LEFT JOIN campaign_translations ct ON c.id = ct.campaign_id AND ct.language = ?
+       WHERE c.is_active = 1
+       ORDER BY c.start_date DESC
+       LIMIT 1`
+    )
+    .bind(language)
+    .first<{
+      id: string;
+      name: string;
+      description: string | null;
+      slug: string | null;
+      status: number;
+      start_date: string;
+      end_date: string;
+    }>();
+
+  if (!campaign) {
+    return failure(c, ErrorCode.NOT_FOUND, 'No active campaign found');
+  }
+
+  const now = new Date();
+  const startDate = new Date(campaign.start_date);
+  const endDate = new Date(campaign.end_date);
+  const isWithinDates = now >= startDate && now <= endDate;
+  const status = campaign.status === 1 && isWithinDates ? 'ACTIVE' : 'INACTIVE';
+
+  const shopCount = await db
+    .prepare("SELECT COUNT(*) as count FROM shops WHERE campaign_id = ? AND status = 'ACTIVE'")
+    .bind(campaign.id)
+    .first<{ count: number }>();
+
+  return success(c, {
+    campaign: {
+      id: campaign.id,
+      name: campaign.name,
+      description: campaign.description,
+      slug: campaign.slug,
+      status,
+      startsAt: campaign.start_date,
+      endsAt: campaign.end_date,
+    },
+    languages: ['my', 'en'],
+    defaultLanguage: language,
+    shopCount: shopCount?.count || 0,
+  });
+});
+
+/** GET /v1/shops — active shops for the current campaign (public info only) */
+publicRoutes.get('/v1/shops', async (c) => {
+  const language = resolveLang(c.req.query('lang'));
+  const db = c.env.survey_db;
+
+  // Resolve the active campaign
+  const campaign = await db
+    .prepare(
+      `SELECT c.id FROM campaigns c WHERE c.is_active = 1 ORDER BY c.start_date DESC LIMIT 1`
+    )
+    .first<{ id: string }>();
+
+  if (!campaign) {
+    return success(c, { shops: [] });
+  }
+
+  const rows = await db
+    .prepare(
+      `SELECT s.id, s.name, s.slug, s.description, s.logo_url, s.address,
+              s.contact_information, s.status, s.display_order, s.created_at
+       FROM shops s
+       WHERE s.campaign_id = ? AND s.status = 'ACTIVE'
+       ORDER BY s.display_order, s.name`
+    )
+    .bind(campaign.id)
+    .all<{
+      id: string;
+      name: string;
+      slug: string;
+      description: string | null;
+      logo_url: string | null;
+      address: string | null;
+      contact_information: string | null;
+      status: string;
+      display_order: number;
+      created_at: string;
+    }>();
+
+  return success(c, {
+    shops: (rows.results || []).map((shop) => ({
+      id: shop.id,
+      name: shop.name,
+      slug: shop.slug,
+      description: shop.description,
+      logoUrl: shop.logo_url,
+      address: shop.address,
+      contactInformation: shop.contact_information,
+      status: shop.status,
+      displayOrder: shop.display_order,
+      createdAt: shop.created_at,
+    })),
+  });
+});
+
+/** GET /v1/shops/:shopId — public information for one active shop */
+publicRoutes.get('/v1/shops/:shopId', async (c) => {
+  const language = resolveLang(c.req.query('lang'));
+  const db = c.env.survey_db;
+  const shopId = c.req.param('shopId');
+
+  const campaign = await db
+    .prepare(
+      `SELECT c.id FROM campaigns c WHERE c.is_active = 1 ORDER BY c.start_date DESC LIMIT 1`
+    )
+    .first<{ id: string }>();
+
+  if (!campaign) {
+    return failure(c, ErrorCode.NOT_FOUND, 'No active campaign found');
+  }
+
+  const shop = await db
+    .prepare(
+      `SELECT s.id, s.name, s.slug, s.description, s.logo_url, s.address,
+              s.contact_information, s.status, s.display_order, s.created_at
+       FROM shops s
+       WHERE s.id = ? AND s.campaign_id = ? AND s.status = 'ACTIVE'
+       LIMIT 1`
+    )
+    .bind(shopId, campaign.id)
+    .first<{
+      id: string;
+      name: string;
+      slug: string;
+      description: string | null;
+      logo_url: string | null;
+      address: string | null;
+      contact_information: string | null;
+      status: string;
+      display_order: number;
+      created_at: string;
+    }>();
+
+  if (!shop) {
+    return failure(c, ErrorCode.SHOP_NOT_FOUND, 'Shop not found or not active');
+  }
+
+  return success(c, {
+    shop: {
+      id: shop.id,
+      name: shop.name,
+      slug: shop.slug,
+      description: shop.description,
+      logoUrl: shop.logo_url,
+      address: shop.address,
+      contactInformation: shop.contact_information,
+      status: shop.status,
+      displayOrder: shop.display_order,
+      createdAt: shop.created_at,
+    },
+  });
+});

@@ -259,6 +259,73 @@ export const exportPaginationSchema = paginationSchema.extend({
   limit: z.coerce.number().int().min(1).max(5000).default(1000),
 });
 
+// ---------------------------------------------------------------------------
+// Multi-shop reward system schemas
+// ---------------------------------------------------------------------------
+
+export const shopCreateSchema = z.object({
+  name: shortText(200),
+  slug: z
+    .string()
+    .trim()
+    .min(1)
+    .max(100)
+    .regex(
+      /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
+      'Slug must be lowercase alphanumeric with hyphens',
+    ),
+  campaignId: optionalText(100),
+  description: optionalText(2000),
+  logoUrl: optionalText(2048),
+  address: optionalText(500),
+  contactInformation: optionalText(500),
+  status: z.enum(['ACTIVE', 'INACTIVE']).default('ACTIVE'),
+  displayOrder: z.coerce.number().int().min(0).max(10_000).optional(),
+  translations,
+});
+
+export const shopUpdateSchema = shopCreateSchema.partial();
+
+export const shopRewardCreateSchema = z.object({
+  rewardName: shortText(200),
+  rewardDescription: optionalText(2000),
+  rewardImageUrl: optionalText(2048),
+  stockTotal: z.coerce.number().int().min(0).max(10_000_000),
+  probabilityWeight: z.coerce.number().int().min(0).max(1_000_000).optional(),
+  winningRatio: z.coerce.number().min(0).max(100).nullable().optional(),
+  isDefaultRemainder: z.coerce.number().int().min(0).max(1).optional(),
+  active: z.coerce.number().int().min(0).max(1).optional(),
+  translations,
+});
+
+export const shopRewardUpdateSchema = z.object({
+  rewardName: optionalText(200),
+  rewardDescription: optionalText(2000),
+  rewardImageUrl: optionalText(2048),
+  stockTotal: z.coerce.number().int().min(0).max(10_000_000).optional(),
+  probabilityWeight: z.coerce.number().int().min(0).max(1_000_000).optional(),
+  winningRatio: z.coerce.number().min(0).max(100).nullable().optional(),
+  isDefaultRemainder: z.coerce.number().int().min(0).max(1).optional(),
+  active: z.coerce.number().int().min(0).max(1).optional(),
+  translations: translations.optional(),
+});
+
+export const shopStockAdjustSchema = z.object({
+  adjustment: z.coerce.number().int().min(-10_000_000).max(10_000_000),
+  reason: optionalText(500),
+});
+
+export const winningConfigSchema = z.object({
+  winProbability: z.coerce.number().min(0).max(100),
+  probabilityMode: z.enum(['percentage', 'ratio']).default('percentage'),
+  noRewardEnabled: z.boolean().default(true),
+  configurationVersion: z.coerce.number().int().min(1).optional(),
+});
+
+export const shopSelectionSchema = z.object({
+  shopId: z.string().trim().min(1).max(100),
+});
+
 export type Parsed<T> = { ok: true; data: T } | { ok: false; response: Response };
 
 /** Parse and validate a JSON body, returning a safe 4xx response on failure. */

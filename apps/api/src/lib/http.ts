@@ -25,6 +25,16 @@ export const ErrorCode = {
   PAYLOAD_TOO_LARGE: 'PAYLOAD_TOO_LARGE',
   TEMPORARY_UNAVAILABLE: 'TEMPORARY_UNAVAILABLE',
   INTERNAL: 'INTERNAL',
+
+  // Multi-shop reward system
+  SHOP_NOT_FOUND: 'SHOP_NOT_FOUND',
+  SHOP_INACTIVE: 'SHOP_INACTIVE',
+  SHOP_NOT_ELIGIBLE: 'SHOP_NOT_ELIGIBLE',
+  NO_ELIGIBLE_REWARD: 'NO_ELIGIBLE_REWARD',
+  SESSION_NOT_FOUND: 'SESSION_NOT_FOUND',
+  SESSION_INCOMPLETE: 'SESSION_INCOMPLETE',
+  ALREADY_REWARDED: 'ALREADY_REWARDED',
+  SHOP_MISMATCH: 'SHOP_MISMATCH',
 } as const;
 
 export type ErrorCodeValue = (typeof ErrorCode)[keyof typeof ErrorCode];
@@ -48,6 +58,16 @@ const STATUS_BY_CODE: Record<string, number> = {
   [ErrorCode.PAYLOAD_TOO_LARGE]: 413,
   [ErrorCode.TEMPORARY_UNAVAILABLE]: 503,
   [ErrorCode.INTERNAL]: 500,
+
+  // Multi-shop reward system
+  [ErrorCode.SHOP_NOT_FOUND]: 404,
+  [ErrorCode.SHOP_INACTIVE]: 409,
+  [ErrorCode.SHOP_NOT_ELIGIBLE]: 409,
+  [ErrorCode.NO_ELIGIBLE_REWARD]: 409,
+  [ErrorCode.SESSION_NOT_FOUND]: 404,
+  [ErrorCode.SESSION_INCOMPLETE]: 409,
+  [ErrorCode.ALREADY_REWARDED]: 409,
+  [ErrorCode.SHOP_MISMATCH]: 409,
 };
 
 export type JsonMeta = Record<string, unknown>;

@@ -172,7 +172,7 @@ export function setup() {
     throw new Error('setup questions returned no active survey questions')
   }
 
-  const tokens = []
+  const users = []
   for (let i = 0; i < USERS; i += 1) {
     const guestRes = http.post(
       `${API_BASE}/users/guest`,
@@ -189,7 +189,7 @@ export function setup() {
     const submitRes = http.post(
       `${API_BASE}/survey/submit`,
       JSON.stringify({
-        campaignId: null,
+        campaignId: 'campaign-2026',
         language: 'en',
         submissionRequestId: `load-${i}-${Date.now()}`,
         answers: buildAnswers(questions),
@@ -201,8 +201,28 @@ export function setup() {
     if (submitPayload?.success !== true) {
       throw new Error(`setup survey submit ${i} was rejected: ${submitRes.body}`)
     }
-    tokens.push(token)
+    const sessionId = submitPayload?.data?.sessionId
+    if (typeof sessionId !== 'string' || sessionId.length === 0) {
+      throw new Error(`setup survey submit ${i} returned no sessionId`)
+    }
+
+    // Select a shop (round-robin across 3 test shops)
+    const shopId = ['shop-a', 'shop-b', 'shop-c'][i % 3]
+    const shopRes = http.post(
+      `${API_BASE}/v1/survey/sessions/${sessionId}/select-shop`,
+      JSON.stringify({ shopId }),
+      requestParams(jsonHeaders(token), 'setup-shop-select'),
+    )
+    requireStatus(shopRes, `setup shop select ${i}`, [200, 201])
+
+    users.push({ token, sessionId, shopId })
   }
+
+  if (users.length === 0) {
+    throw new Error('setup completed without any authenticated users')
+  }
+  console.log(`seeded ${users.length}/${USERS} users`)
+  return { users }
 
   if (tokens.length === 0) {
     throw new Error('setup completed without any authenticated users')
@@ -212,34 +232,34 @@ export function setup() {
 }
 
 export default function (data) {
-  if (!data || !Array.isArray(data.tokens) || data.tokens.length === 0) {
-    throw new Error('k6 setup returned no tokens; refusing to run an empty workload')
+  if (!data || !Array.isArray(data.users) || data.users.length === 0) {
+    throw new Error('k6 setup returned no users; refusing to run an empty workload')
   }
-  const token = data.tokens[(__VU - 1) % data.tokens.length]
-  if (!token) throw new Error(`k6 VU ${__VU} received an empty token`)
+  const user = data.users[(__VU - 1) % data.users.length]
+  if (!user || !user.token || !user.sessionId) throw new Error(`k6 VU ${__VU} received an empty user`)
 
   // Read path: the combined config endpoint the app polls.
   const configRes = http.get(
     `${API_BASE}/public/config?lang=en`,
-    requestParams(jsonHeaders(token), 'config'),
+    requestParams(jsonHeaders(user.token), 'config'),
   )
   configTrend.add(configRes.timings.duration)
   check(configRes, { 'config 200': (r) => r.status === 200 })
 
-  // Write path: one spin per (user, campaign). Controlled 4xx responses are
-  // expected for retries/rate limits, but unexpected statuses still fail the
-  // request metric and the explicit check below.
-  const spinRes = http.post(
-    `${API_BASE}/rewards/spin`,
-    JSON.stringify({ campaignId: 'default', productId: 'beer', idempotencyKey: `vu-${__VU}-${__ITER}-${Date.now()}` }),
-    { ...requestParams(jsonHeaders(token), 'spin'), responseCallback: expectedResponse },
+  // Write path: reward selection per (session, shop). Controlled 4xx responses
+  // are expected for retries/rate limits, but unexpected statuses still fail.
+  const idempotencyKey = `vu-${__VU}-${__ITER}-${Date.now()}`
+  const selectRes = http.post(
+    `${API_BASE}/v1/rewards/select`,
+    JSON.stringify({ sessionId: user.sessionId, idempotencyKey, selectedCardId: 'card_01' }),
+    { ...requestParams(jsonHeaders(user.token), 'reward-select'), responseCallback: expectedResponse },
   )
-  spinTrend.add(spinRes.timings.duration)
-  check(spinRes, {
-    'spin is a clean success or a controlled rejection': (r) => {
+  spinTrend.add(selectRes.timings.duration)
+  check(selectRes, {
+    'reward select is a clean success or a controlled rejection': (r) => {
       if (r.status === 200) return true
       const code = r.json('error.code')
-      return ['ALREADY_SPUN', 'SPIN_IN_PROGRESS', 'NO_REWARDS_AVAILABLE', 'REWARD_UNAVAILABLE', 'RATE_LIMITED'].includes(code)
+      return ['ALREADY_REWARDED', 'NO_ELIGIBLE_REWARD', 'SESSION_INCOMPLETE', 'RATE_LIMITED'].includes(code)
     },
   })
 
