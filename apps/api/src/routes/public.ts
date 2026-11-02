@@ -281,7 +281,7 @@ publicRoutes.get('/v1/campaign/active', async (c) => {
 
   const campaign = await db
     .prepare(
-      `SELECT c.id, c.name, c.description, c.slug, c.status, c.start_date, c.end_date,
+      `SELECT c.id, c.name, c.description, c.slug, c.is_active, c.start_date, c.end_date,
               COALESCE(ct.name, c.name) AS name,
               COALESCE(ct.description, c.description) AS description
        FROM campaigns c
@@ -296,7 +296,7 @@ publicRoutes.get('/v1/campaign/active', async (c) => {
       name: string;
       description: string | null;
       slug: string | null;
-      status: number;
+      is_active: number;
       start_date: string;
       end_date: string;
     }>();
@@ -309,7 +309,7 @@ publicRoutes.get('/v1/campaign/active', async (c) => {
   const startDate = new Date(campaign.start_date);
   const endDate = new Date(campaign.end_date);
   const isWithinDates = now >= startDate && now <= endDate;
-  const status = campaign.status === 1 && isWithinDates ? 'ACTIVE' : 'INACTIVE';
+  const status = campaign.is_active === 1 && isWithinDates ? 'ACTIVE' : 'INACTIVE';
 
   const shopCount = await db
     .prepare("SELECT COUNT(*) as count FROM shops WHERE campaign_id = ? AND status = 'ACTIVE'")
