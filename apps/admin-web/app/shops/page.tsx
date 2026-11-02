@@ -67,6 +67,25 @@ export default function ShopsPage() {
     displayOrder: 0,
   })
   const [savingShop, setSavingShop] = useState(false)
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+
+  // Shop reward form
+  const [showRewardModal, setShowRewardModal] = useState(false)
+  const [editingReward, setEditingReward] = useState<ShopReward | null>(null)
+  const [rewardForm, setRewardForm] = useState({
+    rewardName: '',
+    rewardDescription: '',
+    rewardImageUrl: '',
+    stockTotal: 1,
+    probabilityWeight: 10,
+    winningRatio: null as number | null,
+    isDefaultRemainder: false,
+    active: true,
+  })
+  const [savingReward, setSavingReward] = useState(false)
+  const [rewardImageFile, setRewardImageFile] = useState<File | null>(null)
+  const [rewardPreviewUrl, setRewardPreviewUrl] = useState<string | null>(null)
 
   // Shop rewards
   const [shopRewards, setShopRewards] = useState<ShopReward[]>([])
@@ -126,6 +145,8 @@ export default function ShopsPage() {
   const openAddShop = () => {
     setEditingShop(null)
     setShopForm({ name: '', slug: '', description: '', logoUrl: '', address: '', contactInformation: '', status: 'ACTIVE', displayOrder: 0 })
+    setImageFile(null)
+    setPreviewUrl(null)
     setMutationError('')
     setShowShopModal(true)
   }
@@ -142,8 +163,41 @@ export default function ShopsPage() {
       status: shop.status || 'ACTIVE',
       displayOrder: shop.displayOrder || 0,
     })
+    setImageFile(null)
+    setPreviewUrl(null)
     setMutationError('')
     setShowShopModal(true)
+  }
+
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+    if (!allowedTypes.includes(file.type)) {
+      setMutationError('Invalid file type. Only JPEG, PNG, WebP, and GIF are allowed')
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setMutationError('File too large. Maximum size is 5MB')
+      return
+    }
+    setMutationError('')
+    setImageFile(file)
+    setPreviewUrl(URL.createObjectURL(file))
+  }
+
+  const uploadPendingImage = async (): Promise<string> => {
+    if (!imageFile) return shopForm.logoUrl
+    const uploadData = new FormData()
+    uploadData.append('file', imageFile)
+    uploadData.append('type', 'shop')
+    const response = await fetch(`${API_BASE}/admin/upload`, { method: 'POST', headers: adminHeaders(), body: uploadData })
+    const payload = await readApiPayload(response)
+    const data = payload?.data as { url?: string } | undefined
+    const url = data?.url || payload?.url
+    if (!response.ok || !payload || payload.success !== true || !url) throw new Error(apiErrorMessage(payload, 'Failed to upload shop logo'))
+    return url
   }
 
   const saveShop = async () => {
@@ -154,13 +208,14 @@ export default function ShopsPage() {
     setSavingShop(true)
     setMutationError('')
     try {
+      const logoUrl = await uploadPendingImage()
       const method = editingShop ? 'PATCH' : 'POST'
       const url = editingShop ? `${API_BASE}/admin/shops/${editingShop.id}` : `${API_BASE}/admin/shops`
       const body: Record<string, unknown> = {
         name: shopForm.name.trim(),
         slug: shopForm.slug.trim(),
         description: shopForm.description,
-        logoUrl: shopForm.logoUrl,
+        logoUrl,
         address: shopForm.address,
         contactInformation: shopForm.contactInformation,
         status: shopForm.status,
@@ -176,11 +231,118 @@ export default function ShopsPage() {
         throw new Error(apiErrorMessage(payload, 'Failed to save shop'))
       }
       setShowShopModal(false)
+      setImageFile(null)
+      setPreviewUrl(null)
       void loadData()
     } catch (err) {
       setMutationError(err instanceof Error ? err.message : 'Failed to save shop')
     } finally {
       setSavingShop(false)
+    }
+  }
+
+  // Shop reward CRUD
+  const openAddReward = (shop: Shop) => {
+    setSelectedShop(shop)
+    setEditingReward(null)
+    setRewardForm({ rewardName: '', rewardDescription: '', rewardImageUrl: '', stockTotal: 1, probabilityWeight: 10, winningRatio: null, isDefaultRemainder: false, active: true })
+    setRewardImageFile(null)
+    setRewardPreviewUrl(null)
+    setMutationError('')
+    setShowRewardModal(true)
+    void loadShopRewards(shop)
+  }
+
+  const openEditReward = (shop: Shop, reward: ShopReward) => {
+    setSelectedShop(shop)
+    setEditingReward(reward)
+    setRewardForm({
+      rewardName: reward.rewardName || '',
+      rewardDescription: reward.rewardDescription || '',
+      rewardImageUrl: reward.rewardImageUrl || '',
+      stockTotal: reward.stockTotal,
+      probabilityWeight: reward.probabilityWeight,
+      winningRatio: reward.winningRatio,
+      isDefaultRemainder: reward.isDefaultRemainder,
+      active: reward.active,
+    })
+    setRewardImageFile(null)
+    setRewardPreviewUrl(null)
+    setMutationError('')
+    setShowRewardModal(true)
+  }
+
+  const handleRewardImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+    if (!allowedTypes.includes(file.type)) {
+      setMutationError('Invalid file type')
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setMutationError('File too large')
+      return
+    }
+    setMutationError('')
+    setRewardImageFile(file)
+    setRewardPreviewUrl(URL.createObjectURL(file))
+  }
+
+  const uploadRewardImage = async (): Promise<string> => {
+    if (!rewardImageFile) return rewardForm.rewardImageUrl
+    const uploadData = new FormData()
+    uploadData.append('file', rewardImageFile)
+    uploadData.append('type', 'reward')
+    const response = await fetch(`${API_BASE}/admin/upload`, { method: 'POST', headers: adminHeaders(), body: uploadData })
+    const payload = await readApiPayload(response)
+    const data = payload?.data as { url?: string } | undefined
+    const url = data?.url || payload?.url
+    if (!response.ok || !payload || payload.success !== true || !url) throw new Error(apiErrorMessage(payload, 'Failed to upload reward image'))
+    return url
+  }
+
+  const saveReward = async () => {
+    if (!selectedShop || !rewardForm.rewardName.trim()) {
+      setMutationError('Reward name is required')
+      return
+    }
+    setSavingReward(true)
+    setMutationError('')
+    try {
+      const imageUrl = await uploadRewardImage()
+      const method = editingReward ? 'PATCH' : 'POST'
+      const url = editingReward
+        ? `${API_BASE}/admin/shops/${selectedShop.id}/rewards/${editingReward.id}`
+        : `${API_BASE}/admin/shops/${selectedShop.id}/rewards`
+      const body: Record<string, unknown> = {
+        rewardName: rewardForm.rewardName.trim(),
+        rewardDescription: rewardForm.rewardDescription,
+        rewardImageUrl: imageUrl,
+        stockTotal: rewardForm.stockTotal,
+        probabilityWeight: rewardForm.probabilityWeight,
+        winningRatio: rewardForm.winningRatio,
+        isDefaultRemainder: rewardForm.isDefaultRemainder ? 1 : 0,
+        active: rewardForm.active ? 1 : 0,
+      }
+      const response = await fetch(url, {
+        method,
+        headers: adminHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(body),
+      })
+      const payload = await readApiPayload(response)
+      if (!response.ok || !payload || payload.success !== true) {
+        throw new Error(apiErrorMessage(payload, 'Failed to save reward'))
+      }
+      setShowRewardModal(false)
+      setRewardImageFile(null)
+      setRewardPreviewUrl(null)
+      void loadShopRewards(selectedShop)
+    } catch (err) {
+      setMutationError(err instanceof Error ? err.message : 'Failed to save reward')
+    } finally {
+      setSavingReward(false)
     }
   }
 
@@ -374,7 +536,10 @@ export default function ShopsPage() {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="font-display text-lg font-bold text-ink">Rewards for {selectedShop.name}</h2>
-              <button type="button" onClick={() => setSelectedShop(null)} className="text-sm text-slate-500 hover:text-slate-700">← Back to shops</button>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => openAddReward(selectedShop)} className="btn-gold shadow-gold text-sm">+ Add Reward</button>
+                <button type="button" onClick={() => setSelectedShop(null)} className="text-sm text-slate-500 hover:text-slate-700">← Back</button>
+              </div>
             </div>
             {loadingRewards ? (
               <div className="flex items-center justify-center py-10"><div className="h-6 w-6 animate-spin rounded-full border-b-2 border-t-2 border-gold" /></div>
@@ -392,6 +557,7 @@ export default function ShopsPage() {
                         <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Effective Ratio</th>
                         <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Status</th>
                         <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Stats</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -416,6 +582,9 @@ export default function ShopsPage() {
                             </span>
                           </td>
                           <td className="px-6 py-4 text-sm text-slate-500">Assigned: {reward.assignedCount} | Delivered: {reward.deliveredCount}</td>
+                          <td className="px-6 py-4">
+                            <button type="button" onClick={() => openEditReward(selectedShop!, reward)} className="text-sm font-semibold text-gold-600 hover:text-gold-700">Edit</button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -489,6 +658,17 @@ export default function ShopsPage() {
                 <div>
                   <label className="mb-1 block text-sm font-medium text-slate-700">Logo URL</label>
                   <input type="text" value={shopForm.logoUrl} onChange={(e) => setShopForm({ ...shopForm, logoUrl: e.target.value })} className="input" />
+                  {(previewUrl || shopForm.logoUrl) && (
+                    <div className="mt-2">
+                      <Image src={previewUrl || shopForm.logoUrl} alt="Logo preview" width={80} height={80} className="h-20 w-20 rounded-lg object-cover ring-1 ring-slate-200" />
+                    </div>
+                  )}
+                  <label className="mt-2 cursor-pointer inline-block">
+                    <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleImageUpload} className="sr-only" disabled={savingShop} />
+                    <span className="text-sm text-gold-600 hover:text-gold-700 font-semibold">
+                      {imageFile ? 'Image selected — save to apply' : 'Upload logo'}
+                    </span>
+                  </label>
                 </div>
                 <div>
                   <label className="mb-1 block text-sm font-medium text-slate-700">Address</label>
@@ -516,6 +696,75 @@ export default function ShopsPage() {
                 <button type="button" onClick={() => { setShowShopModal(false) }} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Cancel</button>
                 <button type="button" onClick={() => void saveShop()} disabled={savingShop || !shopForm.name || !shopForm.slug} className="btn-gold disabled:opacity-50">
                   {savingShop ? 'Saving...' : editingShop ? 'Update' : 'Create'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Reward modal */}
+        {showRewardModal && selectedShop && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white shadow-2xl">
+              <div className="border-b border-slate-200 px-6 py-4">
+                <h2 className="font-display text-lg font-semibold text-ink">{editingReward ? 'Edit Reward' : 'Add Reward'} — {selectedShop.name}</h2>
+              </div>
+              <div className="space-y-4 px-6 py-4">
+                {mutationError && <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{mutationError}</div>}
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Reward Name *</label>
+                  <input type="text" value={rewardForm.rewardName} onChange={(e) => setRewardForm({ ...rewardForm, rewardName: e.target.value })} className="input" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Description</label>
+                  <textarea value={rewardForm.rewardDescription} onChange={(e) => setRewardForm({ ...rewardForm, rewardDescription: e.target.value })} rows={2} className="input resize-none" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Reward Image</label>
+                  {(rewardPreviewUrl || rewardForm.rewardImageUrl) && (
+                    <div className="mb-2">
+                      <Image src={rewardPreviewUrl || rewardForm.rewardImageUrl} alt="Preview" width={80} height={80} className="h-20 w-20 rounded-lg object-cover ring-1 ring-slate-200" />
+                    </div>
+                  )}
+                  <label className="cursor-pointer">
+                    <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleRewardImageUpload} className="sr-only" disabled={savingReward} />
+                    <span className="text-sm text-gold-600 hover:text-gold-700 font-semibold">
+                      {rewardImageFile ? 'Image selected — save to apply' : rewardForm.rewardImageUrl ? 'Change image' : 'Upload image'}
+                    </span>
+                  </label>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">Stock Total *</label>
+                    <input type="number" min={0} value={rewardForm.stockTotal} onChange={(e) => setRewardForm({ ...rewardForm, stockTotal: Number(e.target.value) })} className="input" />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">Weight</label>
+                    <input type="number" min={0} value={rewardForm.probabilityWeight} onChange={(e) => setRewardForm({ ...rewardForm, probabilityWeight: Number(e.target.value) })} className="input" />
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Win Probability % (leave empty for Thank You/remainder)</label>
+                  <input type="number" min={0} max={100} step="0.1" value={rewardForm.winningRatio ?? ''} onChange={(e) => setRewardForm({ ...rewardForm, winningRatio: e.target.value === '' ? null : Number(e.target.value) })} className="input" placeholder="e.g. 15" />
+                </div>
+                <div>
+                  <label className="flex items-center gap-2 text-sm text-slate-700">
+                    <input type="checkbox" checked={rewardForm.isDefaultRemainder} onChange={(e) => setRewardForm({ ...rewardForm, isDefaultRemainder: e.target.checked })} className="h-4 w-4 rounded border-slate-300 accent-gold" />
+                    Default remainder reward (Thank You)
+                  </label>
+                  <p className="mt-1 text-xs text-slate-400">Check this for the "Thank You" reward that receives leftover probability.</p>
+                </div>
+                <div>
+                  <label className="flex items-center gap-2 text-sm text-slate-700">
+                    <input type="checkbox" checked={rewardForm.active} onChange={(e) => setRewardForm({ ...rewardForm, active: e.target.checked })} className="h-4 w-4 rounded border-slate-300 accent-gold" />
+                    Active
+                  </label>
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 border-t border-slate-200 px-6 py-4">
+                <button type="button" onClick={() => { setShowRewardModal(false); setRewardImageFile(null); setRewardPreviewUrl(null) }} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Cancel</button>
+                <button type="button" onClick={() => void saveReward()} disabled={savingReward || !rewardForm.rewardName} className="btn-gold disabled:opacity-50">
+                  {savingReward ? 'Saving...' : editingReward ? 'Update' : 'Create'}
                 </button>
               </div>
             </div>
