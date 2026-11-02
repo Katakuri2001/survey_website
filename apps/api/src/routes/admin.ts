@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AppContext } from '../types';
-import { ErrorCode, failure, success } from '../lib/http';
+import { ErrorCode, failure, logEvent, success } from '../lib/http';
 import { adminMiddleware, authMiddleware, createGuestResumeToken, hashGuestResumeToken } from '../lib/auth';
 import { enforceRateLimit, invalidateSettingsCache } from '../lib/security';
 import { generateId, isoTimestamp } from '../lib/ids';
@@ -19,9 +19,15 @@ import {
   rewardCreateSchema,
   rewardUpdateSchema,
   settingsUpdateSchema,
+  shopCreateSchema,
+  shopRewardCreateSchema,
+  shopRewardUpdateSchema,
+  shopStockAdjustSchema,
+  shopUpdateSchema,
   stockAdjustSchema,
   surveyVersionCreateSchema,
   surveyVersionStatusSchema,
+  winningConfigSchema,
 } from '../lib/validation';
 
 export const adminRoutes = new Hono<AppContext>();
@@ -1478,4 +1484,645 @@ adminRoutes.patch('/account/password', async (c) => {
 
   await logAudit(c, 'PASSWORD_CHANGED', 'auth', id);
   return success(c, { message: 'Password updated successfully' });
+});
+
+// ============================================================
+// Shop management (v1) — multi-shop reward system
+// ============================================================
+
+/** GET /admin/shops — list shops with pagination, search, status filter */
+adminRoutes.get('/shops', async (c) => {
+  const db = c.env.survey_db;
+  const parsed = readQuery(c, searchPaginationSchema);
+  if (!parsed.ok) return parsed.response;
+  const { limit, offset, search } = parsed.data;
+
+  const params: unknown[] = [];
+  let query = `
+    SELECT s.id, s.campaign_id, s.name, s.slug, s.description, s.logo_url,
+           s.address, s.contact_information, s.status, s.display_order,
+           s.created_at, s.updated_at,
+           (SELECT COUNT(*) FROM shop_rewards sr WHERE sr.shop_id = s.id) as reward_count,
+           (SELECT COUNT(*) FROM shop_rewards sr WHERE sr.shop_id = s.id AND sr.active = 1 AND sr.stock_remaining > 0) as active_reward_count,
+           (SELECT SUM(sr.stock_remaining) FROM shop_rewards sr WHERE sr.shop_id = s.id) as total_stock,
+           (SELECT SUM(sr.stock_remaining) FROM shop_rewards sr WHERE sr.shop_id = s.id AND sr.active = 1) as remaining_stock,
+           (SELECT win_probability FROM shop_winning_config swc WHERE swc.shop_id = s.id) as win_probability
+    FROM shops s
+    WHERE 1=1`;
+  if (search) {
+    query += ' AND (s.name LIKE ? OR s.slug LIKE ? OR s.address LIKE ?)';
+    const term = `%${search}%`;
+    params.push(term, term, term);
+  }
+  query += ' ORDER BY s.display_order, s.name LIMIT ? OFFSET ?';
+  params.push(limit, offset);
+
+  const shops = await db.prepare(query).bind(...params).all();
+
+  const totalParams: unknown[] = [];
+  let totalQuery = 'SELECT COUNT(*) as count FROM shops s WHERE 1=1';
+  if (search) {
+    totalQuery += ' AND (s.name LIKE ? OR s.slug LIKE ? OR s.address LIKE ?)';
+    const term = `%${search}%`;
+    totalParams.push(term, term, term);
+  }
+  const total = await db.prepare(totalQuery).bind(...totalParams).first<{ count: number }>();
+
+  return success(c, {
+    shops: (shops.results || []).map((shop) => ({
+      id: shop.id,
+      campaignId: shop.campaign_id,
+      name: shop.name,
+      slug: shop.slug,
+      description: shop.description,
+      logoUrl: shop.logo_url,
+      address: shop.address,
+      contactInformation: shop.contact_information,
+      status: shop.status,
+      displayOrder: shop.display_order,
+      createdAt: shop.created_at,
+      updatedAt: shop.updated_at,
+      rewardCount: shop.reward_count,
+      activeRewardCount: shop.active_reward_count,
+      totalStock: shop.total_stock || 0,
+      remainingStock: shop.remaining_stock || 0,
+      winProbability: shop.win_probability,
+    })),
+    total: total?.count || 0,
+  });
+});
+
+/** POST /admin/shops — create a new shop */
+adminRoutes.post('/shops', async (c) => {
+  const parsed = await readJson(c, shopCreateSchema);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.data;
+  const db = c.env.survey_db;
+
+  // Verify campaign exists and is active
+  const campaign = await db
+    .prepare('SELECT id FROM campaigns WHERE id = ? AND is_active = 1')
+    .bind(body.campaignId || 'campaign-2026')
+    .first<{ id: string }>();
+  if (!campaign) {
+    return failure(c, ErrorCode.NOT_FOUND, 'Campaign not found or not active', 404);
+  }
+
+  const id = generateId();
+  const now = isoTimestamp();
+
+  try {
+    await db
+      .prepare(
+        `INSERT INTO shops (id, campaign_id, name, slug, description, logo_url, address, contact_information, status, display_order, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .bind(
+        id,
+        campaign.id,
+        body.name,
+        body.slug,
+        body.description || null,
+        body.logoUrl || null,
+        body.address || null,
+        body.contactInformation || null,
+        body.status,
+        body.displayOrder ?? 0,
+        now,
+        now,
+      )
+      .run();
+  } catch (error) {
+    if (String(error).toLowerCase().includes('unique constraint')) {
+      return failure(c, ErrorCode.VALIDATION_FAILED, 'A shop with this slug already exists in this campaign', 422);
+    }
+    logEvent('error', 'shop_create_failed', { error: String(error) });
+    return failure(c, ErrorCode.INTERNAL, 'Failed to create shop');
+  }
+
+  // Create default winning configuration
+  await db
+    .prepare(
+      `INSERT INTO shop_winning_config (id, shop_id, win_probability, probability_mode, no_reward_enabled, configuration_version, created_at, updated_at)
+       VALUES (?, ?, 0, 'percentage', 1, 1, ?, ?)`
+    )
+    .bind(generateId(), id, now, now)
+    .run();
+
+  await logAudit(c, 'CREATE', 'shop', id, { name: body.name, slug: body.slug, campaignId: campaign.id });
+  return success(c, { id, message: 'Shop created' });
+});
+
+/** PATCH /admin/shops/:shopId — update shop details */
+adminRoutes.patch('/shops/:shopId', async (c) => {
+  const parsed = await readJson(c, shopUpdateSchema);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.data;
+  const shopId = c.req.param('shopId');
+  const db = c.env.survey_db;
+
+  const existing = await db
+    .prepare('SELECT id FROM shops WHERE id = ?')
+    .bind(shopId)
+    .first();
+  if (!existing) return failure(c, ErrorCode.NOT_FOUND, 'Shop not found', 404);
+
+  const now = isoTimestamp();
+  const result = await db
+    .prepare(
+      `UPDATE shops SET
+         name = COALESCE(?, name),
+         slug = COALESCE(?, slug),
+         description = COALESCE(?, description),
+         logo_url = COALESCE(?, logo_url),
+         address = COALESCE(?, address),
+         contact_information = COALESCE(?, contact_information),
+         status = COALESCE(?, status),
+         display_order = COALESCE(?, display_order),
+         updated_at = ?
+       WHERE id = ?`
+    )
+    .bind(
+      body.name ?? null,
+      body.slug ?? null,
+      body.description ?? null,
+      body.logoUrl ?? null,
+      body.address ?? null,
+      body.contactInformation ?? null,
+      body.status ?? null,
+      body.displayOrder ?? null,
+      now,
+      shopId,
+    )
+    .run();
+  if (result.meta.changes !== 1) return failure(c, ErrorCode.NOT_FOUND, 'Shop not found', 404);
+
+  await logAudit(c, 'UPDATE', 'shop', shopId, { name: body.name, status: body.status });
+  return success(c, { message: 'Shop updated' });
+});
+
+/** PATCH /admin/shops/:shopId/status — activate or deactivate a shop */
+adminRoutes.patch('/shops/:shopId/status', async (c) => {
+  const parsed = await readJson(
+    c,
+    z.object({ status: z.enum(['ACTIVE', 'INACTIVE']) })
+  );
+  if (!parsed.ok) return parsed.response;
+  const { status } = parsed.data;
+  const shopId = c.req.param('shopId');
+  const db = c.env.survey_db;
+
+  const existing = await db
+    .prepare('SELECT id, status FROM shops WHERE id = ?')
+    .bind(shopId)
+    .first<{ id: string; status: string }>();
+  if (!existing) return failure(c, ErrorCode.NOT_FOUND, 'Shop not found', 404);
+  if (existing.status === status) {
+    return success(c, { message: `Shop already ${status}`, status });
+  }
+
+  const now = isoTimestamp();
+  await db
+    .prepare('UPDATE shops SET status = ?, updated_at = ? WHERE id = ?')
+    .bind(status, now, shopId)
+    .run();
+
+  await logAudit(c, 'STATUS_CHANGED', 'shop', shopId, { from: existing.status, to: status });
+  return success(c, { message: `Shop ${status.toLowerCase()}`, status });
+});
+
+/** GET /admin/shops/:shopId/rewards — list shop-specific rewards */
+adminRoutes.get('/shops/:shopId/rewards', async (c) => {
+  const db = c.env.survey_db;
+  const shopId = c.req.param('shopId');
+
+  const shop = await db
+    .prepare('SELECT id FROM shops WHERE id = ?')
+    .bind(shopId)
+    .first();
+  if (!shop) return failure(c, ErrorCode.NOT_FOUND, 'Shop not found', 404);
+
+  const rows = await db
+    .prepare(
+      `SELECT sr.id, sr.reward_name, sr.reward_description, sr.reward_image_url,
+              sr.stock_total, sr.stock_remaining, sr.probability_weight, sr.active,
+              sr.winning_ratio, sr.is_default_remainder,
+              sr.created_at, sr.updated_at,
+              (SELECT COUNT(*) FROM reward_wins rw WHERE rw.shop_reward_id = sr.id) as assigned_count,
+              (SELECT COUNT(*) FROM reward_wins rw JOIN reward_delivery_records rdr ON rdr.reward_win_id = rw.id WHERE rw.shop_reward_id = sr.id AND rdr.delivery_status = 'DELIVERED') as delivered_count
+       FROM shop_rewards sr
+       WHERE sr.shop_id = ?
+       ORDER BY sr.created_at DESC`
+    )
+    .bind(shopId)
+    .all<{
+      id: string;
+      reward_name: string;
+      reward_description: string | null;
+      reward_image_url: string | null;
+      stock_total: number;
+      stock_remaining: number;
+      probability_weight: number;
+      active: number;
+      winning_ratio: number | null;
+      is_default_remainder: number;
+      created_at: string;
+      updated_at: string;
+      assigned_count: number;
+      delivered_count: number;
+    }>();
+
+  return success(c, {
+    shopId,
+    rewards: (() => {
+      const results = rows.results || [];
+      // Calculate effective ratios
+      const inStockExplicit = results.filter(r => r.winning_ratio != null && r.stock_remaining > 0);
+      const totalExplicit = inStockExplicit.reduce((sum, r) => sum + Number(r.winning_ratio), 0);
+      const remainder = Math.max(0, 100 - totalExplicit);
+      return results.map((r) => {
+        let effectiveRatio: number;
+        if (r.stock_remaining <= 0) {
+          effectiveRatio = 0; // Out of stock → excluded
+        } else if (r.winning_ratio != null) {
+          effectiveRatio = Number(r.winning_ratio); // Explicit ratio
+        } else if (r.is_default_remainder === 1) {
+          effectiveRatio = remainder; // Remainder reward
+        } else {
+          effectiveRatio = 0;
+        }
+        return {
+          id: r.id,
+          rewardName: r.reward_name,
+          rewardDescription: r.reward_description,
+          rewardImageUrl: r.reward_image_url,
+          stockTotal: r.stock_total,
+          stockRemaining: r.stock_remaining,
+          probabilityWeight: r.probability_weight,
+          active: r.active === 1,
+          winningRatio: r.winning_ratio,
+          isDefaultRemainder: r.is_default_remainder === 1,
+          effectiveRatio,
+          status: r.stock_remaining <= 0 ? 'EXHAUSTED' : r.active === 0 ? 'INACTIVE' : 'AVAILABLE',
+          assignedCount: r.assigned_count,
+          deliveredCount: r.delivered_count,
+          createdAt: r.created_at,
+          updatedAt: r.updated_at,
+        };
+      });
+    })(),
+  });
+});
+
+/** POST /admin/shops/:shopId/rewards — create a shop-specific reward */
+adminRoutes.post('/shops/:shopId/rewards', async (c) => {
+  const parsed = await readJson(c, shopRewardCreateSchema);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.data;
+  const shopId = c.req.param('shopId');
+  const db = c.env.survey_db;
+
+  const shop = await db
+    .prepare('SELECT id, campaign_id FROM shops WHERE id = ?')
+    .bind(shopId)
+    .first<{ id: string; campaign_id: string }>();
+  if (!shop) return failure(c, ErrorCode.NOT_FOUND, 'Shop not found', 404);
+
+  const id = generateId();
+  const now = isoTimestamp();
+  const totalQty = body.stockTotal;
+  const status = totalQty <= 0 ? 'EXHAUSTED' : 'AVAILABLE';
+
+  await db
+    .prepare(
+      `INSERT INTO shop_rewards (id, campaign_id, shop_id, reward_name, reward_description, reward_image_url, stock_total, stock_remaining, probability_weight, winning_ratio, is_default_remainder, active, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    )
+    .bind(
+      id,
+      shop.campaign_id,
+      shopId,
+      body.rewardName,
+      body.rewardDescription || null,
+      body.rewardImageUrl || null,
+      totalQty,
+      totalQty,
+      body.probabilityWeight ?? 10,
+      body.winningRatio ?? null,
+      body.isDefaultRemainder ?? 0,
+      body.active ?? 1,
+      now,
+      now,
+    )
+    .run();
+
+  await logAudit(c, 'CREATE', 'shop_reward', id, { shopId, rewardName: body.rewardName, stockTotal: totalQty });
+  return success(c, { id, message: 'Shop reward created' });
+});
+
+/** PATCH /admin/shops/:shopId/rewards/:rewardId — update a shop reward */
+adminRoutes.patch('/shops/:shopId/rewards/:rewardId', async (c) => {
+  const parsed = await readJson(c, shopRewardUpdateSchema);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.data;
+  const shopId = c.req.param('shopId');
+  const rewardId = c.req.param('rewardId');
+  const db = c.env.survey_db;
+
+  const current = await db
+    .prepare('SELECT stock_total, stock_remaining FROM shop_rewards WHERE id = ? AND shop_id = ?')
+    .bind(rewardId, shopId)
+    .first<{ stock_total: number; stock_remaining: number }>();
+  if (!current) return failure(c, ErrorCode.NOT_FOUND, 'Shop reward not found', 404);
+
+  const now = isoTimestamp();
+  const awarded = Math.max(0, current.stock_total - current.stock_remaining);
+
+  let totalToSave: number | null = null;
+  let remainingToSave: number | null = null;
+  if (body.stockTotal !== undefined) {
+    totalToSave = body.stockTotal;
+    remainingToSave = totalToSave - awarded;
+    if (remainingToSave < 0) {
+      return failure(c, ErrorCode.INVALID_REQUEST, 'Total quantity cannot be lower than awarded quantity', 422);
+    }
+  } else {
+    remainingToSave = current.stock_remaining;
+  }
+
+  const result = await db
+    .prepare(
+      `UPDATE shop_rewards SET
+         reward_name = COALESCE(?, reward_name),
+         reward_description = COALESCE(?, reward_description),
+         reward_image_url = COALESCE(?, reward_image_url),
+         stock_total = CASE WHEN ? = 1 THEN ? ELSE stock_total END,
+         stock_remaining = CASE WHEN ? = 1 THEN ? ELSE stock_remaining END,
+         probability_weight = COALESCE(?, probability_weight),
+         winning_ratio = CASE WHEN ? = 1 THEN ? ELSE winning_ratio END,
+         is_default_remainder = COALESCE(?, is_default_remainder),
+         active = COALESCE(?, active),
+         updated_at = ?
+       WHERE id = ? AND shop_id = ?`
+    )
+    .bind(
+      body.rewardName ?? null,
+      body.rewardDescription ?? null,
+      body.rewardImageUrl ?? null,
+      body.stockTotal !== undefined ? 1 : 0,
+      totalToSave,
+      body.stockTotal !== undefined ? 1 : 0,
+      remainingToSave,
+      body.probabilityWeight ?? null,
+      body.winningRatio !== undefined ? 1 : 0,
+      body.winningRatio !== undefined ? body.winningRatio : null,
+      body.isDefaultRemainder ?? null,
+      body.active ?? null,
+      now,
+      rewardId,
+      shopId,
+    )
+    .run();
+  if (result.meta.changes !== 1) return failure(c, ErrorCode.NOT_FOUND, 'Shop reward not found', 404);
+
+  if (body.stockTotal !== undefined && remainingToSave !== current.stock_remaining) {
+    await db
+      .prepare(
+        `INSERT INTO reward_inventory_transactions (id, reward_id, type, quantity, notes, created_by, created_at)
+         VALUES (?, ?, 'MANUAL_ADJUSTMENT', ?, 'total_quantity_updated', ?, ?)`
+      )
+      .bind(generateId(), rewardId, remainingToSave! - current.stock_remaining, c.get('userId'), now)
+      .run();
+  }
+
+  await logAudit(c, 'UPDATE', 'shop_reward', rewardId, { shopId, rewardName: body.rewardName, stockTotal: body.stockTotal });
+  return success(c, { message: 'Shop reward updated' });
+});
+
+/** POST /admin/shops/:shopId/rewards/:rewardId/stock-adjustments — audited stock adjustment */
+adminRoutes.post('/shops/:shopId/rewards/:rewardId/stock-adjustments', async (c) => {
+  const parsed = await readJson(c, shopStockAdjustSchema);
+  if (!parsed.ok) return parsed.response;
+  const { adjustment, reason } = parsed.data;
+  const shopId = c.req.param('shopId');
+  const rewardId = c.req.param('rewardId');
+  const db = c.env.survey_db;
+
+  const reward = await db
+    .prepare('SELECT stock_total, stock_remaining FROM shop_rewards WHERE id = ? AND shop_id = ?')
+    .bind(rewardId, shopId)
+    .first<{ stock_total: number; stock_remaining: number }>();
+  if (!reward) return failure(c, ErrorCode.NOT_FOUND, 'Shop reward not found', 404);
+
+  const awarded = Math.max(0, reward.stock_total - reward.stock_remaining);
+  const newRemaining = reward.stock_remaining + adjustment;
+
+  // Prevent reducing below already-committed awards
+  if (newRemaining < awarded) {
+    return failure(
+      c,
+      ErrorCode.INVALID_REQUEST,
+      `Cannot reduce stock below ${awarded} already-committed award(s)`,
+      422,
+    );
+  }
+
+  const result = await db
+    .prepare(
+      `UPDATE shop_rewards
+       SET stock_remaining = stock_remaining + ?,
+           updated_at = ?
+       WHERE id = ? AND shop_id = ?`
+    )
+    .bind(adjustment, isoTimestamp(), rewardId, shopId)
+    .run();
+  if (result.meta.changes !== 1) return failure(c, ErrorCode.NOT_FOUND, 'Shop reward not found', 404);
+
+  await db
+    .prepare(
+      `INSERT INTO reward_inventory_transactions (id, reward_id, type, quantity, reference_type, notes, created_by, created_at)
+       VALUES (?, ?, 'MANUAL_ADJUSTMENT', ?, 'stock_adjustment', ?, ?)`
+    )
+    .bind(generateId(), rewardId, adjustment, reason || 'Manual adjustment', c.get('userId'), isoTimestamp())
+    .run();
+
+  await logAudit(c, 'STOCK_ADJUSTED', 'shop_reward', rewardId, { shopId, adjustment, reason, previousStock: reward.stock_remaining, newStock: newRemaining });
+  return success(c, { message: 'Stock adjusted', newQuantity: newRemaining });
+});
+
+/** PATCH /admin/shops/:shopId/winning-config — update shop winning configuration */
+adminRoutes.patch('/shops/:shopId/winning-config', async (c) => {
+  const parsed = await readJson(c, winningConfigSchema);
+  if (!parsed.ok) return parsed.response;
+  const { winProbability, probabilityMode, noRewardEnabled, configurationVersion } = parsed.data;
+  const shopId = c.req.param('shopId');
+  const db = c.env.survey_db;
+
+  const shop = await db
+    .prepare('SELECT id FROM shops WHERE id = ?')
+    .bind(shopId)
+    .first();
+  if (!shop) return failure(c, ErrorCode.NOT_FOUND, 'Shop not found', 404);
+
+  const now = isoTimestamp();
+  const version = configurationVersion ?? 1;
+
+  // Upsert winning config
+  await db
+    .prepare(
+      `INSERT INTO shop_winning_config (id, shop_id, win_probability, probability_mode, no_reward_enabled, configuration_version, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (shop_id) DO UPDATE SET
+         win_probability = excluded.win_probability,
+         probability_mode = excluded.probability_mode,
+         no_reward_enabled = excluded.no_reward_enabled,
+         configuration_version = excluded.configuration_version,
+         updated_at = excluded.updated_at`
+    )
+    .bind(
+      generateId(),
+      shopId,
+      winProbability,
+      probabilityMode,
+      noRewardEnabled ? 1 : 0,
+      version,
+      now,
+      now,
+    )
+    .run();
+
+  await logAudit(c, 'WINNING_CONFIG_UPDATED', 'shop', shopId, {
+    winProbability,
+    probabilityMode,
+    noRewardEnabled,
+    configurationVersion: version,
+  });
+  return success(c, { message: 'Winning configuration updated', configurationVersion: version });
+});
+
+/** GET /admin/shops/:shopId/reward-history — reward history for a shop */
+adminRoutes.get('/shops/:shopId/reward-history', async (c) => {
+  const db = c.env.survey_db;
+  const parsed = readQuery(c, paginationSchema);
+  if (!parsed.ok) return parsed.response;
+  const { limit, offset } = parsed.data;
+  const shopId = c.req.param('shopId');
+
+  const shop = await db
+    .prepare('SELECT id FROM shops WHERE id = ?')
+    .bind(shopId)
+    .first();
+  if (!shop) return failure(c, ErrorCode.NOT_FOUND, 'Shop not found', 404);
+
+  const history = await db
+    .prepare(
+      `SELECT rw.id, rw.reward_name_snapshot AS reward_name, rw.shop_reward_id, rw.status,
+              rw.created_at, rw.updated_at, rw.delivered_at,
+              u.full_name as user_name, u.phone as user_phone
+       FROM reward_wins rw
+       LEFT JOIN users u ON u.id = rw.session_id
+       WHERE rw.shop_id = ?
+       ORDER BY rw.created_at DESC
+       LIMIT ? OFFSET ?`
+    )
+    .bind(shopId, limit, offset)
+    .all();
+
+  const total = await db
+    .prepare('SELECT COUNT(*) as count FROM reward_wins WHERE shop_id = ?')
+    .bind(shopId)
+    .first<{ count: number }>();
+
+  return success(c, {
+    shopId,
+    history: (history.results || []).map((h) => ({
+      winId: h.id,
+      rewardName: h.reward_name,
+      shopRewardId: h.shop_reward_id,
+      status: h.status,
+      userName: h.user_name,
+      userPhone: h.user_phone,
+      createdAt: h.created_at,
+      updatedAt: h.updated_at,
+      deliveredAt: h.delivered_at,
+    })),
+    total: total?.count || 0,
+  });
+});
+
+/** GET /admin/shops/:shopId/statistics — shop-level statistics */
+adminRoutes.get('/shops/:shopId/statistics', async (c) => {
+  const db = c.env.survey_db;
+  const shopId = c.req.param('shopId');
+
+  const shop = await db
+    .prepare('SELECT id FROM shops WHERE id = ?')
+    .bind(shopId)
+    .first();
+  if (!shop) return failure(c, ErrorCode.NOT_FOUND, 'Shop not found', 404);
+
+  const [
+    sessionsSelectingShop,
+    rewardSelectionAttempts,
+    totalWinners,
+    totalNoReward,
+    remainingStock,
+    totalStock,
+    deliveredRewards,
+    pendingRewards,
+  ] = await Promise.all([
+    db
+      .prepare("SELECT COUNT(*) as count FROM survey_sessions WHERE selected_shop_id = ?")
+      .bind(shopId)
+      .first<{ count: number }>(),
+    db
+      .prepare('SELECT COUNT(*) as count FROM reward_wins WHERE shop_id = ?')
+      .bind(shopId)
+      .first<{ count: number }>(),
+    db
+      .prepare("SELECT COUNT(*) as count FROM reward_wins WHERE shop_id = ? AND status != 'NO_REWARD'")
+      .bind(shopId)
+      .first<{ count: number }>(),
+    db
+      .prepare("SELECT COUNT(*) as count FROM reward_wins WHERE shop_id = ? AND status = 'NO_REWARD'")
+      .bind(shopId)
+      .first<{ count: number }>(),
+    db
+      .prepare("SELECT COALESCE(SUM(stock_remaining), 0) as total FROM shop_rewards WHERE shop_id = ?")
+      .bind(shopId)
+      .first<{ total: number }>(),
+    db
+      .prepare("SELECT COALESCE(SUM(stock_total), 0) as total FROM shop_rewards WHERE shop_id = ?")
+      .bind(shopId)
+      .first<{ total: number }>(),
+    db
+      .prepare(
+        "SELECT COUNT(*) as count FROM reward_wins rw JOIN reward_delivery_records rdr ON rdr.reward_win_id = rw.id WHERE rw.shop_id = ? AND rdr.delivery_status = 'DELIVERED'"
+      )
+      .bind(shopId)
+      .first<{ count: number }>(),
+    db
+      .prepare(
+        "SELECT COUNT(*) as count FROM reward_wins rw JOIN reward_delivery_records rdr ON rdr.reward_win_id = rw.id WHERE rw.shop_id = ? AND rdr.delivery_status IN ('PENDING', 'PROCESSING', 'SHIPPED')"
+      )
+      .bind(shopId)
+      .first<{ count: number }>(),
+  ]);
+
+  const attempts = rewardSelectionAttempts?.count || 0;
+  const winners = totalWinners?.count || 0;
+  const actualWinRate = attempts > 0 ? Math.round((winners / attempts) * 100 * 100) / 100 : 0;
+
+  return success(c, {
+    shopId,
+    sessionsSelectingShop: sessionsSelectingShop?.count || 0,
+    rewardSelectionAttempts: attempts,
+    totalWinners: winners,
+    totalNoReward: totalNoReward?.count || 0,
+    actualWinRate,
+    remainingStock: remainingStock?.total || 0,
+    totalStock: totalStock?.total || 0,
+    deliveredRewards: deliveredRewards?.count || 0,
+    pendingRewards: pendingRewards?.count || 0,
+  });
 });

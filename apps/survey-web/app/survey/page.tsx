@@ -628,7 +628,7 @@ export default function SurveyPage() {
           status: res.status,
           body: await res.json().catch(() => null) as {
             success?: boolean
-            data?: { responseId?: unknown }
+            data?: { responseId?: unknown; sessionId?: unknown }
             error?: { code?: string; message?: string }
           } | null,
         }
@@ -663,11 +663,12 @@ export default function SurveyPage() {
       if (result.body?.success && typeof result.body.data?.responseId === 'string' && result.body.data.responseId) {
         try {
           window.sessionStorage.setItem('survey_response_id', result.body.data.responseId)
+          if (result.body.data.sessionId) window.sessionStorage.setItem('survey_session_id', String(result.body.data.sessionId))
           if (campaignId) window.sessionStorage.setItem('survey_campaign_id', campaignId)
           window.sessionStorage.removeItem('survey_submission_request_id')
         } catch { /* storage unavailable */ }
         clearSurveyProgress()
-        router.push('/spin')
+        router.push('/shop-select')
       } else {
         setError(result.body?.error?.message || t('validation.failedToSubmit'))
       }

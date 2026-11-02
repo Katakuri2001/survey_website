@@ -255,3 +255,145 @@ export function surveyHeaders(extra: Record<string, string> = {}): Record<string
     ...extra,
   }
 }
+
+// ============================================================
+// Multi-shop reward system helpers (v1)
+// ============================================================
+
+export interface Shop {
+  id: string
+  name: string
+  slug: string
+  description?: string | null
+  logoUrl?: string | null
+  address?: string | null
+  contactInformation?: string | null
+  status: string
+  displayOrder?: number
+  createdAt?: string
+}
+
+export interface RewardResult {
+  hasReward: boolean
+  reward: {
+    winId: string
+    rewardName: string
+    shopId: string | null
+    shopRewardId: string | null
+    rewardImageUrl: string | null
+    assignedAt: string
+  } | null
+  session?: {
+    sessionId: string
+    status: string
+    selectedShopId: string | null
+  }
+}
+
+export async function fetchShops(language: string = 'my'): Promise<Shop[]> {
+  try {
+    const res = await fetch(`${API_BASE}/v1/shops?lang=${language}`)
+    const data = await res.json().catch(() => null)
+    if (data?.success && Array.isArray(data.data?.shops)) {
+      return data.data.shops
+    }
+    return []
+  } catch {
+    return []
+  }
+}
+
+export async function selectShopForSession(sessionId: string, shopId: string): Promise<{ success: boolean; error?: string }> {
+  const token = readStorage('local', 'survey_token')
+  try {
+    const res = await fetch(`${API_BASE}/v1/survey/sessions/${sessionId}/select-shop`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ shopId }),
+    })
+    const data = await res.json().catch(() => null)
+    if (res.ok && data?.success) return { success: true }
+    return { success: false, error: data?.error?.message || 'Failed to select shop' }
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Connection error' }
+  }
+}
+
+export async function getSessionStatus(sessionId: string): Promise<{
+  status: string
+  selectedShopId: string | null
+  nextAction: string
+  existingReward: { winId: string; rewardName: string; shopId: string | null } | null
+} | null> {
+  const token = readStorage('local', 'survey_token')
+  try {
+    const res = await fetch(`${API_BASE}/v1/survey/sessions/${sessionId}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    const data = await res.json().catch(() => null)
+    if (res.ok && data?.success && data.data) {
+      return {
+        status: data.data.status,
+        selectedShopId: data.data.selectedShopId,
+        nextAction: data.data.nextAction,
+        existingReward: data.data.existingReward,
+      }
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+export async function allocateReward(
+  sessionId: string,
+  idempotencyKey: string,
+  selectedCardId?: string,
+): Promise<{ kind: string; rewardName?: string; rewardImageUrl?: string; shopId?: string; winId?: string; error?: string }> {
+  const token = readStorage('local', 'survey_token')
+  try {
+    const res = await fetch(`${API_BASE}/v1/rewards/select`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ sessionId, selectedCardId, idempotencyKey }),
+    })
+    const data = await res.json().catch(() => null)
+    if (data?.success && data.data) {
+      return {
+        kind: data.data.kind,
+        rewardName: data.data.rewardName,
+        rewardImageUrl: data.data.rewardImageUrl,
+        shopId: data.data.shopId,
+        winId: data.data.rewardWinId || data.data.winId,
+      }
+    }
+    if (data?.error) {
+      return { kind: 'ERROR', error: data.error.message || 'Allocation failed' }
+    }
+    return { kind: 'ERROR', error: 'Unknown error' }
+  } catch (err) {
+    return { kind: 'ERROR', error: err instanceof Error ? err.message : 'Connection error' }
+  }
+}
+
+export async function fetchRewardResult(sessionId: string): Promise<RewardResult | null> {
+  const token = readStorage('local', 'survey_token')
+  try {
+    const res = await fetch(`${API_BASE}/v1/rewards/result/${sessionId}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    const data = await res.json().catch(() => null)
+    if (res.ok && data?.success && data.data) {
+      return data.data as RewardResult
+    }
+    return null
+  } catch {
+    return null
+  }
+}

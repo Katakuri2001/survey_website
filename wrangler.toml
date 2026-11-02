@@ -39,6 +39,12 @@ binding = "MEDIA_BUCKET"
 bucket_name = "survey-assets"
 
 # ---------------------------------------------------------------------------
+# Optional Pages configuration
+# ---------------------------------------------------------------------------
+[[env.production.pages_build_output_dir]]
+directory = "apps/survey-web/out"
+
+# ---------------------------------------------------------------------------
 # Development (local by default; never use this target for a release)
 # ---------------------------------------------------------------------------
 [env.development]
@@ -56,3 +62,9 @@ database_id = "449a4386-9e0f-4e65-b7cf-e37cc0de491c"
 [[env.development.r2_buckets]]
 binding = "MEDIA_BUCKET"
 bucket_name = "survey-assets"
+
+# ---------------------------------------------------------------------------
+# Optional Development Pages configuration
+# ---------------------------------------------------------------------------
+[[env.development.pages_build_output_dir]]
+directory = "apps/survey-web/out"
