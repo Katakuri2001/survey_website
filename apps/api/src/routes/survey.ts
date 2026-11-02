@@ -72,7 +72,7 @@ surveyRoutes.post('/survey/submit', authMiddleware, async (c) => {
   const idempotencyKey = body.submissionRequestId;
   if (idempotencyKey) {
     const idempotentCheck = await db
-      .prepare('SELECT id FROM survey_responses WHERE idempotency_key = ?')
+      .prepare('SELECT id FROM survey_responses WHERE submission_request_id = ?')
       .bind(idempotencyKey)
       .first();
     if (idempotentCheck) return success(c, { responseId: idempotentCheck.id, message: 'Duplicate request ignored (idempotent)' });

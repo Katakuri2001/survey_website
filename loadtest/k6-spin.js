@@ -126,10 +126,11 @@ function requestParams(headers, phase) {
 }
 
 function jsonHeaders(token) {
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  const headers = { 'Content-Type': 'application/json' }
+  if (token) {
+    headers.Authorization = `Bearer ${token}`
   }
+  return headers
 }
 
 function uniquePhone(i) {
@@ -142,7 +143,7 @@ function buildAnswers(questions) {
     .filter((q) => q.is_required)
     .map((q) => {
       const first = (q.options || [])[0]
-      const optionValue = first?.option_value || first?.option_text || 'Yes'
+      const optionValue = (first && (first.option_value || first.option_text)) || 'Yes'
       switch (q.question_type) {
         case 'rating':
         case 'number':
@@ -167,8 +168,8 @@ export function setup() {
   )
   requireStatus(questionsRes, 'setup questions', [200])
   const questionsPayload = json(questionsRes)
-  const questions = questionsPayload?.data?.questions
-  if (questionsPayload?.success !== true || !Array.isArray(questions) || questions.length === 0) {
+  const questions = questionsPayload && questionsPayload.data && questionsPayload.data.questions
+  if (questionsPayload && questionsPayload.success !== true || !Array.isArray(questions) || questions.length === 0) {
     throw new Error('setup questions returned no active survey questions')
   }
 
@@ -181,8 +182,8 @@ export function setup() {
     )
     requireStatus(guestRes, `setup guest ${i}`, [200, 201])
     const guestPayload = json(guestRes)
-    const token = guestPayload?.data?.token
-    if (guestPayload?.success !== true || typeof token !== 'string' || token.length === 0) {
+    const token = guestPayload && guestPayload.data && guestPayload.data.token
+    if (guestPayload && guestPayload.success !== true || typeof token !== 'string' || token.length === 0) {
       throw new Error(`setup guest ${i} returned no token`)
     }
 
@@ -198,10 +199,10 @@ export function setup() {
     )
     requireStatus(submitRes, `setup survey submit ${i}`, [200, 201])
     const submitPayload = json(submitRes)
-    if (submitPayload?.success !== true) {
+    if (submitPayload && submitPayload.success !== true) {
       throw new Error(`setup survey submit ${i} was rejected: ${submitRes.body}`)
     }
-    const sessionId = submitPayload?.data?.sessionId
+    const sessionId = submitPayload && submitPayload.data && submitPayload.data.sessionId
     if (typeof sessionId !== 'string' || sessionId.length === 0) {
       throw new Error(`setup survey submit ${i} returned no sessionId`)
     }
@@ -252,7 +253,7 @@ export default function (data) {
   const selectRes = http.post(
     `${API_BASE}/v1/rewards/select`,
     JSON.stringify({ sessionId: user.sessionId, idempotencyKey, selectedCardId: 'card_01' }),
-    { ...requestParams(jsonHeaders(user.token), 'reward-select'), responseCallback: expectedResponse },
+    Object.assign(requestParams(jsonHeaders(user.token), 'reward-select'), { responseCallback: expectedResponse }),
   )
   spinTrend.add(selectRes.timings.duration)
   check(selectRes, {
