@@ -164,7 +164,15 @@ async function handleLogin(c: Ctx, requireAdmin: boolean) {
   const token = await createToken(user.id, requireAdmin ? 'admin' : 'user', secret, user.token_version);
 
   if (requireAdmin) {
-    await logAudit(c, 'LOGIN', 'auth', user.id, { email: user.email });
+    await logAudit(c, {
+      action: 'LOGIN',
+      resourceType: 'auth',
+      resourceId: user.id,
+      resourceName: user.full_name || user.email || 'Admin',
+      category: 'account',
+      description: `Administrator signed in: ${user.full_name || user.email}`,
+      newValues: { email: user.email },
+    });
   }
 
   return success(c, {

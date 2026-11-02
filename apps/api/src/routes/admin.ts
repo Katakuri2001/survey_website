@@ -1310,32 +1310,93 @@ adminRoutes.get('/responses/:id', async (c) => {
 // ============================================================
 
 adminRoutes.get('/audit-logs', async (c) => {
-  const parsed = readQuery(c, paginationSchema.extend({ action: z.string().trim().max(64).optional() }));
+  const parsed = readQuery(
+    c,
+    paginationSchema.extend({
+      action: z.string().trim().max(64).optional(),
+      category: z.string().trim().max(64).optional(),
+      search: z.string().trim().max(200).optional(),
+      adminId: z.string().trim().max(100).optional(),
+      resultStatus: z.string().trim().max(32).optional(),
+      from: z.string().trim().max(32).optional(),
+      to: z.string().trim().max(32).optional(),
+    })
+  );
   if (!parsed.ok) return parsed.response;
-  const { limit, offset, action } = parsed.data;
+  const { limit, offset, action, category, search, adminId, resultStatus, from, to } = parsed.data;
 
+  const conditions: string[] = [];
   const params: unknown[] = [];
-  let query = `
-    SELECT al.id, al.action, al.resource_type, al.resource_id, al.metadata, al.created_at,
-           u.full_name as admin_name, u.email as admin_email
-    FROM audit_logs al
-    LEFT JOIN users u ON al.admin_id = u.id`;
+
   if (action) {
-    query += ' WHERE al.action = ?';
+    conditions.push('al.action = ?');
     params.push(action);
   }
-  query += ' ORDER BY al.created_at DESC LIMIT ? OFFSET ?';
+  if (category) {
+    conditions.push('al.category = ?');
+    params.push(category);
+  }
+  if (adminId) {
+    conditions.push('al.admin_id = ?');
+    params.push(adminId);
+  }
+  if (resultStatus) {
+    conditions.push('al.result_status = ?');
+    params.push(resultStatus);
+  }
+  if (from) {
+    conditions.push('al.created_at >= ?');
+    params.push(from);
+  }
+  if (to) {
+    conditions.push('al.created_at <= ?');
+    params.push(to);
+  }
+  if (search) {
+    conditions.push(
+      '(al.description LIKE ? OR al.resource_name_snapshot LIKE ? OR al.actor_name_snapshot LIKE ? OR al.action LIKE ? OR al.resource_type LIKE ?)'
+    );
+    const term = `%${search}%`;
+    params.push(term, term, term, term, term);
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+  const query = `
+    SELECT al.id, al.action, al.resource_type, al.resource_id, al.metadata, al.created_at,
+           al.actor_type, al.actor_name_snapshot, al.actor_role_snapshot, al.category,
+           al.resource_name_snapshot, al.description, al.previous_values, al.new_values,
+           al.result_status, al.failure_reason, al.request_id,
+           u.full_name as admin_name, u.email as admin_email
+    FROM audit_logs al
+    LEFT JOIN users u ON al.admin_id = u.id
+    ${whereClause}
+    ORDER BY al.created_at DESC
+    LIMIT ? OFFSET ?`;
   params.push(limit, offset);
 
   const logs = await c.env.survey_db.prepare(query).bind(...params).all();
 
-  const totalParams: unknown[] = [];
-  let totalQuery = 'SELECT COUNT(*) as count FROM audit_logs';
-  if (action) {
-    totalQuery += ' WHERE action = ?';
-    totalParams.push(action);
+  // Count query
+  const countParams: unknown[] = [];
+  let countQuery = 'SELECT COUNT(*) as count FROM audit_logs al';
+  if (conditions.length > 0) {
+    // Rebuild conditions without the LIMIT/OFFSET params
+    const countConditions: string[] = [];
+    if (action) { countConditions.push('al.action = ?'); countParams.push(action); }
+    if (category) { countConditions.push('al.category = ?'); countParams.push(category); }
+    if (adminId) { countConditions.push('al.admin_id = ?'); countParams.push(adminId); }
+    if (resultStatus) { countConditions.push('al.result_status = ?'); countParams.push(resultStatus); }
+    if (from) { countConditions.push('al.created_at >= ?'); countParams.push(from); }
+    if (to) { countConditions.push('al.created_at <= ?'); countParams.push(to); }
+    if (search) {
+      countConditions.push('(al.description LIKE ? OR al.resource_name_snapshot LIKE ? OR al.actor_name_snapshot LIKE ? OR al.action LIKE ? OR al.resource_type LIKE ?)');
+      const term = `%${search}%`;
+      countParams.push(term, term, term, term, term);
+    }
+    countQuery += ` WHERE ${countConditions.join(' AND ')}`;
   }
-  const total = await c.env.survey_db.prepare(totalQuery).bind(...totalParams).first<{ count: number }>();
+  const total = await c.env.survey_db.prepare(countQuery).bind(...countParams).first<{ count: number }>();
 
   return success(c, { logs: logs.results || [], total: total?.count || 0 });
 });
@@ -1370,7 +1431,15 @@ adminRoutes.patch('/settings', async (c) => {
   if (statements.length > 0) await db.batch(statements);
   invalidateSettingsCache();
 
-  await logAudit(c, 'UPDATE', 'settings', null, parsed.data.settings);
+  await logAudit(c, {
+    action: 'CONFIG_UPDATED',
+    resourceType: 'settings',
+    resourceId: null,
+    resourceName: 'Platform Settings',
+    category: 'settings',
+    description: 'Updated platform settings',
+    newValues: parsed.data.settings,
+  });
   return success(c, { message: 'Settings updated', settings: parsed.data.settings });
 });
 
@@ -1436,7 +1505,14 @@ adminRoutes.post('/upload', async (c) => {
     url = `data:${file.type};base64,${btoa(binary)}`;
   }
 
-  await logAudit(c, 'UPLOAD', type, entityId || 'new', { fileName: file.name, fileSize: file.size });
+  await logAudit(c, {
+    action: 'UPLOAD',
+    resourceType: type,
+    resourceId: entityId || 'new',
+    category: 'other',
+    description: `Uploaded file ${file.name} (${file.size} bytes)`,
+    metadata: { fileName: file.name, fileSize: file.size },
+  });
   return c.json({ success: true, data: { url, message: 'File uploaded successfully' }, url });
 });
 
@@ -1482,7 +1558,14 @@ adminRoutes.patch('/account/password', async (c) => {
     .bind(newHash, id)
     .run();
 
-  await logAudit(c, 'PASSWORD_CHANGED', 'auth', id);
+  await logAudit(c, {
+    action: 'PASSWORD_CHANGED',
+    resourceType: 'auth',
+    resourceId: id,
+    resourceName: 'Admin Account',
+    category: 'account',
+    description: 'Administrator changed their password',
+  });
   return success(c, { message: 'Password updated successfully' });
 });
 
@@ -1609,7 +1692,15 @@ adminRoutes.post('/shops', async (c) => {
     .bind(generateId(), id, now, now)
     .run();
 
-  await logAudit(c, 'CREATE', 'shop', id, { name: body.name, slug: body.slug, campaignId: campaign.id });
+  await logAudit(c, {
+    action: 'CREATE',
+    resourceType: 'shop',
+    resourceId: id,
+    resourceName: body.name,
+    category: 'shops',
+    description: `Created a new participating shop: ${body.name}`,
+    newValues: { name: body.name, slug: body.slug, status: body.status },
+  });
   return success(c, { id, message: 'Shop created' });
 });
 
@@ -1657,7 +1748,15 @@ adminRoutes.patch('/shops/:shopId', async (c) => {
     .run();
   if (result.meta.changes !== 1) return failure(c, ErrorCode.NOT_FOUND, 'Shop not found', 404);
 
-  await logAudit(c, 'UPDATE', 'shop', shopId, { name: body.name, status: body.status });
+  await logAudit(c, {
+    action: 'UPDATE',
+    resourceType: 'shop',
+    resourceId: shopId,
+    resourceName: body.name || shopId,
+    category: 'shops',
+    description: `Updated shop information: ${body.name || shopId}`,
+    newValues: body.name ? { name: body.name, status: body.status } : undefined,
+  });
   return success(c, { message: 'Shop updated' });
 });
 
@@ -1687,7 +1786,16 @@ adminRoutes.patch('/shops/:shopId/status', async (c) => {
     .bind(status, now, shopId)
     .run();
 
-  await logAudit(c, 'STATUS_CHANGED', 'shop', shopId, { from: existing.status, to: status });
+  await logAudit(c, {
+    action: 'STATUS_CHANGED',
+    resourceType: 'shop',
+    resourceId: shopId,
+    resourceName: shopId,
+    category: 'shops',
+    description: `Changed shop status from ${existing.status} to ${status}`,
+    previousValues: { status: existing.status },
+    newValues: { status },
+  });
   return success(c, { message: `Shop ${status.toLowerCase()}`, status });
 });
 
@@ -1816,7 +1924,15 @@ adminRoutes.post('/shops/:shopId/rewards', async (c) => {
     )
     .run();
 
-  await logAudit(c, 'CREATE', 'shop_reward', id, { shopId, rewardName: body.rewardName, stockTotal: totalQty });
+  await logAudit(c, {
+    action: 'CREATE',
+    resourceType: 'shop_reward',
+    resourceId: id,
+    resourceName: `${shopId} — ${body.rewardName}`,
+    category: 'rewards',
+    description: `Created a new reward "${body.rewardName}" for shop ${shopId}`,
+    newValues: { rewardName: body.rewardName, stockTotal: totalQty, probabilityWeight: body.probabilityWeight ?? 10 },
+  });
   return success(c, { id, message: 'Shop reward created' });
 });
 
@@ -1895,7 +2011,15 @@ adminRoutes.patch('/shops/:shopId/rewards/:rewardId', async (c) => {
       .run();
   }
 
-  await logAudit(c, 'UPDATE', 'shop_reward', rewardId, { shopId, rewardName: body.rewardName, stockTotal: body.stockTotal });
+  await logAudit(c, {
+    action: 'UPDATE',
+    resourceType: 'shop_reward',
+    resourceId: rewardId,
+    resourceName: `${shopId} — ${body.rewardName || rewardId}`,
+    category: 'rewards',
+    description: `Updated reward "${body.rewardName || rewardId}" for shop ${shopId}`,
+    newValues: { rewardName: body.rewardName, stockTotal: body.stockTotal },
+  });
   return success(c, { message: 'Shop reward updated' });
 });
 
@@ -1946,7 +2070,17 @@ adminRoutes.post('/shops/:shopId/rewards/:rewardId/stock-adjustments', async (c)
     .bind(generateId(), rewardId, adjustment, reason || 'Manual adjustment', c.get('userId'), isoTimestamp())
     .run();
 
-  await logAudit(c, 'STOCK_ADJUSTED', 'shop_reward', rewardId, { shopId, adjustment, reason, previousStock: reward.stock_remaining, newStock: newRemaining });
+  await logAudit(c, {
+    action: 'STOCK_ADJUSTED',
+    resourceType: 'shop_reward',
+    resourceId: rewardId,
+    resourceName: `${shopId} — ${rewardId}`,
+    category: 'inventory',
+    description: `Adjusted stock by ${adjustment > 0 ? '+' : ''}${adjustment} for reward ${rewardId}`,
+    previousValues: { stockRemaining: reward.stock_remaining },
+    newValues: { stockRemaining: newRemaining },
+    metadata: { reason },
+  });
   return success(c, { message: 'Stock adjusted', newQuantity: newRemaining });
 });
 
@@ -1991,11 +2125,14 @@ adminRoutes.patch('/shops/:shopId/winning-config', async (c) => {
     )
     .run();
 
-  await logAudit(c, 'WINNING_CONFIG_UPDATED', 'shop', shopId, {
-    winProbability,
-    probabilityMode,
-    noRewardEnabled,
-    configurationVersion: version,
+  await logAudit(c, {
+    action: 'WINNING_CONFIG_UPDATED',
+    resourceType: 'shop',
+    resourceId: shopId,
+    resourceName: shopId,
+    category: 'rewards',
+    description: `Updated winning configuration for shop ${shopId}`,
+    newValues: { winProbability, probabilityMode, noRewardEnabled },
   });
   return success(c, { message: 'Winning configuration updated', configurationVersion: version });
 });
