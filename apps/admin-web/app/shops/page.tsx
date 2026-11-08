@@ -138,6 +138,8 @@ export default function ShopsPage() {
   }, [fetchShops])
 
   useEffect(() => {
+    // Initial shop list load; the request callback owns the state updates.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadData()
     return () => controller.current?.abort()
   }, [loadData])
@@ -752,7 +754,7 @@ export default function ShopsPage() {
                     <input type="checkbox" checked={rewardForm.isDefaultRemainder} onChange={(e) => setRewardForm({ ...rewardForm, isDefaultRemainder: e.target.checked })} className="h-4 w-4 rounded border-slate-300 accent-gold" />
                     Default remainder reward (Thank You)
                   </label>
-                  <p className="mt-1 text-xs text-slate-400">Check this for the "Thank You" reward that receives leftover probability.</p>
+                  <p className="mt-1 text-xs text-slate-400">Check this for the &quot;Thank You&quot; reward that receives leftover probability.</p>
                 </div>
                 <div>
                   <label className="flex items-center gap-2 text-sm text-slate-700">

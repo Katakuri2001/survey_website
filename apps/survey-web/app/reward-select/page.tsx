@@ -14,7 +14,7 @@ import {
   getValidToken,
   markResumeTokenRecovery,
 } from '../lib/api'
-import './cards.css'
+import '../spin/cards.css'
 
 interface Reward {
   id: string

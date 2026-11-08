@@ -154,6 +154,8 @@ export default function AuditPage() {
   }, [offset, search, category, resultStatus])
 
   useEffect(() => {
+    // Initial audit log load; the request callback owns the state updates.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchLogs()
   }, [fetchLogs])
 
@@ -197,7 +199,7 @@ export default function AuditPage() {
           <p className="font-display mt-1 text-2xl font-bold text-ink">{summary.total.toLocaleString()}</p>
         </div>
         <div className="card p-5">
-          <p className="text-[13px] font-medium text-slate-500">Today's Activities</p>
+          <p className="text-[13px] font-medium text-slate-500">Today&apos;s Activities</p>
           <p className="font-display mt-1 text-2xl font-bold text-ink">{summary.today}</p>
         </div>
         <div className="card p-5">
