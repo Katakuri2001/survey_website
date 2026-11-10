@@ -5,6 +5,8 @@
  */
 import { randomBytes, pbkdf2Sync } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
+import { createRequire } from 'node:module'
+import path from 'node:path'
 
 const email = (process.env.ADMIN_EMAIL || '').trim().toLowerCase()
 const password = process.env.ADMIN_PASSWORD || ''
@@ -43,8 +45,25 @@ ON CONFLICT(id) DO UPDATE SET
   updated_at = datetime('now');
 `
 
+// Run Wrangler's JS entry point with the current Node binary instead of
+// `npx wrangler`: npx is a .cmd shim on Windows that spawnSync cannot launch
+// without a shell (it fails silently there), and enabling a shell would mangle
+// the multi-line SQL argument.
+const require = createRequire(import.meta.url)
+const wranglerPackagePath = require.resolve('wrangler/package.json')
+const wranglerPackage = require(wranglerPackagePath)
+const wranglerBinRelative =
+  typeof wranglerPackage.bin === 'string'
+    ? wranglerPackage.bin
+    : wranglerPackage.bin?.wrangler
+if (!wranglerBinRelative) {
+  console.error('Could not locate the wrangler executable in wrangler/package.json')
+  process.exit(1)
+}
+const wranglerBin = path.join(path.dirname(wranglerPackagePath), wranglerBinRelative)
+
 const args = [
-  'wrangler',
+  wranglerBin,
   'd1',
   'execute',
   'survey-db',
@@ -56,5 +75,9 @@ const args = [
   '--command',
   sql,
 ]
-const result = spawnSync('npx', args, { stdio: 'inherit' })
+const result = spawnSync(process.execPath, args, { stdio: 'inherit' })
+if (result.error) {
+  console.error(`Could not start wrangler: ${result.error.message}`)
+  process.exit(1)
+}
 process.exit(result.status ?? 1)
