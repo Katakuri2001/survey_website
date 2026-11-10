@@ -281,12 +281,17 @@ export const shopCreateSchema = z.object({
   contactInformation: optionalText(500),
   status: z.enum(['ACTIVE', 'INACTIVE']).default('ACTIVE'),
   displayOrder: z.coerce.number().int().min(0).max(10_000).optional(),
+  // Initial multi-select of master reward IDs to assign to this shop.
+  rewardIds: z.array(z.string().trim().min(1).max(100)).optional().default([]),
   translations,
 });
 
 export const shopUpdateSchema = shopCreateSchema.partial();
 
 export const shopRewardCreateSchema = z.object({
+  // Master reward to assign (FK to rewards.id). If omitted, a new master reward
+  // is created from rewardName/rewardDescription/rewardImageUrl.
+  rewardId: optionalText(100),
   rewardName: shortText(200),
   rewardDescription: optionalText(2000),
   rewardImageUrl: optionalText(2048),
@@ -299,6 +304,7 @@ export const shopRewardCreateSchema = z.object({
 });
 
 export const shopRewardUpdateSchema = z.object({
+  rewardId: optionalText(100),
   rewardName: optionalText(200),
   rewardDescription: optionalText(2000),
   rewardImageUrl: optionalText(2048),

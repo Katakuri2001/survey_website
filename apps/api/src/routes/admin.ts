@@ -896,6 +896,49 @@ adminRoutes.patch('/rewards/:id/stock', async (c) => {
   return success(c, { message: 'Stock adjusted', newQuantity: updated?.remaining_quantity ?? 0 });
 });
 
+/** DELETE /admin/rewards/:id — deactivate (soft-delete) a master reward.
+ *  Fails if the reward has active shop assignments (use deactivate first). */
+adminRoutes.delete('/rewards/:id', async (c) => {
+  const id = c.req.param('id');
+  const db = c.env.survey_db;
+
+  const reward = await db
+    .prepare('SELECT id, status, is_active FROM rewards WHERE id = ?')
+    .bind(id)
+    .first<{ id: string; status: string; is_active: number }>();
+  if (!reward) return failure(c, ErrorCode.NOT_FOUND, 'Reward not found', 404);
+
+  const assignmentCount = await db
+    .prepare('SELECT COUNT(*) as count FROM shop_rewards WHERE reward_id = ? AND active = 1')
+    .bind(id)
+    .first<{ count: number }>();
+  if ((assignmentCount?.count || 0) > 0) {
+    return failure(
+      c,
+      ErrorCode.INVALID_REQUEST,
+      'Cannot delete reward with active shop assignments. Deactivate it first or remove from all shops.',
+      422,
+    );
+  }
+
+  const now = isoTimestamp();
+  await db
+    .prepare(`UPDATE rewards SET status = 'INACTIVE', is_active = 0, updated_at = ? WHERE id = ?`)
+    .bind(now, id)
+    .run();
+
+  await logAudit(c, {
+    action: 'DELETE',
+    resourceType: 'reward',
+    resourceId: id,
+    resourceName: reward.id,
+    category: 'rewards',
+    description: `Deactivated master reward ${id}`,
+    newValues: { status: 'INACTIVE', isActive: 0 },
+  });
+  return success(c, { message: 'Reward deactivated', id });
+});
+
 adminRoutes.get('/rewards/history', async (c) => {
   const parsed = readQuery(c, paginationSchema);
   if (!parsed.ok) return parsed.response;
@@ -919,6 +962,81 @@ adminRoutes.get('/rewards/history', async (c) => {
 
   const total = await c.env.survey_db.prepare('SELECT COUNT(*) as count FROM user_rewards').first<{ count: number }>();
   return success(c, { history: history.results || [], total: total?.count || 0 });
+});
+
+/** GET /admin/rewards/:id/distribution — detail card data for a master reward.
+ *  Returns company total stock and per-shop distributed quantities. */
+adminRoutes.get('/rewards/:id/distribution', async (c) => {
+  const id = c.req.param('id');
+  const db = c.env.survey_db;
+
+  const reward = await db
+    .prepare('SELECT id, name, total_quantity, remaining_quantity, status, winning_ratio FROM rewards WHERE id = ?')
+    .bind(id)
+    .first<{ id: string; name: string; total_quantity: number; remaining_quantity: number; status: string; winning_ratio: number | null }>();
+  if (!reward) return failure(c, ErrorCode.NOT_FOUND, 'Reward not found', 404);
+
+  const distribution = await db
+    .prepare(
+      `SELECT s.id as shop_id, s.name as shop_name, s.slug as shop_slug,
+              sr.id as assignment_id,
+              sr.stock_total as allocated_stock,
+              sr.stock_remaining as remaining_stock,
+              (sr.stock_total - sr.stock_remaining) as distributed_quantity,
+              sr.active,
+              sr.winning_ratio as shop_winning_ratio,
+              sr.is_default_remainder
+       FROM shop_rewards sr
+       JOIN shops s ON s.id = sr.shop_id
+       WHERE sr.reward_id = ?
+       ORDER BY s.name`
+    )
+    .bind(id)
+    .all<{
+      shop_id: string;
+      shop_name: string;
+      shop_slug: string | null;
+      assignment_id: string;
+      allocated_stock: number;
+      remaining_stock: number;
+      distributed_quantity: number;
+      active: number;
+      shop_winning_ratio: number | null;
+      is_default_remainder: number;
+    }>();
+
+  const totalAllocated = distribution.results?.reduce((sum, d) => sum + d.allocated_stock, 0) ?? 0;
+  const totalRemaining = distribution.results?.reduce((sum, d) => sum + d.remaining_stock, 0) ?? 0;
+  const totalDistributed = distribution.results?.reduce((sum, d) => sum + d.distributed_quantity, 0) ?? 0;
+
+  return success(c, {
+    reward: {
+      id: reward.id,
+      name: reward.name,
+      totalStock: reward.total_quantity,
+      remainingStock: reward.remaining_quantity,
+      winningRatio: reward.winning_ratio,
+      status: reward.status,
+    },
+    summary: {
+      totalAllocated,
+      totalRemaining,
+      totalDistributed,
+      shopCount: distribution.results?.length ?? 0,
+    },
+    distribution: (distribution.results || []).map((d) => ({
+      assignmentId: d.assignment_id,
+      shopId: d.shop_id,
+      shopName: d.shop_name,
+      shopSlug: d.shop_slug,
+      allocatedStock: d.allocated_stock,
+      remainingStock: d.remaining_stock,
+      distributedQuantity: d.distributed_quantity,
+      active: d.active === 1,
+      shopWinningRatio: d.shop_winning_ratio,
+      isDefaultRemainder: d.is_default_remainder === 1,
+    })),
+  });
 });
 
 // ============================================================
@@ -1701,6 +1819,39 @@ adminRoutes.post('/shops', async (c) => {
     description: `Created a new participating shop: ${body.name}`,
     newValues: { name: body.name, slug: body.slug, status: body.status },
   });
+
+  // Create initial shop-reward assignments from multi-select (rewardIds)
+  if (body.rewardIds && body.rewardIds.length > 0) {
+    const now = isoTimestamp();
+    for (const rewardId of body.rewardIds) {
+      const masterReward = await db
+        .prepare('SELECT id, name, description, image_url, winning_ratio, status FROM rewards WHERE id = ? AND is_active = 1')
+        .bind(rewardId)
+        .first<{ id: string; name: string; description: string | null; image_url: string | null; winning_ratio: number | null; status: string }>();
+      if (!masterReward) continue;
+
+      const assignmentId = generateId();
+      await db
+        .prepare(
+          `INSERT INTO shop_rewards (id, campaign_id, shop_id, reward_id, reward_name, reward_description, reward_image_url, stock_total, stock_remaining, probability_weight, winning_ratio, is_default_remainder, active, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 10, ?, 0, 1, ?, ?)`
+        )
+        .bind(
+          assignmentId,
+          campaign.id,
+          id,
+          masterReward.id,
+          masterReward.name,
+          masterReward.description || null,
+          masterReward.image_url || null,
+          masterReward.winning_ratio ?? null,
+          now,
+          now,
+        )
+        .run();
+    }
+  }
+
   return success(c, { id, message: 'Shop created' });
 });
 
@@ -1812,19 +1963,23 @@ adminRoutes.get('/shops/:shopId/rewards', async (c) => {
 
   const rows = await db
     .prepare(
-      `SELECT sr.id, sr.reward_name, sr.reward_description, sr.reward_image_url,
+      `SELECT sr.id, sr.reward_id, sr.reward_name, sr.reward_description, sr.reward_image_url,
               sr.stock_total, sr.stock_remaining, sr.probability_weight, sr.active,
               sr.winning_ratio, sr.is_default_remainder,
               sr.created_at, sr.updated_at,
+              r.name as master_reward_name, r.total_quantity as master_total_stock,
+              r.winning_ratio as master_winning_ratio,
               (SELECT COUNT(*) FROM reward_wins rw WHERE rw.shop_reward_id = sr.id) as assigned_count,
               (SELECT COUNT(*) FROM reward_wins rw JOIN reward_delivery_records rdr ON rdr.reward_win_id = rw.id WHERE rw.shop_reward_id = sr.id AND rdr.delivery_status = 'DELIVERED') as delivered_count
        FROM shop_rewards sr
+       LEFT JOIN rewards r ON r.id = sr.reward_id
        WHERE sr.shop_id = ?
        ORDER BY sr.created_at DESC`
     )
     .bind(shopId)
     .all<{
       id: string;
+      reward_id: string | null;
       reward_name: string;
       reward_description: string | null;
       reward_image_url: string | null;
@@ -1836,6 +1991,9 @@ adminRoutes.get('/shops/:shopId/rewards', async (c) => {
       is_default_remainder: number;
       created_at: string;
       updated_at: string;
+      master_reward_name: string | null;
+      master_total_stock: number | null;
+      master_winning_ratio: number | null;
       assigned_count: number;
       delivered_count: number;
     }>();
@@ -1861,7 +2019,8 @@ adminRoutes.get('/shops/:shopId/rewards', async (c) => {
         }
         return {
           id: r.id,
-          rewardName: r.reward_name,
+          rewardId: r.reward_id ?? undefined,
+          rewardName: r.master_reward_name ?? r.reward_name,
           rewardDescription: r.reward_description,
           rewardImageUrl: r.reward_image_url,
           stockTotal: r.stock_total,
@@ -1871,6 +2030,8 @@ adminRoutes.get('/shops/:shopId/rewards', async (c) => {
           winningRatio: r.winning_ratio,
           isDefaultRemainder: r.is_default_remainder === 1,
           effectiveRatio,
+          masterTotalStock: r.master_total_stock ?? undefined,
+          masterWinningRatio: r.master_winning_ratio ?? undefined,
           status: r.stock_remaining <= 0 ? 'EXHAUSTED' : r.active === 0 ? 'INACTIVE' : 'AVAILABLE',
           assignedCount: r.assigned_count,
           deliveredCount: r.delivered_count,
@@ -1882,7 +2043,9 @@ adminRoutes.get('/shops/:shopId/rewards', async (c) => {
   });
 });
 
-/** POST /admin/shops/:shopId/rewards — create a shop-specific reward */
+/** POST /admin/shops/:shopId/rewards — assign a master reward to a shop.
+ *  If rewardId is provided, links to existing master reward (stockTotal is shop-allocated qty).
+ *  If rewardId is omitted, creates a new master reward from rewardName fields first. */
 adminRoutes.post('/shops/:shopId/rewards', async (c) => {
   const parsed = await readJson(c, shopRewardCreateSchema);
   if (!parsed.ok) return parsed.response;
@@ -1896,27 +2059,73 @@ adminRoutes.post('/shops/:shopId/rewards', async (c) => {
     .first<{ id: string; campaign_id: string }>();
   if (!shop) return failure(c, ErrorCode.NOT_FOUND, 'Shop not found', 404);
 
+  // Resolve master reward id
+  let rewardId = body.rewardId;
+  if (!rewardId) {
+    // Create a new master reward from inline fields
+    const masterId = generateId();
+    const now2 = isoTimestamp();
+    await db
+      .prepare(
+        `INSERT INTO rewards (id, name, description, image_url, total_quantity, remaining_quantity, weight, low_stock_threshold, campaign_id, winning_ratio, requires_delivery, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 0, 0, 10, 10, ?, ?, 1, 'AVAILABLE', ?, ?)`
+      )
+      .bind(
+        masterId,
+        body.rewardName,
+        body.rewardDescription || null,
+        body.rewardImageUrl || null,
+        shop.campaign_id,
+        body.winningRatio ?? null,
+        now2,
+        now2,
+      )
+      .run();
+    rewardId = masterId;
+  } else {
+    // Verify master reward exists
+    const master = await db
+      .prepare('SELECT id FROM rewards WHERE id = ?')
+      .bind(rewardId)
+      .first();
+    if (!master) return failure(c, ErrorCode.NOT_FOUND, 'Master reward not found', 404);
+  }
+
+  // Prevent duplicate assignment of same reward to same shop
+  const existing = await db
+    .prepare('SELECT id FROM shop_rewards WHERE shop_id = ? AND reward_id = ?')
+    .bind(shopId, rewardId)
+    .first();
+  if (existing) return failure(c, ErrorCode.VALIDATION_FAILED, 'Reward already assigned to this shop', 422);
+
   const id = generateId();
   const now = isoTimestamp();
   const totalQty = body.stockTotal;
   const status = totalQty <= 0 ? 'EXHAUSTED' : 'AVAILABLE';
 
+  // Fetch master reward details for denormalized display fields
+  const master = await db
+    .prepare('SELECT name, description, image_url, winning_ratio FROM rewards WHERE id = ?')
+    .bind(rewardId)
+    .first<{ name: string; description: string | null; image_url: string | null; winning_ratio: number | null }>();
+
   await db
     .prepare(
-      `INSERT INTO shop_rewards (id, campaign_id, shop_id, reward_name, reward_description, reward_image_url, stock_total, stock_remaining, probability_weight, winning_ratio, is_default_remainder, active, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO shop_rewards (id, campaign_id, shop_id, reward_id, reward_name, reward_description, reward_image_url, stock_total, stock_remaining, probability_weight, winning_ratio, is_default_remainder, active, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .bind(
       id,
       shop.campaign_id,
       shopId,
-      body.rewardName,
-      body.rewardDescription || null,
-      body.rewardImageUrl || null,
+      rewardId,
+      master?.name ?? body.rewardName,
+      master?.description ?? (body.rewardDescription ?? null),
+      master?.image_url ?? (body.rewardImageUrl ?? null),
       totalQty,
       totalQty,
       body.probabilityWeight ?? 10,
-      body.winningRatio ?? null,
+      body.winningRatio ?? master?.winning_ratio ?? null,
       body.isDefaultRemainder ?? 0,
       body.active ?? 1,
       now,
@@ -1928,28 +2137,39 @@ adminRoutes.post('/shops/:shopId/rewards', async (c) => {
     action: 'CREATE',
     resourceType: 'shop_reward',
     resourceId: id,
-    resourceName: `${shopId} — ${body.rewardName}`,
+    resourceName: `${shopId} — ${rewardId}`,
     category: 'rewards',
-    description: `Created a new reward "${body.rewardName}" for shop ${shopId}`,
-    newValues: { rewardName: body.rewardName, stockTotal: totalQty, probabilityWeight: body.probabilityWeight ?? 10 },
+    description: `Assigned reward ${rewardId} to shop ${shopId} with ${totalQty} allocated stock`,
+    newValues: { rewardId, stockTotal: totalQty, probabilityWeight: body.probabilityWeight ?? 10 },
   });
-  return success(c, { id, message: 'Shop reward created' });
+  return success(c, { id, message: 'Reward assigned to shop', rewardId });
 });
 
-/** PATCH /admin/shops/:shopId/rewards/:rewardId — update a shop reward */
+/** PATCH /admin/shops/:shopId/rewards/:rewardId — update a shop reward assignment.
+ *  Supports changing the linked master reward (rewardId) and shop-level overrides. */
 adminRoutes.patch('/shops/:shopId/rewards/:rewardId', async (c) => {
   const parsed = await readJson(c, shopRewardUpdateSchema);
   if (!parsed.ok) return parsed.response;
   const body = parsed.data;
   const shopId = c.req.param('shopId');
-  const rewardId = c.req.param('rewardId');
+  const assignmentId = c.req.param('rewardId');
   const db = c.env.survey_db;
 
   const current = await db
-    .prepare('SELECT stock_total, stock_remaining FROM shop_rewards WHERE id = ? AND shop_id = ?')
-    .bind(rewardId, shopId)
-    .first<{ stock_total: number; stock_remaining: number }>();
+    .prepare('SELECT stock_total, stock_remaining, reward_id FROM shop_rewards WHERE id = ? AND shop_id = ?')
+    .bind(assignmentId, shopId)
+    .first<{ stock_total: number; stock_remaining: number; reward_id: string | null }>();
   if (!current) return failure(c, ErrorCode.NOT_FOUND, 'Shop reward not found', 404);
+
+  // Resolve master reward id (may change via body.rewardId)
+  let newRewardId = body.rewardId ?? current.reward_id;
+  if (newRewardId && newRewardId !== current.reward_id) {
+    const master = await db
+      .prepare('SELECT id FROM rewards WHERE id = ?')
+      .bind(newRewardId)
+      .first();
+    if (!master) return failure(c, ErrorCode.NOT_FOUND, 'Master reward not found', 404);
+  }
 
   const now = isoTimestamp();
   const awarded = Math.max(0, current.stock_total - current.stock_remaining);
@@ -1966,9 +2186,18 @@ adminRoutes.patch('/shops/:shopId/rewards/:rewardId', async (c) => {
     remainingToSave = current.stock_remaining;
   }
 
+  // Fetch master reward details for denormalized display fields
+  const master = newRewardId
+    ? await db
+        .prepare('SELECT name, description, image_url, winning_ratio FROM rewards WHERE id = ?')
+        .bind(newRewardId)
+        .first<{ name: string; description: string | null; image_url: string | null; winning_ratio: number | null }>()
+    : null;
+
   const result = await db
     .prepare(
       `UPDATE shop_rewards SET
+         reward_id = COALESCE(?, reward_id),
          reward_name = COALESCE(?, reward_name),
          reward_description = COALESCE(?, reward_description),
          reward_image_url = COALESCE(?, reward_image_url),
@@ -1982,20 +2211,21 @@ adminRoutes.patch('/shops/:shopId/rewards/:rewardId', async (c) => {
        WHERE id = ? AND shop_id = ?`
     )
     .bind(
-      body.rewardName ?? null,
-      body.rewardDescription ?? null,
-      body.rewardImageUrl ?? null,
+      newRewardId ?? null,
+      body.rewardName ?? master?.name ?? null,
+      body.rewardDescription ?? master?.description ?? null,
+      body.rewardImageUrl ?? master?.image_url ?? null,
       body.stockTotal !== undefined ? 1 : 0,
       totalToSave,
       body.stockTotal !== undefined ? 1 : 0,
       remainingToSave,
       body.probabilityWeight ?? null,
       body.winningRatio !== undefined ? 1 : 0,
-      body.winningRatio !== undefined ? body.winningRatio : null,
+      body.winningRatio !== undefined ? body.winningRatio : master?.winning_ratio ?? null,
       body.isDefaultRemainder ?? null,
       body.active ?? null,
       now,
-      rewardId,
+      assignmentId,
       shopId,
     )
     .run();
@@ -2007,18 +2237,18 @@ adminRoutes.patch('/shops/:shopId/rewards/:rewardId', async (c) => {
         `INSERT INTO reward_inventory_transactions (id, reward_id, type, quantity, notes, created_by, created_at)
          VALUES (?, ?, 'MANUAL_ADJUSTMENT', ?, 'total_quantity_updated', ?, ?)`
       )
-      .bind(generateId(), rewardId, remainingToSave! - current.stock_remaining, c.get('userId'), now)
+      .bind(generateId(), assignmentId, remainingToSave! - current.stock_remaining, c.get('userId'), now)
       .run();
   }
 
   await logAudit(c, {
     action: 'UPDATE',
     resourceType: 'shop_reward',
-    resourceId: rewardId,
-    resourceName: `${shopId} — ${body.rewardName || rewardId}`,
+    resourceId: assignmentId,
+    resourceName: `${shopId} — ${newRewardId}`,
     category: 'rewards',
-    description: `Updated reward "${body.rewardName || rewardId}" for shop ${shopId}`,
-    newValues: { rewardName: body.rewardName, stockTotal: body.stockTotal },
+    description: `Updated reward assignment ${assignmentId} for shop ${shopId}`,
+    newValues: { rewardId: newRewardId, stockTotal: body.stockTotal },
   });
   return success(c, { message: 'Shop reward updated' });
 });
@@ -2082,6 +2312,45 @@ adminRoutes.post('/shops/:shopId/rewards/:rewardId/stock-adjustments', async (c)
     metadata: { reason },
   });
   return success(c, { message: 'Stock adjusted', newQuantity: newRemaining });
+});
+
+/** DELETE /admin/shops/:shopId/rewards/:rewardId — remove a reward from a shop.
+ *  Fails if the assignment has already-distributed awards (stock_remaining < stock_total). */
+adminRoutes.delete('/shops/:shopId/rewards/:rewardId', async (c) => {
+  const shopId = c.req.param('shopId');
+  const rewardId = c.req.param('rewardId');
+  const db = c.env.survey_db;
+
+  const assignment = await db
+    .prepare('SELECT stock_total, stock_remaining, active FROM shop_rewards WHERE id = ? AND shop_id = ?')
+    .bind(rewardId, shopId)
+    .first<{ stock_total: number; stock_remaining: number; active: number }>();
+  if (!assignment) return failure(c, ErrorCode.NOT_FOUND, 'Shop reward assignment not found', 404);
+
+  const distributed = assignment.stock_total - assignment.stock_remaining;
+  if (distributed > 0) {
+    return failure(
+      c,
+      ErrorCode.INVALID_REQUEST,
+      `Cannot remove reward with ${distributed} already-distributed award(s). Deactivate instead.`,
+      422,
+    );
+  }
+
+  await db
+    .prepare('DELETE FROM shop_rewards WHERE id = ? AND shop_id = ?')
+    .bind(rewardId, shopId)
+    .run();
+
+  await logAudit(c, {
+    action: 'DELETE',
+    resourceType: 'shop_reward',
+    resourceId: rewardId,
+    resourceName: `${shopId} — ${rewardId}`,
+    category: 'rewards',
+    description: `Removed reward assignment ${rewardId} from shop ${shopId}`,
+  });
+  return success(c, { message: 'Reward removed from shop', id: rewardId });
 });
 
 /** PATCH /admin/shops/:shopId/winning-config — update shop winning configuration */

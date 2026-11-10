@@ -140,6 +140,27 @@ export default function RewardsPage() {
   const [reason, setReason] = useState('')
   const [adjusting, setAdjusting] = useState(false)
 
+  // Distribution detail card (per-shop breakdown of company stock)
+  const [showDistribution, setShowDistribution] = useState(false)
+  const [distReward, setDistReward] = useState<Reward | null>(null)
+  const [distribution, setDistribution] = useState<{
+    reward: { id: string; name: string; totalStock: number; remainingStock: number; winningRatio: number | null; status: string }
+    summary: { totalAllocated: number; totalRemaining: number; totalDistributed: number; shopCount: number }
+    distribution: Array<{
+      assignmentId: string
+      shopId: string
+      shopName: string
+      shopSlug: string | null
+      allocatedStock: number
+      remainingStock: number
+      distributedQuantity: number
+      active: boolean
+      shopWinningRatio: number | null
+      isDefaultRemainder: boolean
+    }>
+  } | null>(null)
+  const [loadingDistribution, setLoadingDistribution] = useState(false)
+
   const requestId = useRef(0)
   const controller = useRef<AbortController | null>(null)
 
@@ -335,6 +356,25 @@ export default function RewardsPage() {
     }
   }
 
+  const openDistribution = async (reward: Reward) => {
+    setDistReward(reward)
+    setShowDistribution(true)
+    setLoadingDistribution(true)
+    try {
+      const response = await fetch(`${API_BASE}/admin/rewards/${reward.id}/distribution`, { headers: adminHeaders() })
+      const payload = await readApiPayload(response)
+      if (response.ok && payload && payload.success === true) {
+        setDistribution(payload.data as any)
+      } else {
+        setMutationError(apiErrorMessage(payload, 'Failed to load distribution'))
+      }
+    } catch {
+      setMutationError('Failed to load distribution. Please try again.')
+    } finally {
+      setLoadingDistribution(false)
+    }
+  }
+
   const openAdjustModal = (reward: Reward) => {
     setAdjustModal({ open: true, reward })
     setAdjustment(0)
@@ -437,7 +477,20 @@ export default function RewardsPage() {
           <div className="card overflow-hidden">
             {loading && <p className="border-b border-slate-100 px-6 py-2 text-xs text-slate-400">Refreshing rewards…</p>}
             <div className="overflow-x-auto"><table className="min-w-full divide-y divide-slate-200"><thead className="bg-slate-50"><tr><th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Reward</th><th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Stock</th><th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Weight / Ratio</th><th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Status</th><th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Stats</th><th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Actions</th></tr></thead><tbody className="divide-y divide-slate-100">
-              {rewards.map((reward) => <tr key={reward.id} className="transition-colors hover:bg-slate-50/70"><td className="px-6 py-4"><div className="flex items-center gap-3">{reward.image_url && <Image src={reward.image_url} alt={reward.name} width={40} height={40} className="h-10 w-10 rounded-lg object-cover ring-1 ring-slate-200" />}<div><div className="text-sm font-medium text-ink">{reward.name}</div><div className="line-clamp-1 text-xs text-slate-500">{reward.description}</div></div></div></td><td className="px-6 py-4 text-sm text-slate-700">{reward.remaining_quantity} / {reward.total_quantity}</td><td className="px-6 py-4 text-sm text-slate-700">{reward.weight}<span className="block text-xs text-slate-400">{reward.winning_ratio == null ? 'Auto ratio' : `${reward.winning_ratio}% ratio`}</span></td><td className="px-6 py-4"><div className="flex items-center gap-2">{statusBadge(reward.status)}{!(reward.is_active === true || reward.is_active === 1) && <span className="text-xs text-slate-400">(disabled)</span>}</div></td><td className="px-6 py-4 text-sm text-slate-500">Rewarded: {reward.rewarded_count} | Delivered: {reward.delivered_count}</td><td className="px-6 py-4"><div className="flex gap-3"><button type="button" onClick={() => openEditModal(reward)} className="text-sm font-semibold text-gold-600 hover:text-gold-700">Edit</button><button type="button" onClick={() => openAdjustModal(reward)} className="text-sm font-semibold text-amber-600 hover:text-amber-700">Adjust</button></div></td></tr>)}
+              {rewards.map((reward) => <tr key={reward.id} className="transition-colors hover:bg-slate-50/70"><td className="px-6 py-4 cursor-pointer hover:bg-slate-100/50 rounded-lg transition-colors" onClick={() => openDistribution(reward)}><div className="flex items-center gap-3">{reward.image_url && <Image src={reward.image_url} alt={reward.name} width={40} height={40} className="h-10 w-10 rounded-lg object-cover ring-1 ring-slate-200" />}<div><div className="text-sm font-medium text-ink">{reward.name}</div><div className="line-clamp-1 text-xs text-slate-500">{reward.description}</div></div></div></td><td className="px-6 py-4 text-sm text-slate-700">{reward.remaining_quantity} / {reward.total_quantity}</td><td className="px-6 py-4 text-sm text-slate-700">{reward.weight}<span className="block text-xs text-slate-400">{reward.winning_ratio == null ? 'Auto ratio' : `${reward.winning_ratio}% ratio`}</span></td><td className="px-6 py-4"><div className="flex items-center gap-2">{statusBadge(reward.status)}{!(reward.is_active === true || reward.is_active === 1) && <span className="text-xs text-slate-400">(disabled)</span>}</div></td><td className="px-6 py-4 text-sm text-slate-500">Rewarded: {reward.rewarded_count} | Delivered: {reward.delivered_count}</td><td className="px-6 py-4"><div className="flex gap-3"><button type="button" onClick={() => openEditModal(reward)} className="text-sm font-semibold text-gold-600 hover:text-gold-700">Edit</button><button type="button" onClick={() => openAdjustModal(reward)} className="text-sm font-semibold text-amber-600 hover:text-amber-700">Adjust</button><button type="button" onClick={() => {
+  if (window.confirm(`Deactivate reward "${reward.name}"? This will disable it across all shops.`)) {
+    fetch(`${API_BASE}/admin/rewards/${reward.id}`, { method: 'DELETE', headers: adminHeaders() })
+      .then(async (res) => {
+        const payload = await readApiPayload(res)
+        if (res.ok && payload && payload.success === true) {
+          void loadData()
+        } else {
+          setMutationError(apiErrorMessage(payload, 'Failed to deactivate reward'))
+        }
+      })
+      .catch(() => setMutationError('Failed to deactivate reward'))
+  }
+}} className="text-sm font-semibold text-rose-600 hover:text-rose-700">Deactivate</button></div></td></tr>)}
             </tbody></table></div>
           </div>
         )}
@@ -478,6 +531,81 @@ export default function RewardsPage() {
 
         {adjustModal.open && adjustModal.reward && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"><div className="w-full max-w-md rounded-3xl bg-white shadow-2xl"><div className="border-b border-slate-200 px-6 py-4"><h2 className="font-display text-lg font-semibold text-ink">Adjust Stock: {adjustModal.reward.name}</h2><p className="mt-1 text-sm text-slate-500">Current stock: {adjustModal.reward.remaining_quantity} / {adjustModal.reward.total_quantity}</p></div><div className="space-y-4 px-6 py-4"><div><label htmlFor="stock-adjustment" className="mb-1 block text-sm font-medium text-slate-700">Adjustment (positive to add, negative to subtract)</label><input id="stock-adjustment" type="number" step={1} value={adjustment} onChange={(event) => setAdjustment(Number(event.target.value))} className="input" /></div><div><label htmlFor="stock-reason" className="mb-1 block text-sm font-medium text-slate-700">Reason *</label><input id="stock-reason" type="text" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="e.g. Restock, Damaged, etc." className="input" /></div></div><div className="flex justify-end gap-3 border-t border-slate-200 px-6 py-4"><button type="button" onClick={() => setAdjustModal({ open: false, reward: null })} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Cancel</button><button type="button" onClick={() => void saveStockAdjustment()} disabled={adjusting || !reason} className="inline-flex items-center justify-center rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600 disabled:opacity-50">{adjusting ? 'Saving...' : 'Apply'}</button></div></div></div>
+        )}
+
+        {/* Distribution detail card */}
+        {showDistribution && distReward && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowDistribution(false)}>
+            <div className="max-w-2xl w-full max-h-[90vh] overflow-y-auto rounded-3xl bg-white shadow-2xl mx-4 sm:mx-0" onClick={(e) => e.stopPropagation()}>
+              <div className="border-b border-slate-200 px-6 py-4 flex items-center justify-between">
+                <div>
+                  <h2 className="font-display text-lg font-semibold text-ink">Reward Distribution: {distReward.name}</h2>
+                  <p className="mt-1 text-sm text-slate-500">Company total stock and per-shop breakdown</p>
+                </div>
+                <button type="button" onClick={() => setShowDistribution(false)} className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              <div className="px-6 py-4">
+                {loadingDistribution ? (
+                  <div className="flex items-center justify-center py-10"><div className="h-6 w-6 animate-spin rounded-full border-b-2 border-t-2 border-gold" /></div>
+                ) : distribution ? (
+                  <>
+                    <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 mb-6">
+                      <div className="card p-4"><div className="text-sm text-slate-500">Company Total Stock</div><div className="font-display text-2xl font-bold text-ink">{distribution.reward.totalStock}</div></div>
+                      <div className="card p-4"><div className="text-sm text-slate-500">Remaining</div><div className="font-display text-2xl font-bold text-ink">{distribution.reward.remainingStock}</div></div>
+                      <div className="card p-4"><div className="text-sm text-slate-500">Distributed</div><div className="font-display text-2xl font-bold text-gold-600">{distribution.summary.totalDistributed}</div></div>
+                      <div className="card p-4"><div className="text-sm text-slate-500">Shops</div><div className="font-display text-2xl font-bold text-ink">{distribution.summary.shopCount}</div></div>
+                    </div>
+
+                    <div className="card overflow-hidden">
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-slate-200">
+                          <thead className="bg-slate-50">
+                            <tr>
+                              <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Shop</th>
+                              <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Allocated</th>
+                              <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Remaining</th>
+                              <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Distributed</th>
+                              <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Shop Win %</th>
+                              <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {distribution.distribution.map((d) => (
+                              <tr key={d.assignmentId} className="transition-colors hover:bg-slate-50/70">
+                                <td className="px-6 py-4">
+                                  <div className="text-sm font-medium text-ink">{d.shopName}</div>
+                                  <div className="text-xs text-slate-500">{d.shopSlug}</div>
+                                </td>
+                                <td className="px-6 py-4 text-sm text-slate-700">{d.allocatedStock}</td>
+                                <td className="px-6 py-4 text-sm text-slate-700">{d.remainingStock}</td>
+                                <td className="px-6 py-4 text-sm text-slate-700">{d.distributedQuantity}</td>
+                                <td className="px-6 py-4 text-sm text-slate-700">{d.shopWinningRatio != null ? `${d.shopWinningRatio}%` : '—'}</td>
+                                <td className="px-6 py-4">
+                                  <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset ${d.active ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : 'bg-slate-100 text-slate-600 ring-slate-200'}`}>
+                                    {d.active ? 'Active' : 'Inactive'}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                            {distribution.distribution.length === 0 && (
+                              <tr><td colSpan={6} className="px-6 py-8 text-center text-slate-500">No shops assigned this reward.</td></tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-sm text-slate-500 text-center py-4">No distribution data available.</div>
+                )}
+              </div>
+              <div className="flex justify-end border-t border-slate-200 px-6 py-4">
+                <button type="button" onClick={() => setShowDistribution(false)} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Close</button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>
