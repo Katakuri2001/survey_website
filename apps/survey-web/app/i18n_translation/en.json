@@ -190,6 +190,13 @@
     "cardBackAlt": "Reward card, face down",
     "surveyRequired": "Please complete the survey first"
   },
+  "shopSelect": {
+    "title": "Select Shop",
+    "desc": "Choose a shop to continue",
+    "searchPlaceholder": "Search shops...",
+    "noShops": "No shops available",
+    "shopsAvailable": "shops available"
+  },
   "validation": {
     "requiredField": "This field is required",
     "invalidEmail": "Invalid email address",

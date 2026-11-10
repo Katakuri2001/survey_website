@@ -102,7 +102,7 @@ export default function ShopSelectPage() {
 
   return (
     <div className="min-h-screen bg-navy text-fg-bright">
-      <Header title={t('shopSelect.title' as any, 'Select Shop')} backHref="/survey" />
+      <Header title={t('shopSelect.title', 'Select Shop')} backHref="/survey" />
 
       <div className="relative mx-auto max-w-xl px-4 py-6">
         <div className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 w-[420px] h-[260px] rounded-full bg-gold/[0.06] blur-[110px]" />
@@ -112,8 +112,8 @@ export default function ShopSelectPage() {
           <span className="inline-block px-3 py-1 rounded-full border border-gold/30 bg-gold/10 text-[10px] tracking-[0.3em] uppercase text-gold mb-3">
             03 · Shop Selection
           </span>
-          <h2 className="font-display text-2xl font-bold gold-text">{t('shopSelect.title' as any, 'Select Shop')}</h2>
-          <p className="text-fg-secondary mt-2 text-sm">{t('shopSelect.desc' as any, 'Choose a shop to continue')}</p>
+          <h2 className="font-display text-2xl font-bold gold-text">{t('shopSelect.title', 'Select Shop')}</h2>
+          <p className="text-fg-secondary mt-2 text-sm">{t('shopSelect.desc', 'Choose a shop to continue')}</p>
         </div>
 
         {/* Search */}
@@ -123,7 +123,7 @@ export default function ShopSelectPage() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={t('shopSelect.searchPlaceholder' as any, 'Search shops...')}
+              placeholder={t('shopSelect.searchPlaceholder', 'Search shops...')}
               className="survey-input w-full"
             />
           </div>
@@ -141,7 +141,7 @@ export default function ShopSelectPage() {
         {/* Shop list */}
         {filteredShops.length === 0 ? (
           <div className="card p-12 text-center text-slate-500">
-            <p>{t('shopSelect.noShops' as any, 'No shops available')}</p>
+            <p>{t('shopSelect.noShops', 'No shops available')}</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -198,7 +198,7 @@ export default function ShopSelectPage() {
         )}
 
         <p className="text-xs text-fg-muted text-center mt-6">
-          {shops.length} {t('shopSelect.shopsAvailable' as any, 'shops available')}
+          {shops.length} {t('shopSelect.shopsAvailable', 'shops available')}
         </p>
       </div>
     </div>
