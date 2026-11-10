@@ -24,8 +24,21 @@ type Shop = {
   winProbability: number | null
 }
 
+type MasterReward = {
+  id: string
+  name: string
+  description?: string | null
+  image_url?: string | null
+  total_quantity: number
+  remaining_quantity: number
+  winning_ratio: number | null
+  status: string
+  is_active: boolean | number
+}
+
 type ShopReward = {
   id: string
+  rewardId?: string
   rewardName: string
   rewardDescription?: string | null
   rewardImageUrl?: string | null
@@ -53,6 +66,10 @@ export default function ShopsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [selectedShop, setSelectedShop] = useState<Shop | null>(null)
 
+  // Master rewards (company catalog) for multi-select assignment
+  const [masterRewards, setMasterRewards] = useState<MasterReward[]>([])
+  const [loadingMasterRewards, setLoadingMasterRewards] = useState(false)
+
   // Shop form
   const [showShopModal, setShowShopModal] = useState(false)
   const [editingShop, setEditingShop] = useState<Shop | null>(null)
@@ -66,6 +83,7 @@ export default function ShopsPage() {
     status: 'ACTIVE',
     displayOrder: 0,
   })
+  const [selectedRewardIds, setSelectedRewardIds] = useState<string[]>([])
   const [savingShop, setSavingShop] = useState(false)
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -74,6 +92,7 @@ export default function ShopsPage() {
   const [showRewardModal, setShowRewardModal] = useState(false)
   const [editingReward, setEditingReward] = useState<ShopReward | null>(null)
   const [rewardForm, setRewardForm] = useState({
+    rewardId: '' as string,
     rewardName: '',
     rewardDescription: '',
     rewardImageUrl: '',
@@ -119,6 +138,16 @@ export default function ShopsPage() {
     return (data?.shops || []) as Shop[]
   }, [search])
 
+  const fetchMasterRewards = useCallback(async (signal?: AbortSignal) => {
+    const response = await fetch(`${API_BASE}/admin/rewards?limit=200&offset=0`, { headers: adminHeaders(), signal })
+    const payload = await readApiPayload(response)
+    if (!response.ok || !payload || payload.success !== true) return []
+    const data = payload.data
+    if (Array.isArray(data)) return (data as MasterReward[])
+    if (data && typeof data === 'object' && Array.isArray((data as any).rewards)) return (data as any).rewards as MasterReward[]
+    return []
+  }, [])
+
   const loadData = useCallback(async () => {
     const id = ++requestId.current
     controller.current?.abort()
@@ -127,15 +156,21 @@ export default function ShopsPage() {
     setLoading(true)
     setLoadError('')
     try {
-      const data = await fetchShops(nextController.signal)
-      if (id === requestId.current) setShops(data)
+      const [shopsData, masterData] = await Promise.all([
+        fetchShops(nextController.signal),
+        fetchMasterRewards(nextController.signal),
+      ])
+      if (id === requestId.current) {
+        setShops(shopsData)
+        setMasterRewards(masterData.filter(r => (r.is_active === true || r.is_active === 1)))
+      }
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') return
       if (id === requestId.current) setLoadError(error instanceof Error ? error.message : 'Failed to load shops')
     } finally {
       if (id === requestId.current) setLoading(false)
     }
-  }, [fetchShops])
+  }, [fetchShops, fetchMasterRewards])
 
   useEffect(() => {
     // Initial shop list load; the request callback owns the state updates.
@@ -147,6 +182,7 @@ export default function ShopsPage() {
   const openAddShop = () => {
     setEditingShop(null)
     setShopForm({ name: '', slug: '', description: '', logoUrl: '', address: '', contactInformation: '', status: 'ACTIVE', displayOrder: 0 })
+    setSelectedRewardIds([])
     setImageFile(null)
     setPreviewUrl(null)
     setMutationError('')
@@ -222,6 +258,7 @@ export default function ShopsPage() {
         contactInformation: shopForm.contactInformation,
         status: shopForm.status,
         displayOrder: shopForm.displayOrder,
+        rewardIds: selectedRewardIds,
       }
       const response = await fetch(url, {
         method,
@@ -247,7 +284,7 @@ export default function ShopsPage() {
   const openAddReward = (shop: Shop) => {
     setSelectedShop(shop)
     setEditingReward(null)
-    setRewardForm({ rewardName: '', rewardDescription: '', rewardImageUrl: '', stockTotal: 1, probabilityWeight: 10, winningRatio: null, isDefaultRemainder: false, active: true })
+    setRewardForm({ rewardId: '', rewardName: '', rewardDescription: '', rewardImageUrl: '', stockTotal: 1, probabilityWeight: 10, winningRatio: null, isDefaultRemainder: false, active: true })
     setRewardImageFile(null)
     setRewardPreviewUrl(null)
     setMutationError('')
@@ -259,6 +296,7 @@ export default function ShopsPage() {
     setSelectedShop(shop)
     setEditingReward(reward)
     setRewardForm({
+      rewardId: reward.rewardId ?? '',
       rewardName: reward.rewardName || '',
       rewardDescription: reward.rewardDescription || '',
       rewardImageUrl: reward.rewardImageUrl || '',
@@ -327,6 +365,7 @@ export default function ShopsPage() {
         winningRatio: rewardForm.winningRatio,
         isDefaultRemainder: rewardForm.isDefaultRemainder ? 1 : 0,
         active: rewardForm.active ? 1 : 0,
+        ...(rewardForm.rewardId ? { rewardId: rewardForm.rewardId } : {}),
       }
       const response = await fetch(url, {
         method,
@@ -586,6 +625,21 @@ export default function ShopsPage() {
                           <td className="px-6 py-4 text-sm text-slate-500">Assigned: {reward.assignedCount} | Delivered: {reward.deliveredCount}</td>
                           <td className="px-6 py-4">
                             <button type="button" onClick={() => openEditReward(selectedShop!, reward)} className="text-sm font-semibold text-gold-600 hover:text-gold-700">Edit</button>
+                            <button type="button" onClick={() => {
+                              if (window.confirm(`Remove "${reward.rewardName}" from this shop? This is only allowed if no awards have been distributed yet.`)) {
+                                fetch(`${API_BASE}/admin/shops/${selectedShop!.id}/rewards/${reward.id}`, { method: 'DELETE', headers: adminHeaders() })
+                                  .then(async (res) => {
+                                    const payload = await readApiPayload(res)
+                                    if (res.ok && payload && payload.success === true) {
+                                      void loadShopRewards(selectedShop!)
+                                      void loadData()
+                                    } else {
+                                      setMutationError(apiErrorMessage(payload, 'Failed to remove reward from shop'))
+                                    }
+                                  })
+                                  .catch(() => setMutationError('Failed to remove reward from shop'))
+                              }
+                            }} className="text-sm font-semibold text-rose-600 hover:text-rose-700">Remove</button>
                           </td>
                         </tr>
                       ))}
@@ -693,6 +747,42 @@ export default function ShopsPage() {
                     <input type="number" min={0} value={shopForm.displayOrder} onChange={(e) => setShopForm({ ...shopForm, displayOrder: Number(e.target.value) })} className="input" />
                   </div>
                 </div>
+
+                {/* Master rewards multi-select (only when adding a new shop) */}
+                {!editingShop && masterRewards.length > 0 && (
+                  <div className="pt-4 border-t border-slate-200">
+                    <div className="flex items-center justify-between mb-3">
+                      <label className="mb-0 block text-sm font-medium text-slate-700">Initial Rewards</label>
+                      <span className="text-xs text-slate-400">Select active master rewards to assign to this shop</span>
+                    </div>
+                    <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-1">
+                      {masterRewards.map((r) => {
+                        const isSelected = selectedRewardIds.includes(r.id)
+                        return (
+                          <label key={r.id} className="flex items-center gap-3 rounded-md p-2 cursor-pointer transition-colors hover:bg-slate-100/50">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => {
+                                if (isSelected) setSelectedRewardIds(selectedRewardIds.filter(id => id !== r.id))
+                                else setSelectedRewardIds([...selectedRewardIds, r.id])
+                              }}
+                              className="h-4 w-4 rounded border-slate-300 text-gold-600 accent-gold focus:ring-gold-500"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium text-ink">{r.name}</div>
+                              <div className="text-xs text-slate-500">Company stock: {r.total_quantity} • Ratio: {r.winning_ratio == null ? 'Auto' : r.winning_ratio + '%'}</div>
+                            </div>
+                            {isSelected && <svg className="h-4 w-4 text-gold-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>}
+                          </label>
+                        )
+                      })}
+                    </div>
+                    {selectedRewardIds.length === 0 && (
+                      <p className="mt-2 text-xs text-slate-400">No rewards selected — shop will have no reward inventory until rewards are assigned.</p>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="flex justify-end gap-3 border-t border-slate-200 px-6 py-4">
                 <button type="button" onClick={() => { setShowShopModal(false) }} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Cancel</button>
@@ -713,31 +803,113 @@ export default function ShopsPage() {
               </div>
               <div className="space-y-4 px-6 py-4">
                 {mutationError && <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{mutationError}</div>}
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">Reward Name *</label>
-                  <input type="text" value={rewardForm.rewardName} onChange={(e) => setRewardForm({ ...rewardForm, rewardName: e.target.value })} className="input" />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">Description</label>
-                  <textarea value={rewardForm.rewardDescription} onChange={(e) => setRewardForm({ ...rewardForm, rewardDescription: e.target.value })} rows={2} className="input resize-none" />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">Reward Image</label>
-                  {(rewardPreviewUrl || rewardForm.rewardImageUrl) && (
-                    <div className="mb-2">
-                      <Image src={rewardPreviewUrl || rewardForm.rewardImageUrl} alt="Preview" width={80} height={80} className="h-20 w-20 rounded-lg object-cover ring-1 ring-slate-200" />
+
+                {/* Reward source: select from master catalog or create new */}
+                {!editingReward && masterRewards.length > 0 && (
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 mb-4">
+                    <label className="mb-2 block text-sm font-medium text-slate-700">Assign Reward to Shop</label>
+                    <div className="flex gap-3">
+                      <label className="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+                        <input type="radio" name="reward-source" value="master" defaultChecked={!rewardForm.rewardId} className="h-4 w-4 text-gold-600 accent-gold" onChange={() => setRewardForm({ ...rewardForm, rewardId: '' })} />
+                        Select from Master Catalog
+                      </label>
+                      <label className="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+                        <input type="radio" name="reward-source" value="new" checked={!!rewardForm.rewardId} className="h-4 w-4 text-gold-600 accent-gold" onChange={() => setRewardForm({ ...rewardForm, rewardId: '' })} />
+                        Create New Reward
+                      </label>
                     </div>
-                  )}
-                  <label className="cursor-pointer">
-                    <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleRewardImageUpload} className="sr-only" disabled={savingReward} />
-                    <span className="text-sm text-gold-600 hover:text-gold-700 font-semibold">
-                      {rewardImageFile ? 'Image selected — save to apply' : rewardForm.rewardImageUrl ? 'Change image' : 'Upload image'}
-                    </span>
-                  </label>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
+                    {rewardForm.rewardId ? (
+                      <>
+                        <div className="mt-3">
+                          <label className="mb-1 block text-sm font-medium text-slate-700">Master Reward</label>
+                          <select
+                            value={rewardForm.rewardId}
+                            onChange={(e) => {
+                              const id = e.target.value
+                              const master = masterRewards.find(r => r.id === id)
+                              if (master) {
+                                setRewardForm({
+                                  ...rewardForm,
+                                  rewardId: id,
+                                  rewardName: master.name,
+                                  rewardDescription: master.description || '',
+                                  rewardImageUrl: master.image_url || '',
+                                  winningRatio: master.winning_ratio,
+                                })
+                              }
+                            }}
+                            className="input w-full"
+                          >
+                            {masterRewards.map((r) => (
+                              <option key={r.id} value={r.id}>
+                                {r.name} (Company stock: {r.total_quantity} / {r.remaining_quantity})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="mt-2 text-xs text-slate-500">
+                          Selected master reward's company stock and winning ratio are shown above. The Stock Total below is how much you allocate <strong>to this shop only</strong>.
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="mt-3">
+                          <label className="mb-1 block text-sm font-medium text-slate-700">Reward Name *</label>
+                          <input type="text" value={rewardForm.rewardName} onChange={(e) => setRewardForm({ ...rewardForm, rewardName: e.target.value })} className="input" />
+                        </div>
+                        <div className="mt-3">
+                          <label className="mb-1 block text-sm font-medium text-slate-700">Description</label>
+                          <textarea value={rewardForm.rewardDescription} onChange={(e) => setRewardForm({ ...rewardForm, rewardDescription: e.target.value })} rows={2} className="input resize-none" />
+                        </div>
+                        <div className="mt-3">
+                          <label className="mb-1 block text-sm font-medium text-slate-700">Reward Image</label>
+                          {(rewardPreviewUrl || rewardForm.rewardImageUrl) && (
+                            <div className="mb-2">
+                              <Image src={rewardPreviewUrl || rewardForm.rewardImageUrl} alt="Preview" width={80} height={80} className="h-20 w-20 rounded-lg object-cover ring-1 ring-slate-200" />
+                            </div>
+                          )}
+                          <label className="cursor-pointer">
+                            <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleRewardImageUpload} className="sr-only" disabled={savingReward} />
+                            <span className="text-sm text-gold-600 hover:text-gold-700 font-semibold">
+                              {rewardImageFile ? 'Image selected — save to apply' : rewardForm.rewardImageUrl ? 'Change image' : 'Upload image'}
+                            </span>
+                          </label>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {editingReward || (rewardForm.rewardId && masterRewards.length === 0) ? (
+                  <>
+                    <div className="mt-3">
+                      <label className="mb-1 block text-sm font-medium text-slate-700">Reward Name *</label>
+                      <input type="text" value={rewardForm.rewardName} onChange={(e) => setRewardForm({ ...rewardForm, rewardName: e.target.value })} className="input" />
+                    </div>
+                    <div className="mt-3">
+                      <label className="mb-1 block text-sm font-medium text-slate-700">Description</label>
+                      <textarea value={rewardForm.rewardDescription} onChange={(e) => setRewardForm({ ...rewardForm, rewardDescription: e.target.value })} rows={2} className="input resize-none" />
+                    </div>
+                    <div className="mt-3">
+                      <label className="mb-1 block text-sm font-medium text-slate-700">Reward Image</label>
+                      {(rewardPreviewUrl || rewardForm.rewardImageUrl) && (
+                        <div className="mb-2">
+                          <Image src={rewardPreviewUrl || rewardForm.rewardImageUrl} alt="Preview" width={80} height={80} className="h-20 w-20 rounded-lg object-cover ring-1 ring-slate-200" />
+                        </div>
+                      )}
+                      <label className="cursor-pointer">
+                        <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleRewardImageUpload} className="sr-only" disabled={savingReward} />
+                        <span className="text-sm text-gold-600 hover:text-gold-700 font-semibold">
+                          {rewardImageFile ? 'Image selected — save to apply' : rewardForm.rewardImageUrl ? 'Change image' : 'Upload image'}
+                        </span>
+                      </label>
+                    </div>
+                  </>
+                ) : null}
+
+                <div className="grid grid-cols-2 gap-4 mt-3">
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">Stock Total *</label>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">Allocated Stock (this shop) *</label>
                     <input type="number" min={0} value={rewardForm.stockTotal} onChange={(e) => setRewardForm({ ...rewardForm, stockTotal: Number(e.target.value) })} className="input" />
                   </div>
                   <div>
@@ -745,7 +917,7 @@ export default function ShopsPage() {
                     <input type="number" min={0} value={rewardForm.probabilityWeight} onChange={(e) => setRewardForm({ ...rewardForm, probabilityWeight: Number(e.target.value) })} className="input" />
                   </div>
                 </div>
-                <div>
+                <div className="mt-3">
                   <label className="mb-1 block text-sm font-medium text-slate-700">Win Probability % (leave empty for Thank You/remainder)</label>
                   <input type="number" min={0} max={100} step="0.1" value={rewardForm.winningRatio ?? ''} onChange={(e) => setRewardForm({ ...rewardForm, winningRatio: e.target.value === '' ? null : Number(e.target.value) })} className="input" placeholder="e.g. 15" />
                 </div>
