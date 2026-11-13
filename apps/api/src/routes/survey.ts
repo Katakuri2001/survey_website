@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { AppContext } from '../types';
 import type { D1Database } from '@cloudflare/workers-types';
+import { z } from 'zod';
 import { ErrorCode, failure, isUniqueViolation, logEvent, success } from '../lib/http';
 import { authMiddleware } from '../lib/auth';
 import { enforceRateLimit, maintenanceResponse, RATE_POLICIES } from '../lib/security';
@@ -106,14 +107,20 @@ surveyRoutes.post('/survey/submit', authMiddleware, async (c) => {
 // ============================================================
 
 /** POST /api/v1/survey/sessions - Create a new survey session */
+const sessionCreateSchema = z.object({
+  campaignId: z.string().trim().min(1).max(100),
+});
+
 surveyRoutes.post('/survey/sessions', authMiddleware, async (c) => {
   const db = c.env.survey_db;
   const userId = c.get('userId');
 
-  const body = await c.req.json();
-  if (!body || !body.campaignId) return failure(c, ErrorCode.VALIDATION_FAILED, 'campaignId is required', 422);
+  const limited = await enforceRateLimit(c, 'survey-session', userId, { limit: 30, windowSeconds: 60 });
+  if (limited) return limited;
 
-  const campaignId = body.campaignId.trim();
+  const parsed = await readJson(c, sessionCreateSchema);
+  if (!parsed.ok) return parsed.response;
+  const campaignId = parsed.data.campaignId;
 
   // Check if the campaign exists and is active
   const campaign = await db
@@ -141,6 +148,16 @@ surveyRoutes.post('/survey/sessions', authMiddleware, async (c) => {
 });
 
 /** PATCH /api/v1/survey/sessions/:sessionId/personal - Save personal information */
+const personalInfoSchema = z.object({
+  fullName: z.string().trim().min(1).max(200),
+  phone: z.string().trim().min(4).max(32),
+  dob: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD'),
+  stateCode: z.string().trim().min(1).max(8),
+  nrcTownship: z.string().trim().min(1).max(32),
+  nrcType: z.enum(['N', 'E', 'P', 'T', 'Y', 'S']),
+  nrcNumber: z.string().trim().regex(/^[0-9]{6}$/),
+});
+
 surveyRoutes.patch('/survey/sessions/:sessionId/personal', authMiddleware, async (c) => {
   const db = c.env.survey_db;
   const userId = c.get('userId');
@@ -155,10 +172,12 @@ surveyRoutes.patch('/survey/sessions/:sessionId/personal', authMiddleware, async
   if (!session) return failure(c, ErrorCode.NOT_FOUND, 'Session not found', 404);
   if (session.status !== 'STARTED') return failure(c, ErrorCode.INVALID_STATE_TRANSITION, 'Session not in STARTED state', 409);
 
-  const body = await c.req.json();
-  if (!body) return failure(c, ErrorCode.VALIDATION_FAILED, 'Request body is required', 422);
+  const limited = await enforceRateLimit(c, 'survey-personal', userId, { limit: 30, windowSeconds: 60 });
+  if (limited) return limited;
 
-  const { fullName, phone, dob, stateCode, nrcTownship, nrcType, nrcNumber } = body;
+  const parsed = await readJson(c, personalInfoSchema);
+  if (!parsed.ok) return parsed.response;
+  const { fullName, phone, dob, stateCode, nrcTownship, nrcType, nrcNumber } = parsed.data;
 
   // Validate required fields
   if (!fullName || !phone || !dob || !stateCode || !nrcTownship || !nrcType || !nrcNumber) {
@@ -183,6 +202,16 @@ surveyRoutes.patch('/survey/sessions/:sessionId/personal', authMiddleware, async
 });
 
 /** PUT /api/v1/survey/sessions/:sessionId/answers - Save survey answers */
+const answerItemSchema = z.object({
+  questionId: z.string().trim().min(1).max(100),
+  type: z.string().trim().max(32).optional(),
+  value: z.union([z.string().max(2000), z.number(), z.array(z.string().max(500)).max(50)]),
+});
+
+const surveyAnswersSchema = z.object({
+  answers: z.array(answerItemSchema).min(1).max(100),
+});
+
 surveyRoutes.put('/survey/sessions/:sessionId/answers', authMiddleware, async (c) => {
   const db = c.env.survey_db;
   const userId = c.get('userId');
@@ -197,10 +226,12 @@ surveyRoutes.put('/survey/sessions/:sessionId/answers', authMiddleware, async (c
   if (!session) return failure(c, ErrorCode.NOT_FOUND, 'Session not found', 404);
   if (session.status === 'COMPLETED') return failure(c, ErrorCode.INVALID_STATE_TRANSITION, 'Survey already completed', 409);
 
-  const body = await c.req.json();
-  if (!body || !body.answers || !Array.isArray(body.answers)) return failure(c, ErrorCode.VALIDATION_FAILED, 'Answers array is required', 422);
+  const limited = await enforceRateLimit(c, 'survey-answers', userId, { limit: 30, windowSeconds: 60 });
+  if (limited) return limited;
 
-  const { answers } = body;
+  const parsed = await readJson(c, surveyAnswersSchema);
+  if (!parsed.ok) return parsed.response;
+  const { answers } = parsed.data;
 
   // Fetch the survey config for this campaign
   const configResult = await db
@@ -246,8 +277,34 @@ surveyRoutes.put('/survey/sessions/:sessionId/answers', authMiddleware, async (c
   await db.prepare('UPDATE survey_sessions SET status = ?, survey_completed_at = ?, updated_at = ? WHERE id = ?')
     .bind(newStatus, now, now, sessionId).run();
 
-  await db.prepare('INSERT INTO survey_answers (id, response_id, question_id, answer_text, answer_number, answer_choice, answer_rating) SELECT generateId(), ?, question_id, answer_text, answer_number, answer_choice, answer_rating FROM unnest(?) AS answer(questionId, question_type, value)')
-    .bind(sessionId, JSON.stringify(answers)).run();
+  // Insert each answer individually with parameterized queries (no unnest/generateId SQL).
+  const answerInserts = answers.map((answer) => {
+    let answerText: string | null = null;
+    let answerNumber: number | null = null;
+    let answerChoice: string | null = null;
+    let answerRating: number | null = null;
+
+    const value = answer.value;
+    if (typeof value === 'string') {
+      answerText = value;
+      answerChoice = value;
+    } else if (typeof value === 'number') {
+      answerNumber = value;
+      answerRating = value;
+    } else if (Array.isArray(value)) {
+      answerText = value.join(',');
+    }
+
+    return db
+      .prepare(
+        'INSERT INTO survey_answers (id, response_id, question_id, answer_text, answer_number, answer_choice, answer_rating) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      )
+      .bind(generateId(), sessionId, answer.questionId, answerText, answerNumber, answerChoice, answerRating);
+  });
+
+  if (answerInserts.length > 0) {
+    await db.batch(answerInserts);
+  }
 
   return success(c, { data: { sessionId, status: newStatus } });
 });
@@ -455,6 +512,12 @@ surveyRoutes.get('/v1/survey/sessions/:sessionId', authMiddleware, async (c) => 
   });
 });
 
+const rewardSelectSchema = z.object({
+  sessionId: z.string().trim().min(1).max(100),
+  selectedCardId: z.string().trim().min(1).max(100).optional(),
+  idempotencyKey: z.string().trim().min(8).max(128).optional(),
+});
+
 /** POST /v1/rewards/select — server-authoritative reward allocation */
 surveyRoutes.post('/v1/rewards/select', authMiddleware, async (c) => {
   const db = c.env.survey_db;
@@ -463,16 +526,13 @@ surveyRoutes.post('/v1/rewards/select', authMiddleware, async (c) => {
   const settings = c.get('settings');
   if (settings.maintenanceMode) return maintenanceResponse(c);
 
-  const body = await c.req.json().catch(() => null);
-  if (!body || typeof body.sessionId !== 'string') {
-    return failure(c, ErrorCode.VALIDATION_FAILED, 'sessionId is required', 422);
-  }
-
-  const sessionId = body.sessionId;
-  const selectedCardId = typeof body.selectedCardId === 'string' ? body.selectedCardId : null;
+  const parsed = await readJson(c, rewardSelectSchema);
+  if (!parsed.ok) return parsed.response;
+  const sessionId = parsed.data.sessionId;
+  const selectedCardId = parsed.data.selectedCardId ?? null;
   const idempotencyKey =
-    typeof body.idempotencyKey === 'string' && body.idempotencyKey.length >= 8
-      ? body.idempotencyKey
+    typeof parsed.data.idempotencyKey === 'string' && parsed.data.idempotencyKey.length >= 8
+      ? parsed.data.idempotencyKey
       : c.req.header('Idempotency-Key') ||
         c.req.header('x-idempotency-key') ||
         generateId();

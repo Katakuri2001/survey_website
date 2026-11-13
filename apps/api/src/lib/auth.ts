@@ -65,9 +65,9 @@ async function hmacSha256(secret: string, message: string): Promise<Uint8Array> 
 export function resolveJwtSecret(env: Bindings): string | null {
   const secret = env.JWT_SECRET;
   if (secret && secret.length >= 16) return secret;
-  const environment = env.ENVIRONMENT || 'production';
-  if (environment === 'production') return null;
-  return secret || 'dev-jwt-secret-change-in-production';
+  // Fail closed: no hardcoded default. JWT_SECRET must be provided in all
+  // environments via wrangler secret put (or equivalent).
+  return null;
 }
 
 export async function createToken(

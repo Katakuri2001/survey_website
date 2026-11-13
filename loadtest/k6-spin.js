@@ -134,8 +134,9 @@ function jsonHeaders(token) {
 }
 
 function uniquePhone(i) {
+  const run = Date.now().toString().slice(-4)
   const tail = String(100000000 + (i % 899999999)).padStart(9, '0')
-  return `09${tail}`
+  return `09${run}${tail.slice(4)}`
 }
 
 function buildAnswers(questions) {

@@ -1576,6 +1576,34 @@ function fileExtension(mimeType: string): string {
   return MIME_EXTENSIONS[mimeType] || '';
 }
 
+/** Magic-byte signatures for allowed image types (first bytes of the file). */
+const IMAGE_MAGIC_BYTES: Record<string, Uint8Array> = {
+  'image/jpeg': new Uint8Array([0xff, 0xd8, 0xff]),
+  'image/png': new Uint8Array([0x89, 0x50, 0x4e, 0x47]),
+  'image/webp': new Uint8Array([0x52, 0x49, 0x46, 0x46]), // RIFF, with WEBP checked at offset 8
+  'image/gif': new Uint8Array([0x47, 0x49, 0x46, 0x38]),
+};
+
+/** Validate file contents against magic bytes, not just the client-asserted MIME type. */
+function validateMagicBytes(arrayBuffer: ArrayBuffer, declaredType: string): boolean {
+  const expected = IMAGE_MAGIC_BYTES[declaredType];
+  if (!expected) return false;
+  const bytes = new Uint8Array(arrayBuffer);
+  if (bytes.length < expected.length) return false;
+  for (let i = 0; i < expected.length; i += 1) {
+    if (bytes[i] !== expected[i]) return false;
+  }
+  // WebP also requires "WEBP" at offset 8 after the RIFF header.
+  if (declaredType === 'image/webp') {
+    const webpMarker = new TextEncoder().encode('WEBP');
+    if (bytes.length < 12) return false;
+    for (let i = 0; i < 4; i += 1) {
+      if (bytes[8 + i] !== webpMarker[i]) return false;
+    }
+  }
+  return true;
+}
+
 
 adminRoutes.post('/upload', async (c) => {
   const limited = await enforceRateLimit(c, 'upload', c.get('userId'), { limit: 20, windowSeconds: 60 });
@@ -1600,6 +1628,13 @@ adminRoutes.post('/upload', async (c) => {
   }
 
   const arrayBuffer = await file.arrayBuffer();
+
+  // Validate file contents against magic bytes, not just the client-asserted
+  // MIME type. A client can spoof file.type; magic bytes cannot be forged
+  // without also producing valid file content.
+  if (!validateMagicBytes(arrayBuffer, file.type)) {
+    return failure(c, ErrorCode.INVALID_REQUEST, 'File content does not match the declared image type');
+  }
 
   // Prefer the optional R2 bucket; fall back to a D1 data-URL so uploads keep
   // working in dev or when the MEDIA_BUCKET binding is not configured. The
