@@ -144,7 +144,7 @@ export default function ShopsPage() {
     if (!response.ok || !payload || payload.success !== true) return []
     const data = payload.data
     if (Array.isArray(data)) return (data as MasterReward[])
-    if (data && typeof data === 'object' && Array.isArray((data as any).rewards)) return (data as any).rewards as MasterReward[]
+    if (data && typeof data === 'object' && 'rewards' in data && Array.isArray(data.rewards)) return data.rewards as MasterReward[]
     return []
   }, [])
 
@@ -848,7 +848,7 @@ export default function ShopsPage() {
                           </select>
                         </div>
                         <div className="mt-2 text-xs text-slate-500">
-                          Selected master reward's company stock and winning ratio are shown above. The Stock Total below is how much you allocate <strong>to this shop only</strong>.
+                          Selected master reward&apos;s company stock and winning ratio are shown above. The Stock Total below is how much you allocate <strong>to this shop only</strong>.
                         </div>
                       </>
                     ) : (

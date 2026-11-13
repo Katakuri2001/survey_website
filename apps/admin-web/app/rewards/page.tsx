@@ -72,6 +72,23 @@ type RewardForm = {
   status: RewardStatus
 }
 
+type DistributionDetail = {
+  reward: { id: string; name: string; totalStock: number; remainingStock: number; winningRatio: number | null; status: string }
+  summary: { totalAllocated: number; totalRemaining: number; totalDistributed: number; shopCount: number }
+  distribution: Array<{
+    assignmentId: string
+    shopId: string
+    shopName: string
+    shopSlug: string | null
+    allocatedStock: number
+    remainingStock: number
+    distributedQuantity: number
+    active: boolean
+    shopWinningRatio: number | null
+    isDefaultRemainder: boolean
+  }>
+}
+
 type Tab = 'rewards' | 'inventory' | 'history'
 
 const defaultForm: RewardForm = {
@@ -143,22 +160,7 @@ export default function RewardsPage() {
   // Distribution detail card (per-shop breakdown of company stock)
   const [showDistribution, setShowDistribution] = useState(false)
   const [distReward, setDistReward] = useState<Reward | null>(null)
-  const [distribution, setDistribution] = useState<{
-    reward: { id: string; name: string; totalStock: number; remainingStock: number; winningRatio: number | null; status: string }
-    summary: { totalAllocated: number; totalRemaining: number; totalDistributed: number; shopCount: number }
-    distribution: Array<{
-      assignmentId: string
-      shopId: string
-      shopName: string
-      shopSlug: string | null
-      allocatedStock: number
-      remainingStock: number
-      distributedQuantity: number
-      active: boolean
-      shopWinningRatio: number | null
-      isDefaultRemainder: boolean
-    }>
-  } | null>(null)
+  const [distribution, setDistribution] = useState<DistributionDetail | null>(null)
   const [loadingDistribution, setLoadingDistribution] = useState(false)
 
   const requestId = useRef(0)
@@ -364,7 +366,7 @@ export default function RewardsPage() {
       const response = await fetch(`${API_BASE}/admin/rewards/${reward.id}/distribution`, { headers: adminHeaders() })
       const payload = await readApiPayload(response)
       if (response.ok && payload && payload.success === true) {
-        setDistribution(payload.data as any)
+        setDistribution(payload.data as DistributionDetail)
       } else {
         setMutationError(apiErrorMessage(payload, 'Failed to load distribution'))
       }
